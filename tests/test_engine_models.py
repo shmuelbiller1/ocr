@@ -118,11 +118,15 @@ class ModelTests(unittest.TestCase):
 
     def test_models_directory_follows_the_environment(self) -> None:
         import os
+        import tempfile
 
         original = os.environ.get("HEBREW_WORKBENCH_MODELS")
-        os.environ["HEBREW_WORKBENCH_MODELS"] = "/tmp/somewhere"
+        # A path that is built with Path, so that the test is the same
+        # on every system.
+        target = Path(tempfile.gettempdir()) / "somewhere"
+        os.environ["HEBREW_WORKBENCH_MODELS"] = str(target)
         try:
-            self.assertEqual(str(models.models_directory()), "/tmp/somewhere")
+            self.assertEqual(models.models_directory(), target)
         finally:
             if original is None:
                 os.environ.pop("HEBREW_WORKBENCH_MODELS", None)
