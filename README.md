@@ -7,11 +7,12 @@ Hebrew-script notes into editable, printable documents.
 > the CI build machine, the interface is right-to-left and Hebrew-capable,
 > and the recognition engine reads real handwritten pages with kraken and
 > PP-OCRv6 (both Apache-2.0).  The measured accuracy on early modern
-> Hebrew cursive is a character error rate of 56.3%, so the result of a
-> recognition is a **starting point that has to be read by a person**, and
-> the program says so after every recognition.  The numbers and what they
-> mean are in `docs/OCR_ACCURACY.md`; the table below says what is real
-> and what is not.
+> Hebrew cursive is a character error rate of 61.5% over the pages whose
+> ground truth is complete, so the result of a recognition is a **starting
+> point that has to be read by a person**, and the program says so after
+> every recognition.  The numbers and what they mean are in
+> `docs/OCR_ACCURACY.md`; the table below says what is real and what is
+> not.
 
 ## Design principles
 
@@ -44,7 +45,7 @@ Hebrew-script notes into editable, printable documents.
 | Print | **Works** | Print dialog with the Windows printers, print preview, and "save as PDF" |
 | Sample pages | **Works** | `File > Open samples` loads the synthetic pages from `samples/` |
 | OCR engine slot | **Works** | The engine is found by itself: the worker of the recognition is in the folder `ocr-worker` of the program |
-| Handwriting recognition with a real model | **Works, needs the model** | kraken + PP-OCRv6 (Apache-2.0); the model is installed by the user and checked against two digests; the accuracy is measured in `docs/OCR_ACCURACY.md` and is 56.3% character error rate on early modern cursive - the result has to be read line by line |
+| Handwriting recognition with a real model | **Works, needs the model** | kraken + PP-OCRv6 (Apache-2.0); the model is installed by the user and checked against two digests; the accuracy is measured in `docs/OCR_ACCURACY.md` and is 61.5% character error rate on early modern cursive (7 of the 8 pages whose ground truth is complete) - the result has to be read line by line |
 | Spelling proposals | **Works, needs a word list** | The word list of the user; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
 | Grammar proposals | **Works, a few rules** | Punctuation and spacing |
 | `לשון הספר` proposals | **Not implemented** | The module exists, is switched off, and says so; see `docs/SUGGESTIONS.md` |
