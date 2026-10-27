@@ -173,32 +173,39 @@ class ReleaseTests(unittest.TestCase):
                 release.build_release(app, output, root / "no-packages")
             self.assertFalse(output.exists())
 
-    def test_the_release_is_not_made_when_a_licence_text_cannot_be_fetched(
+    def test_a_licence_text_that_cannot_be_fetched_does_not_stop_the_release(
         self,
     ) -> None:
+        """The texts are in the repository, and the network is only a way
+        to refresh them."""
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             app = self.make_application(root)
             output = root / "program.zip"
-            with self.assertRaises(SystemExit):
-                release.build_release(
-                    app,
-                    output,
-                    self.make_packages(root),
-                    fetch_licences=True,
-                    fetch=lambda url: "this is not a licence",
-                )
-            self.assertFalse(output.exists())
+            release.build_release(
+                app,
+                output,
+                self.make_packages(root),
+                fetch_licences=True,
+                fetch=lambda url: "this is not a licence",
+            )
+            self.assertTrue(output.is_file())
+            with zipfile.ZipFile(output) as archive:
+                names = archive.namelist()
+            self.assertIn("HebrewNotesWorkbench/LICENCES/LGPL-3.0.txt", names)
 
-    def test_the_release_is_not_made_without_the_licence_of_qt(self) -> None:
-        """The text of the LGPL has to be in the release."""
+    def test_the_licence_texts_are_taken_from_the_repository(self) -> None:
+        """The release does not need a network for the licence texts."""
         with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
-            app = self.make_application(root)
-            output = root / "program.zip"
-            with self.assertRaises(SystemExit):
-                release.build_release(app, output, self.make_packages(root))
-            self.assertFalse(output.exists())
+            target = Path(folder) / "licences"
+            target.mkdir()
+            copied = release.copy_repository_licences(target)
+            self.assertIn("LGPL-3.0.txt", copied)
+            self.assertIn("GPL-3.0.txt", copied)
+            self.assertIn("PSF-LICENSE.txt", copied)
+            for name, _url, marker in release.LICENCE_TEXTS:
+                text = (target / name).read_text(encoding="utf-8")
+                self.assertIn(marker.lower(), text.lower())
 
     def test_the_release_holds_the_licence_of_qt_and_of_python(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

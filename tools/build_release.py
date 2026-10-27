@@ -332,6 +332,35 @@ def build_notice(site_packages: Path) -> str:
     return "\n".join(lines)
 
 
+def copy_repository_licences(licences: Path) -> list[str]:
+    """Copy the licence texts that are in the repository.
+
+    The texts of the LGPL, of the GPL and of Python are in the
+    repository, so that the release does not need a network, and so
+    that a program that is given to somebody always carries them.  The
+    texts are checked before they are used, and a text that does not
+    look like the licence it claims to be is not copied.
+    """
+    repository = REPO_ROOT / "docs" / "licences"
+    copied: list[str] = []
+    if not repository.is_dir():
+        return copied
+    for name, _url, marker in LICENCE_TEXTS:
+        source = repository / name
+        target = licences / name
+        if not source.is_file() or target.is_file():
+            continue
+        try:
+            text = source.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if marker.lower() not in text.lower():
+            continue
+        target.write_text(text, encoding="utf-8")
+        copied.append(name)
+    return copied
+
+
 def build_release(
     app: Path,
     output: Path,
@@ -383,6 +412,11 @@ def build_release(
     for package, path in licence_files(site_packages):
         info = site_packages / package
         shutil.copy2(path, licences / licence_name(package, path, info))
+    # The texts of the licences that are not inside the packages are
+    # taken from the repository, so that the release does not depend on
+    # a network.  The network is only used for a text that is not in
+    # the repository.
+    copy_repository_licences(licences)
     if fetch_licences:
         missing = download_licence_texts(
             licences, fetch=fetch if fetch is not None else fetch_text
@@ -392,15 +426,6 @@ def build_release(
                 "these licence texts were not fetched, so the program is not "
                 "given to anybody: " + ", ".join(missing)
             )
-    else:
-        # The texts that are in the repository are used, so that a
-        # release can be made without a network.
-        repository = REPO_ROOT / "docs" / "licences"
-        if repository.is_dir():
-            for name, _url, _marker in LICENCE_TEXTS:
-                source = repository / name
-                if source.is_file() and not (licences / name).is_file():
-                    shutil.copy2(source, licences / name)
     # The texts of the licences that are not inside the packages have to
     # be in the release: the LGPL of the Qt libraries, the GPL that it
     # points at, and the licence of Python.

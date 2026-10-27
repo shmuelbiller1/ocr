@@ -188,7 +188,8 @@ jobs:
       - name: Put the program into a folder for the user
         shell: pwsh
         run: |
-          python tools/build_release.py --app dist/HebrewNotesWorkbench --worker dist/ocr-worker --download-licences
+          python tools/build_release.py --app dist/HebrewNotesWorkbench --worker dist/ocr-worker --download-licences 2>&1 | Tee-Object -FilePath build-release.log
+          if ($LASTEXITCODE -ne 0) { throw 'the release was not made' }
       - name: Download the recognition model
         shell: pwsh
         run: |
@@ -249,7 +250,7 @@ jobs:
         run: |
           Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-worker.log install-engine.log build-console.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-err.txt release-worker-out.txt release-worker-err.txt release-result.json
+          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-err.txt release-worker-out.txt release-worker-err.txt release-result.json
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
