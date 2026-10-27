@@ -47,6 +47,25 @@ class SpellingTests(unittest.TestCase):
         proposals = module.check("שלום")
         self.assertEqual(proposals, [])
 
+    def test_the_other_spelling_of_a_word_is_proposed_with_a_replacement(self) -> None:
+        """The spellings of a word that are separated by a slash are known."""
+        module = self.make_module("שלום/תחתונות\n")
+        proposals = module.check("תחתונות")
+        self.assertEqual(len(proposals), 1)
+        self.assertEqual(proposals[0].original, "תחתונות")
+        self.assertEqual(proposals[0].replacement, "שלום")
+
+    def test_every_spelling_of_a_word_can_be_proposed(self) -> None:
+        module = self.make_module("שלום/תחתונות/תחתוניות\n")
+        proposals = module.check("תחתונות")
+        self.assertEqual(
+            [item.replacement for item in proposals], ["שלום", "תחתוניות"]
+        )
+
+    def test_the_preferred_spelling_of_a_word_is_not_proposed(self) -> None:
+        module = self.make_module("שלום/תחתונות\n")
+        self.assertEqual(module.check("שלום"), [])
+
     def test_a_module_without_a_list_cannot_work(self) -> None:
         module = SpellingModule()
         self.assertFalse(module.available())
@@ -80,6 +99,15 @@ class GrammarTests(unittest.TestCase):
 
     def test_a_correct_text_has_no_proposals(self) -> None:
         self.assertEqual(GrammarModule().check("שלום, עולם"), [])
+
+    def test_an_opening_quote_keeps_the_space_before_it(self) -> None:
+        """The space before a quote that opens a quotation is correct."""
+        self.assertEqual(GrammarModule().check('שלום "עולם"'), [])
+
+    def test_a_space_before_a_closing_quote_is_proposed(self) -> None:
+        proposals = GrammarModule().check('אמר "שלום עולם " ולא')
+        self.assertEqual(len(proposals), 1)
+        self.assertEqual(proposals[0].replacement, '"')
 
 
 class StyleTests(unittest.TestCase):
@@ -184,6 +212,75 @@ class SessionTests(unittest.TestCase):
         session = self.make_session()
         session.current_text = "טקסט אחר"
         self.assertIsNone(session.accept(session.pending()[0]))
+
+    def test_the_places_of_a_new_round_are_not_moved_by_earlier_corrections(
+        self,
+    ) -> None:
+        """A new round of proposals has the places of the text as it is.
+
+        The corrections of the earlier round are kept, so that they can
+        still be taken back, but they must not move the places of the
+        new proposals.
+        """
+        from hebrew_workbench.suggestions import Suggestion
+
+        session = SuggestionSession("שלום ,עולם")
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original=" ,",
+                    replacement=",",
+                    message="אין רווח לפני הפסיק",
+                    start=4,
+                    end=6,
+                )
+            ],
+            "שלום ,עולם",
+        )
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "שלום,עולם")
+
+        # A new round, on the text as it is now.
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original="עולם",
+                    replacement="עולם!",
+                    message="סימן קריאה",
+                    start=5,
+                    end=9,
+                )
+            ],
+            "שלום,עולם",
+        )
+        outcome = session.accept(session.pending()[0])
+        self.assertIsNotNone(outcome)
+        text, position = outcome
+        self.assertEqual(text, "שלום,עולם!")
+        self.assertEqual(position, 5)
+
+    def test_the_undo_keeps_what_the_user_wrote_after_the_correction(self) -> None:
+        session = self.make_session()
+        session.accept(session.pending()[0])
+        # The user wrote something after the correction was made.
+        text = session.undo_all("שלום,עולם ועוד מילה")
+        self.assertEqual(text, "שלום ,עולם ועוד מילה")
+        self.assertEqual(session.accepted, [])
+
+    def test_the_changes_of_a_saved_project_are_taken_back_into_the_session(
+        self,
+    ) -> None:
+        session = self.make_session()
+        session.accept(session.pending()[0])
+        log = session.change_log()
+
+        restored = SuggestionSession("שלום,עולם")
+        restored.restore_accepted(log)
+        self.assertEqual(len(restored.accepted), 1)
+        self.assertTrue(restored.undo_available)
+        self.assertEqual(restored.undo_all(), "שלום ,עולם")
 
 
 if __name__ == "__main__":

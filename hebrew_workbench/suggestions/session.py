@@ -63,18 +63,35 @@ class SuggestionSession:
         self.suggestions: list[Suggestion] = []
         self.accepted: list[AcceptedChange] = []
         self.refused: list[Suggestion] = []
+        # The places of the proposals of the last round, and the change
+        # every accepted correction made to the length of the text.
+        # The proposals keep the places they had when the round began,
+        # so only the corrections of this round may move them.
+        self._round_shifts: list[tuple[int, int]] = []
 
     # -- the proposals -----------------------------------------------------
     def set_suggestions(self, suggestions: list[Suggestion], text: str | None = None) -> None:
-        """Start a new round of proposals."""
+        """Start a new round of proposals.
+
+        The proposals of the new round have their places in the text as
+        it is now.  The corrections of the earlier rounds are kept, so
+        that they can still be taken back, but they do not move the new
+        places any more.
+        """
         self.suggestions = list(suggestions)
         if text is not None:
             self.current_text = text
         self.refused = []
+        self._round_shifts = []
 
     def pending(self) -> list[Suggestion]:
         """The proposals that the user did not decide about yet."""
         return [item for item in self.suggestions if item not in self.refused]
+
+    @property
+    def undo_available(self) -> bool:
+        """Is there something that can be taken back?"""
+        return bool(self.accepted)
 
     def proposal(self, suggestion: Suggestion) -> Suggestion | None:
         """The proposal with the same text, if it is still waiting."""
@@ -102,9 +119,9 @@ class SuggestionSession:
     def shift(self, position: int) -> int:
         """Where a place of the old text is in the text after the changes."""
         shift = 0
-        for change in self.accepted:
-            if change.position + len(change.original) <= position:
-                shift += len(change.replacement) - len(change.original)
+        for end, change in self._round_shifts:
+            if end <= position:
+                shift += change
         return position + shift
 
     def place_of(self, suggestion: Suggestion) -> tuple[int, int] | None:
@@ -140,21 +157,62 @@ class SuggestionSession:
             )
         )
         self.current_text = new_text
+        # The proposals of this round keep the places of the text as it
+        # was when the round began, so the correction is remembered in
+        # those places and not in the place of the new text.
+        self._round_shifts.append(
+            (
+                suggestion.start + len(suggestion.original),
+                len(suggestion.replacement) - len(suggestion.original),
+            )
+        )
         self.remove(suggestion)
         self.refused = [item for item in self.refused if item is not suggestion]
         return new_text, start
 
-    def undo_all(self) -> str:
-        """Take back every change that was accepted, and return the text."""
+    def undo_all(self, text: str | None = None) -> str:
+        """Take back every change that was accepted, and return the text.
+
+        When the text of the editor is given, the corrections are taken
+        back in that text, so that what the user wrote after them is
+        kept.
+        """
+        result = self.current_text if text is None else text
         for change in reversed(self.accepted):
+            replacement = change.replacement
+            if not replacement:
+                continue
             start = change.position
-            end = start + len(change.replacement)
-            if self.current_text[start:end] == change.replacement:
-                self.current_text = (
-                    self.current_text[:start] + change.original + self.current_text[end:]
+            if result[start : start + len(replacement)] == replacement:
+                result = (
+                    result[:start] + change.original + result[start + len(replacement) :]
                 )
+                continue
+            # The text was written after the correction, so its place is
+            # looked for near the place where the correction was made.
+            found = result.find(replacement, max(0, start - 200))
+            if found < 0:
+                found = result.find(replacement)
+            if found >= 0:
+                result = (
+                    result[:found]
+                    + change.original
+                    + result[found + len(replacement) :]
+                )
+        self.current_text = result
         self.accepted = []
-        return self.current_text
+        self._round_shifts = []
+        return result
+
+    # -- the changes of a project ------------------------------------------
+    def restore_accepted(self, changes: list[dict]) -> None:
+        """Take the corrections of a saved project back into the session.
+
+        The changes are kept, so that they can be taken back, and the
+        places of the proposals of the next round are not moved by them.
+        """
+        self.accepted = [AcceptedChange.from_dict(change) for change in changes]
+        self._round_shifts = []
 
     def change_log(self) -> list[dict]:
         """The changes that were accepted, for the file of the project."""

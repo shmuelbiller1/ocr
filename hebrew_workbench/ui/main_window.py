@@ -76,6 +76,9 @@ class MainWindow(QMainWindow):
         self.engines: list = []
         self.suggestion_modules = SuggestionRegistry()
         self.suggestions = SuggestionSession()
+        # Every document has its own session of proposals, so that the
+        # proposals of one document are never offered for another one.
+        self._sessions: dict[str, SuggestionSession] = {}
         self._shown_entry = None
         self._loading = False
         self.task: TaskThread | None = None
@@ -444,12 +447,16 @@ class MainWindow(QMainWindow):
                 removed = self.project.remove(row)
                 if removed is self._shown_entry:
                     self._shown_entry = None
+                self._sessions.pop(str(removed.path), None)
         self._sync_document_list()
-        self._loading = True
-        self.editor.clear()
-        self._loading = False
-        self.doc_path_label.setText("לא נבחר מסמך")
-        self.preview.set_document(None)
+        if self._shown_entry is not None and self._shown_entry not in self.project:
+            self._shown_entry = None
+        if self._shown_entry is not None:
+            # The document that was shown is still there, so it stays in
+            # the editor and its text is not lost.
+            self._show_entry(self._shown_entry)
+        else:
+            self._clear_editor()
         self.statusBar().showMessage(f"הוסרו {len(rows)} מסמכים מהרשימה.", 5000)
 
     def clear_documents(self) -> None:
@@ -465,29 +472,65 @@ class MainWindow(QMainWindow):
         if answer != QMessageBox.Yes:
             return
         self.project.clear()
-        self._shown_entry = None
+        self._sessions.clear()
         self._sync_document_list()
-        self.preview.set_document(None)
-        self._loading = True
-        self.editor.clear()
-        self._loading = False
+        self._clear_editor()
         self.statusBar().showMessage("הרשימה נוקתה. הקבצים על הדיסק לא נגעו.", 5000)
 
     def _on_document_selected(self, row: int) -> None:
         self._store_editor_text()
         if not (0 <= row < len(self.project)):
-            self._shown_entry = None
-            self.editor.clear()
-            self.doc_path_label.setText("לא נבחר מסמך")
-            self.preview.set_document(None)
+            self._clear_editor()
             return
-        entry = self.project[row]
+        self._show_entry(self.project[row])
+
+    def _show_entry(self, entry) -> None:
+        """Show a document in the editor and in the preview.
+
+        The proposals of the document come with it, so that they are
+        never offered for a document they do not belong to.
+        """
         self._loading = True
         self.editor.setPlainText(entry.transcription)
         self._loading = False
         self._shown_entry = entry
+        self.suggestions = self._session_for(entry)
+        self._refresh_suggestions(self.suggestions)
         self.doc_path_label.setText(entry.path)
         self.preview.set_document(entry.path)
+
+    def _clear_editor(self) -> None:
+        """Show an empty editor, with no document behind it.
+
+        The document that was shown is forgotten, so that its text is
+        not written over with the empty text of the editor.
+        """
+        self._loading = True
+        self.editor.clear()
+        self._loading = False
+        self._shown_entry = None
+        self.suggestions = SuggestionSession()
+        self._refresh_suggestions(self.suggestions)
+        self.doc_path_label.setText("לא נבחר מסמך")
+        self.preview.set_document(None)
+
+    def _session_for(self, entry) -> SuggestionSession:
+        """The session of the proposals of a document.
+
+        The session of a document that is opened for the first time is
+        built from the corrections that were saved with the project, so
+        that they can be taken back.
+        """
+        if entry is None:
+            return SuggestionSession()
+        key = str(entry.path)
+        session = self._sessions.get(key)
+        if session is None:
+            session = SuggestionSession(entry.transcription)
+            if entry.changes:
+                session.restore_accepted(entry.changes)
+            self._sessions[key] = session
+        return session
 
     def _on_editor_changed(self) -> None:
         if self._loading:
@@ -542,12 +585,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "פתיחת הפרויקט", f"לא ניתן לפתוח: {exc}")
             return
         self.project = project
-        self._shown_entry = None
+        self._sessions.clear()
         self._sync_document_list()
-        self.preview.set_document(None)
-        self._loading = True
-        self.editor.clear()
-        self._loading = False
+        self._clear_editor()
         if len(self.project):
             self.doc_list.setCurrentRow(0)
         self.statusBar().showMessage(
@@ -601,12 +641,18 @@ class MainWindow(QMainWindow):
     def _on_ocr_done(self, result, entry=None) -> None:
         if entry is None:
             entry = self._current_entry()
-        self._loading = True
-        self._replace_editor_text(result.text)
-        self._loading = False
         if entry is not None:
             entry.transcription = result.text
             entry.engine_name = result.engine_name
+        if entry is not None and entry is self._shown_entry:
+            # The document that was recognised is still the one that is
+            # shown, so the editor may show the result.  When the user
+            # moved to another document in the meantime, the result
+            # stays with the document it belongs to, and the editor of
+            # the other document is left alone.
+            self._loading = True
+            self._replace_editor_text(result.text)
+            self._loading = False
         self.statusBar().showMessage(
             f"הזיהוי בוצע באמצעות {result.engine_name} ב-{result.duration_seconds:.1f} שניות. "
             "יש לבדוק כל שורה לפני הייצוא.",
@@ -842,22 +888,30 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "מצב המנועים", self.registry.status())
 
     # -- the proposals for corrections -------------------------------------
+    def _refresh_suggestions(self, session: SuggestionSession) -> None:
+        """Show the proposals of a session and what can be taken back."""
+        self.suggestions_pane.show_suggestions(session.pending())
+        self.suggestions_pane.set_undo_available(bool(session.accepted))
+
     def check_suggestions(self) -> None:
         """Ask the modules what they would change, and show the proposals."""
-        entry = self._current_entry()
+        entry = self._shown_entry
         if entry is None:
             QMessageBox.information(
                 self, "הצעות תיקון", "יש לבחור מסמך לפני בדיקת הצעות."
             )
             return
+        session = self._session_for(entry)
+        self.suggestions = session
         text = self.editor.toPlainText()
         if not text.strip():
-            self.suggestions_pane.show_suggestions([])
+            session.set_suggestions([], text)
+            self._refresh_suggestions(session)
             self.statusBar().showMessage("אין טקסט לבדיקה.", 5000)
             return
         proposals = self.suggestion_modules.check(text)
-        self.suggestions.set_suggestions(proposals, text)
-        self.suggestions_pane.show_suggestions(self.suggestions.pending())
+        session.set_suggestions(proposals, text)
+        self._refresh_suggestions(session)
         self.suggestions_dock.show()
         if proposals:
             self.statusBar().showMessage(
@@ -869,40 +923,73 @@ class MainWindow(QMainWindow):
 
     def accept_suggestion(self, suggestion) -> None:
         """Apply one proposal that the user accepted."""
-        outcome = self.suggestions.accept(suggestion)
+        session = self.suggestions
+        if session is not self._session_for(self._shown_entry):
+            # The proposals belong to another document, and they are not
+            # applied to this one.
+            self.statusBar().showMessage(
+                "ההצעות שייכות למסמך אחר, ולכן לא הוחלו.", 6000
+            )
+            return
+        if self.editor.toPlainText() != session.current_text:
+            # The user wrote something after the proposals were made, so
+            # they no longer fit the text and applying them would throw
+            # away what was written.
+            self.statusBar().showMessage(
+                "הטקסט השתנה אחרי הבדיקה, ולכן ההצעה לא הוחלה. יש לבדוק את ההצעות שוב.",
+                8000,
+            )
+            self._refresh_suggestions(session)
+            return
+        outcome = session.accept(suggestion)
         if outcome is None:
             self.statusBar().showMessage(
                 "ההצעה כבר אינה מתאימה לטקסט, ולכן לא הוחלה.", 6000
             )
-            self.suggestions_pane.show_suggestions(self.suggestions.pending())
+            self._refresh_suggestions(session)
             return
         text, position = outcome
         self._loading = True
         self.editor.setPlainText(text)
         self._loading = False
-        self.suggestions_pane.show_suggestions(self.suggestions.pending())
-        self.suggestions_pane.set_undo_available(bool(self.suggestions.accepted))
+        self._store_editor_text()
+        self._refresh_suggestions(session)
         self._store_changes()
         self.statusBar().showMessage(
-            f"ההצעה התקבלה. נשארו {len(self.suggestions.pending())} הצעות.", 5000
+            f"ההצעה התקבלה. נשארו {len(session.pending())} הצעות.", 5000
         )
 
     def refuse_suggestion(self, suggestion) -> None:
         """The user does not want this proposal."""
-        self.suggestions.refuse(suggestion)
-        self.suggestions_pane.show_suggestions(self.suggestions.pending())
+        session = self.suggestions
+        if session is not self._session_for(self._shown_entry):
+            self.statusBar().showMessage(
+                "ההצעות שייכות למסמך אחר, ולכן לא נדחו.", 6000
+            )
+            return
+        session.refuse(suggestion)
+        self._refresh_suggestions(session)
         self.statusBar().showMessage("ההצעה נדחתה. הטקסט לא השתנה.", 5000)
 
     def undo_all_changes(self) -> None:
         """Take back every correction that was accepted."""
-        if not self.suggestions.accepted:
+        session = self.suggestions
+        if session is not self._session_for(self._shown_entry):
+            self.statusBar().showMessage(
+                "ההצעות שייכות למסמך אחר, ולכן לא בוטלו.", 6000
+            )
+            return
+        if not session.accepted:
             self.statusBar().showMessage("אין שינויים לביטול.", 5000)
             return
-        text = self.suggestions.undo_all()
+        # The corrections are taken back in the text that is in the
+        # editor now, so that what the user wrote after them is kept.
+        text = session.undo_all(self.editor.toPlainText())
         self._loading = True
         self.editor.setPlainText(text)
         self._loading = False
-        self.suggestions_pane.set_undo_available(False)
+        self._store_editor_text()
+        self._refresh_suggestions(session)
         self._store_changes()
         self.statusBar().showMessage("כל שינויי התיקון בוטלו.", 6000)
 
@@ -930,7 +1017,7 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             QMessageBox.warning(self, "בחירת מילון", f"לא ניתן לקרוא את המילון: {exc}")
             return
-        self.suggestions_pane.show_suggestions([])
+        self._refresh_suggestions(self.suggestions)
         self.statusBar().showMessage(
             f"המילון של מודל האיות הוא עכשיו: {path} ({module.word_count} מילים)",
             8000,

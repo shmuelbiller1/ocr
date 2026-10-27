@@ -138,6 +138,98 @@ class WindowSuggestionsTests(unittest.TestCase):
             proposals = module.check("זהו טקסט")
             self.assertTrue(proposals)
 
+    def add_two_documents(self) -> None:
+        from hebrew_workbench.resources import samples_directory
+
+        samples = samples_directory()
+        if samples is None:
+            self.skipTest("the sample pages are not available here")
+        pages = sorted(samples.glob("scan_page_*.png"))
+        if len(pages) < 2:
+            self.skipTest("the sample pages are not available here")
+        self.window.project.add(pages[0])
+        self.window.project.add(pages[1])
+        self.window._sync_document_list()
+        self.window.doc_list.setCurrentRow(0)
+
+    def test_the_proposals_of_one_document_are_not_offered_for_another(self) -> None:
+        """The proposals belong to the document they were made for."""
+        self.add_two_documents()
+        self.window.editor.setPlainText("שלום , עולם")
+        self.window.check_suggestions()
+        self.assertEqual(len(self.window.suggestions.pending()), 1)
+
+        # The user moves to the other document.
+        self.window.doc_list.setCurrentRow(1)
+        self.app.processEvents()
+        self.assertEqual(self.window.suggestions.pending(), [])
+
+        # The proposal of the first document is not applied to the second.
+        self.window.editor.setPlainText("טקסט של המסמך השני")
+        stale = Suggestion(
+            module=KIND_GRAMMAR,
+            original=" ,",
+            replacement=",",
+            message="אין רווח לפני הפסיק",
+            start=4,
+            end=6,
+        )
+        self.window.accept_suggestion(stale)
+        self.assertEqual(self.window.editor.toPlainText(), "טקסט של המסמך השני")
+
+    def test_a_proposal_is_not_applied_when_the_text_was_changed_after_the_check(
+        self,
+    ) -> None:
+        """What the user wrote after the check is not thrown away."""
+        self.add_document()
+        self.window.editor.setPlainText("שלום , עולם")
+        self.window.check_suggestions()
+        suggestion = self.window.suggestions.pending()[0]
+
+        # The user writes something else before accepting.
+        self.window.editor.setPlainText("שלום , עולם ועוד")
+        self.window.accept_suggestion(suggestion)
+        self.assertEqual(self.window.editor.toPlainText(), "שלום , עולם ועוד")
+
+    def test_the_undo_is_still_there_after_a_new_check(self) -> None:
+        self.add_document()
+        self.window.editor.setPlainText("שלום , עולם")
+        self.window.check_suggestions()
+        self.window.accept_suggestion(self.window.suggestions.pending()[0])
+        self.assertTrue(self.window.suggestions_pane.undo_button.isEnabled())
+
+        # A new check does not take away the possibility to undo.
+        self.window.check_suggestions()
+        self.assertTrue(self.window.suggestions_pane.undo_button.isEnabled())
+
+    def test_the_accepted_changes_come_back_when_the_project_is_opened(self) -> None:
+        self.add_document()
+        self.window.editor.setPlainText("שלום , עולם")
+        self.window.check_suggestions()
+        self.window.accept_suggestion(self.window.suggestions.pending()[0])
+        self.assertEqual(len(self.window.project[0].changes), 1)
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "work.hwproj"
+            self.window.project.save(path)
+
+            from hebrew_workbench.ui.main_window import MainWindow
+
+            other = MainWindow()
+            try:
+                other.project = type(self.window.project).load(path)
+                other._sessions.clear()
+                other._sync_document_list()
+                other.doc_list.setCurrentRow(0)
+                other.app = self.app
+                self.app.processEvents()
+                self.assertEqual(len(other.suggestions.accepted), 1)
+                self.assertTrue(other.suggestions_pane.undo_button.isEnabled())
+            finally:
+                other.close()
+                other.deleteLater()
+                self.app.processEvents()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,12 @@ Hunspell dictionary does::
 
     שלום/תחתונות
     בית
+
+The first word of the line is the spelling that the list prefers, and
+the words after the slash are the other spellings of the same word.
+All of them are known words, and none of them is reported as a
+mistake.  When the text holds one of the other spellings, the preferred
+spelling is proposed for it, and the user decides.
 """
 
 from __future__ import annotations
@@ -52,6 +58,20 @@ def load_word_list(path: str | Path) -> dict[str, list[str]]:
     return words
 
 
+def build_spellings(words: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Every known spelling, with the spellings of its own word.
+
+    The first spelling of a word is the one that the list prefers, and
+    the others are the ways the word is also written.
+    """
+    spellings: dict[str, list[str]] = {}
+    for word, alternatives in words.items():
+        group = [word] + [item for item in alternatives if item != word]
+        for member in group:
+            spellings.setdefault(member, group)
+    return spellings
+
+
 class SpellingModule(SuggestionModule):
     """Proposes the words that are not in the word list of the user."""
 
@@ -63,6 +83,8 @@ class SpellingModule(SuggestionModule):
     def __init__(self) -> None:
         self._path: Path | None = None
         self._words: dict[str, list[str]] = {}
+        # Every known spelling, with the spellings of its own word.
+        self._spellings: dict[str, list[str]] = {}
         self._licence = ""
 
     # -- the word list of the user ----------------------------------------
@@ -73,6 +95,7 @@ class SpellingModule(SuggestionModule):
             raise FileNotFoundError(target)
         self._path = target
         self._words = load_word_list(target)
+        self._spellings = build_spellings(self._words)
         self._licence = self._read_licence(target)
 
     @property
@@ -114,21 +137,39 @@ class SpellingModule(SuggestionModule):
             word = match.group(0)
             if len(word) < MINIMUM_LENGTH:
                 continue
-            if word in self._words:
-                continue
-            alternatives = tuple(self._words.get(word, ()))
-            proposals.append(
-                Suggestion(
-                    module=self.id,
-                    original=word,
-                    replacement=word,
-                    message="המילה אינה במילון",
-                    start=match.start(),
-                    end=match.end(),
-                    kind="word",
-                    alternatives=alternatives,
+            group = self._spellings.get(word)
+            if group is None:
+                # The word is not in the list of the user at all.
+                proposals.append(
+                    Suggestion(
+                        module=self.id,
+                        original=word,
+                        replacement=word,
+                        message="המילה אינה במילון",
+                        start=match.start(),
+                        end=match.end(),
+                        kind="word",
+                    )
                 )
+                continue
+            if word == group[0]:
+                # The word is written the way the list prefers it.
+                continue
+            # The word is one of the other spellings, so the spelling
+            # that the list prefers is proposed for it.
+            others = [item for item in group if item != word]
+            proposal = Suggestion(
+                module=self.id,
+                original=word,
+                replacement=others[0],
+                message="אפשרות נוספת למילה",
+                start=match.start(),
+                end=match.end(),
+                kind="word",
+                alternatives=tuple(others[1:]),
             )
+            proposals.append(proposal)
+            proposals.extend(self.proposals_with_alternatives([proposal]))
         return proposals
 
     def proposals_with_alternatives(self, proposals: list[Suggestion]) -> list[Suggestion]:

@@ -115,7 +115,12 @@ class SuggestionsPane(QWidget):
 
     # -- what is shown -----------------------------------------------------
     def show_suggestions(self, suggestions: list[Suggestion]) -> None:
-        """Show the proposals that are waiting."""
+        """Show the proposals that are waiting.
+
+        The button that takes back the corrections is not touched here:
+        the window knows whether there is something to take back, and
+        it says so with :meth:`set_undo_available`.
+        """
         while self.rows_layout.count() > 1:
             item = self.rows_layout.takeAt(0)
             widget = item.widget()
@@ -132,7 +137,6 @@ class SuggestionsPane(QWidget):
             self.summary.setText(f"יש {len(suggestions)} הצעות לבחירה.")
         else:
             self.summary.setText("אין הצעות.")
-        self.undo_button.setEnabled(False)
 
     def set_undo_available(self, available: bool) -> None:
         self.undo_button.setEnabled(bool(available))

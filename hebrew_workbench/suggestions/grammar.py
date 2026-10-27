@@ -74,15 +74,24 @@ def double_space(text: str) -> list[Suggestion]:
 
 
 def space_before_closing_quote(text: str) -> list[Suggestion]:
-    """A closing quote is written without a space before it."""
+    """A closing quote is written without a space before it.
+
+    A quote that opens a quotation keeps the space before it, so only
+    the quote that closes a quotation is looked at.  The quotes come in
+    pairs, and the first of a pair opens the quotation.
+    """
     proposals: list[Suggestion] = []
     for match in re.finditer(r" +([\"״»])", text):
+        quote = match.group(1)
+        if quote != "»" and text.count(quote, 0, match.start(1)) % 2 == 0:
+            # This quote opens a quotation, and it needs the space.
+            continue
         proposals.append(
             _proposal(
                 text,
                 match.start(),
                 match.end(),
-                match.group(1),
+                quote,
                 "אין רווח לפני הגרשיים",
             )
         )

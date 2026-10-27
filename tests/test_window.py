@@ -80,6 +80,49 @@ class DocumentTextTests(unittest.TestCase):
         self.assertEqual(self.window.editor.toPlainText(), "")
         self.assertEqual(len(self.window.project), 1)
 
+    def test_removing_another_document_keeps_the_text_of_the_shown_one(self) -> None:
+        """The text of the shown document is not lost when another one goes."""
+        self.add_two_documents()
+        self.window.editor.setPlainText("הטקסט של המסמך הראשון")
+        first = self.window.project[0]
+
+        # The second document is removed, and the first one is shown.
+        self.window.doc_list.clearSelection()
+        self.window.doc_list.item(1).setSelected(True)
+        self.window.remove_selected_documents()
+        self.assertEqual(len(self.window.project), 1)
+        self.assertEqual(first.transcription, "הטקסט של המסמך הראשון")
+
+        # The text is not written over with the empty text of the editor.
+        self.window.doc_list.setCurrentRow(0)
+        self.app.processEvents()
+        self.assertEqual(first.transcription, "הטקסט של המסמך הראשון")
+
+    def test_the_result_of_the_recognition_stays_with_its_document(self) -> None:
+        """A recognition that finishes after the user moved on is safe."""
+        self.add_two_documents()
+        first = self.window.project[0]
+        second = self.window.project[1]
+
+        class Result:
+            text = "תוצאת הזיהוי"
+            engine_name = "מנוע הבדיקה"
+            duration_seconds = 1.5
+
+        # The recognition of the first document is still running, and the
+        # user moves to the second document.
+        self.window.doc_list.setCurrentRow(1)
+        self.app.processEvents()
+        self.window.editor.setPlainText("הטקסט של המסמך השני")
+
+        self.window._on_ocr_done(Result(), first)
+
+        # The result belongs to the first document, and the editor of
+        # the second one was left alone.
+        self.assertEqual(first.transcription, "תוצאת הזיהוי")
+        self.assertEqual(self.window.editor.toPlainText(), "הטקסט של המסמך השני")
+        self.assertEqual(second.transcription, "הטקסט של המסמך השני")
+
 
 if __name__ == "__main__":
     unittest.main()
