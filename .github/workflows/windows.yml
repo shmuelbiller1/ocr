@@ -219,7 +219,8 @@ jobs:
           } 2>&1 | tee install-engine.log
       - name: Check that torch and torchvision belong together
         run: |
-          python -c "import torch, torchvision, torchvision._C; print('torch', torch.__version__); print('torchvision', torchvision.__version__)" 2>&1 | tee check-engine.log
+          set -o pipefail
+          python tools/check_engine.py 2>&1 | tee check-engine.log
       - name: Download and check the recognition model
         run: |
           set -o pipefail
@@ -274,7 +275,7 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log model-download.log benchmark.log corpus-structure.log ocr-accuracy.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log benchmark.log corpus-structure.log ocr-accuracy.json
 
   ocr-worker-windows:
     name: OCR worker (Windows)
@@ -302,7 +303,7 @@ jobs:
       - name: Check that torch and torchvision belong together
         shell: pwsh
         run: |
-          python -c "import torch, torchvision, torchvision._C; print('torch', torch.__version__); print('torchvision', torchvision.__version__)" 2>&1 | Out-File -Encoding utf8 check-engine.log
+          python tools/check_engine.py 2>&1 | Out-File -Encoding utf8 check-engine.log
           if ($LASTEXITCODE -ne 0) { throw 'torch and torchvision do not belong together' }
       - name: Download and check the recognition model
         shell: pwsh
