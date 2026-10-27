@@ -7,14 +7,15 @@
     what it wrote to the standard output and what it wrote to the
     standard error.
 
-    The program is started with Start-Process, which takes the path of
-    the program and the paths of the files as separate values.  That way
+    The program is started with Start-Process, which takes the path of the
+    program and the paths of the files as separate values.  That way
     a path with a space in it is not broken by the quoting rules of the
     command line.  If Start-Process is not available, the program is
     started through cmd, which waits for it and returns its exit code.
 
-    Every fact is written to a file, so that a build that fails can still
-    publish them.
+    The wait has a limit, and a program that does not stop in time is
+    stopped, so that a build cannot hang for ever.  Every fact is
+    written to a file, so that a build that fails can still publish them.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Exe,
@@ -40,46 +41,43 @@ $reportPath = if ([System.IO.Path]::IsPathRooted($Report)) {
     Join-Path $root $Report
 }
 
-$job = Start-Job -ScriptBlock {
-    param($root, $exe, $report, $out, $err)
-    Set-Location $root
-    try {
-        # The path of the report is given in quotes, because
-        # Start-Process puts the values of the list together without
-        # quoting them.
-        $process = Start-Process -FilePath $exe `
-            -ArgumentList @('--selftest', '--selftest-report', ('"' + $report + '"')) `
-            -RedirectStandardOutput $out `
-            -RedirectStandardError $err `
-            -NoNewWindow `
-            -Wait `
-            -PassThru `
-            -ErrorAction Stop
-        $process.ExitCode
-    } catch {
-        cmd /c "`"$exe`" --selftest --selftest-report `"$report`" > `"$out`" 2> `"$err`""
-        $LASTEXITCODE
-    }
-} -ArgumentList $root, $exePath, $reportPath, $outPath, $errPath
-
-$done = Wait-Job $job -Timeout $TimeoutSeconds
-if (-not $done) {
-    Stop-Job $job -ErrorAction SilentlyContinue
-    Remove-Job $job -Force -ErrorAction SilentlyContinue
-    @("exit code: timeout", "exe: $exePath") | Out-File -Encoding utf8 $exitPath
-    Write-Output "::error title=Self-test::the packaged executable did not finish within $TimeoutSeconds seconds"
-    exit 1
+function Write-ExitFile([string]$code, [string]$note) {
+    @("exit code: $code", "exe: $exePath", $note) |
+        Out-File -Encoding utf8 $exitPath
 }
 
-$code = Receive-Job $job
-Remove-Job $job -Force -ErrorAction SilentlyContinue
+$code = $null
+try {
+    # The path of the report is given in quotes, because Start-Process
+    # puts the values of the list together without quoting them.
+    $process = Start-Process -FilePath $exePath `
+        -ArgumentList @('--selftest', '--selftest-report', ('"' + $reportPath + '"')) `
+        -RedirectStandardOutput $outPath `
+        -RedirectStandardError $errPath `
+        -NoNewWindow `
+        -PassThru `
+        -ErrorAction Stop
+    # The wait has a limit: a program that does not stop in time is
+    # stopped, and the build says that it did not stop.
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+        try { $process.Kill() } catch { }
+        Write-ExitFile 'timeout' "the program did not stop within $TimeoutSeconds seconds"
+        Write-Output "::error title=Self-test::the packaged executable did not finish within $TimeoutSeconds seconds"
+        exit 1
+    }
+    $code = $process.ExitCode
+} catch {
+    Write-Output "::error title=Self-test::Start-Process failed: $_"
+    cmd /c "`"$exePath`" --selftest --selftest-report `"$reportPath`" > `"$outPath`" 2> `"$errPath`""
+    $code = $LASTEXITCODE
+}
+
 if ($null -eq $code) {
     # The program did not report an exit code, so the build failed.
     $code = 1
 }
 
-@("exit code: $code", "exe: $exePath", "exe size: $((Get-Item $exePath).Length) bytes") |
-    Out-File -Encoding utf8 $exitPath
+Write-ExitFile "$code" "exe size: $((Get-Item $exePath).Length) bytes"
 Write-Host "exit code: $code"
 
 if (Test-Path $outPath) {

@@ -32,6 +32,7 @@ __all__ = [
     "kraken_importable",
     "default_segmentation_model",
     "build_manifest",
+    "make_engine",
 ]
 
 
@@ -83,6 +84,26 @@ def build_manifest(model_path: Path | None, artifact_id: str = "kraken-ppocrv6-s
         model_size_bytes=artifact.size_bytes if artifact else None,
         notes=artifact.notes if artifact else "",
     )
+
+
+def make_engine(options: dict | None = None) -> "KrakenEngine":
+    """Build the engine for the plugin system.
+
+    The options of the plugin say which of the known models is used.  A
+    model that was not downloaded is not an error here: the engine says
+    that it is not available, and the program tells the user what to do.
+    """
+    from .models import MODEL_ARTIFACTS, models_directory
+
+    settings = dict(options or {})
+    artifact_id = str(settings.get("model_id", "kraken-ppocrv6-small"))
+    artifact = MODEL_ARTIFACTS.get(artifact_id)
+    model_path = None
+    if artifact is not None:
+        candidate = models_directory() / artifact.filename
+        if candidate.is_file():
+            model_path = candidate
+    return KrakenEngine(model_path, artifact_id=artifact_id)
 
 
 class KrakenEngine:
@@ -146,6 +167,14 @@ class KrakenEngine:
         from ..preview.loader import DocumentPreview, PreviewError
 
         started = time.monotonic()
+        # The budget of the whole document.  A page that runs out of
+        # time is given up on, so that a stuck page cannot hold the
+        # program for ever.
+        deadline = (
+            None
+            if not self.timeout_seconds
+            else started + float(self.timeout_seconds)
+        )
         try:
             with DocumentPreview(file_path) as preview:
                 pages: list[PageResult] = []
