@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 
 if sys.platform.startswith("linux"):
     # The machine that runs the tests has no screen.
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from hebrew_workbench.suggestions.session import AcceptedChange  # noqa: E402
 from hebrew_workbench.ui.main_window import MainWindow  # noqa: E402
 from tests.qt_app import application  # noqa: E402
 
@@ -168,6 +171,30 @@ class DocumentTextTests(unittest.TestCase):
 
         self.assertEqual(self.window.doc_list.currentRow(), 0)
         self.assertIs(self.window._shown_entry, first)
+
+    def test_opening_another_project_forgets_the_old_one(self) -> None:
+        """The proposals of one project are not offered in another."""
+        self.add_two_documents()
+        self.window.doc_list.setCurrentRow(0)
+        self.app.processEvents()
+        session = self.window.suggestions
+        session.current_text = "שלום ,עולם"
+        session.accepted.append(
+            AcceptedChange("spelling", "שלום ,", "שלום,", 0, "")
+        )
+        self.assertTrue(session.undo_available)
+
+        from hebrew_workbench.project import Project
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "work.hwproj"
+            Project().save(path)
+            self.assertTrue(self.window.load_project(path))
+            # The old project is gone, and with it the proposals.
+            self.assertEqual(len(self.window.project), 0)
+            self.assertEqual(self.window.editor.toPlainText(), "")
+            self.assertFalse(self.window.suggestions.undo_available)
+            self.assertEqual(self.window.suggestions.pending(), [])
 
 
 if __name__ == "__main__":

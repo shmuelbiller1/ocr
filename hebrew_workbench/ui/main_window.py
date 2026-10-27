@@ -588,11 +588,20 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
+        self.load_project(Path(path))
+
+    def load_project(self, path: Path) -> bool:
+        """Open a project file, and leave the old project behind.
+
+        The sessions of the proposals belong to the documents of the
+        project that is open, and they are forgotten when another
+        project is opened.
+        """
         try:
             project = Project.load(path)
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "פתיחת הפרויקט", f"לא ניתן לפתוח: {exc}")
-            return
+            return False
         self.project = project
         self._sessions.clear()
         self._sync_document_list()
@@ -602,6 +611,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"נפתח הפרויקט {Path(path).name} עם {len(self.project)} מסמכים.", 6000
         )
+        return True
 
     # -- actions -----------------------------------------------------------
     def run_ocr(self) -> None:
