@@ -53,7 +53,7 @@ Hebrew-script notes into editable, printable documents.
 | Text search inside the document | **Not implemented** | Planned |
 | Undoing a correction of the style guide | **Not implemented** | The style module has no rules yet |
 | Reading a page of a PDF at the resolution of the scan | **Works** | The pages of a PDF are given to the engine at 300 dots per inch |
-| Installing the engine as a plugin | **Not in this pull request** | The plugin system is in the next pull request |
+| Installing and removing an engine or a word list | **Works** | They are plugins: they are installed, removed, switched on and off, and chosen in the settings screen; see `docs/PLUGINS.md` |
 
 ### What is not there yet
 
