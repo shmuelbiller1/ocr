@@ -219,6 +219,25 @@ class AccuracyTests(unittest.TestCase):
             # page is not complete.
             self.assertFalse(report["complete"])
 
+    def test_a_line_that_is_only_half_transcribed_is_not_complete(self) -> None:
+        """A word without a text would be counted as a mistake."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            xml = root / "page.xml"
+            xml.write_text(
+                "<PcGts><Page><TextRegion><TextLine>"
+                "<Word><TextEquiv><Unicode>שלום</Unicode></TextEquiv></Word>"
+                "<Word></Word>"
+                "</TextLine></TextRegion></Page></PcGts>",
+                encoding="utf-8",
+            )
+            text, report = benchmark.ground_truth_of(xml)
+            self.assertEqual(text, "שלום")
+            self.assertEqual(report["lines_from_words"], 1)
+            self.assertEqual(report["words"], 2)
+            self.assertEqual(report["words_with_text"], 1)
+            self.assertFalse(report["complete"])
+
     def test_the_rate_of_the_words_of_the_corpus_weighs_the_pages(self) -> None:
         """A page with few words does not count as much as a page with many."""
         results = [

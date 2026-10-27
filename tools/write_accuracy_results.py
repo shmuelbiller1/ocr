@@ -50,19 +50,35 @@ def build_section(report: dict) -> str:
         "",
     ]
 
+    # The ground truth of a page has to be complete, or the page is not
+    # a measurement of the recognition: the text that was not
+    # transcribed would be counted as a mistake of the engine.
+    incomplete = summary.get("pages_with_incomplete_ground_truth") or []
+    if incomplete:
+        lines += [
+            "> **The ground truth of these pages is not complete, and they are"
+            " not part of the rates above:** "
+            + ", ".join(incomplete)
+            + ".  Their numbers are in the table below, and they are not a"
+            " measurement of the recognition.",
+            "",
+        ]
+
     if pages:
         lines += [
-            "| Page | Characters in the ground truth | Character error rate | Word error rate | Seconds |",
-            "| --- | --- | --- | --- | --- |",
+            "| Page | Characters in the ground truth | Character error rate | Word error rate | Seconds | Ground truth |",
+            "| --- | --- | --- | --- | --- | --- |",
         ]
         for page in pages:
+            complete = (page.get("ground_truth") or {}).get("complete", True)
             lines.append(
-                "| {page} | {chars} | {cer} | {wer} | {seconds} |".format(
+                "| {page} | {chars} | {cer} | {wer} | {seconds} | {ground} |".format(
                     page=page.get("page", "?"),
                     chars=page.get("characters_reference", "?"),
                     cer=percent(page.get("cer", 0.0)),
                     wer=percent(page.get("wer", 0.0)),
                     seconds=page.get("seconds", "?"),
+                    ground="complete" if complete else "**not complete**",
                 )
             )
         lines.append("")

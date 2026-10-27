@@ -14,34 +14,48 @@ from .base import Suggestion
 
 __all__ = ["SuggestionSession", "AcceptedChange"]
 
-# The sizes of the text around a correction that are used to find it
-# back in a text that was written by hand after it.
-CONTEXT_SIZES = (40, 20, 10)
+#: The number of the characters around a correction that are kept, so
+#: that the correction can be found again in a text that was written by
+#: hand after it.
+CONTEXT_SIZE = 40
 
 
-def _place_of_change(change: "AcceptedChange", old: str, new: str) -> int | None:
-    """Where the correction is in the new text.
+def _place_of_change(change: "AcceptedChange", text: str) -> int | None:
+    """Where the correction is in the text.
 
-    The place is looked for with the text that surrounds the
-    correction, so that a correction is not taken back in a place where
-    the user wrote something else.  When the place cannot be found, or
-    when the same text is in more than one place, nothing is returned:
-    a correction that cannot be told apart is not taken back.
+    The place is looked for with the text that surrounded the
+    correction when it was accepted, so that a correction is not taken
+    back in a place where the user wrote something else.  When the
+    place cannot be found, or when the same text is in two places near
+    it, nothing is returned: a correction that cannot be told apart is
+    not taken back.
+
+    When the text around the correction was changed by another
+    correction that was accepted later, the place of the correction is
+    used, because the text around it is not the text that was kept.
     """
+    if not change.replacement:
+        return None
     start = change.position
     end = start + len(change.replacement)
-    for size in CONTEXT_SIZES:
-        before = old[max(0, start - size) : start]
-        after = old[end : end + size]
-        piece = before + change.replacement + after
-        found = new.find(piece)
-        if found < 0:
-            continue
-        if new.find(piece, found + 1) >= 0:
-            # The same text is in two places, and the place of the
-            # correction cannot be told.
-            continue
-        return found + len(before)
+    if change.before or change.after:
+        if not change.context_stale:
+            low = max(0, start - 200)
+            high = min(len(text), end + 200)
+            piece = change.before + change.replacement + change.after
+            found = text.find(piece, low, high)
+            if found < 0:
+                return None
+            if text.find(piece, found + 1, high) >= 0:
+                # The same text is in two places, and the place of the
+                # correction cannot be told.
+                return None
+            return found + len(change.before)
+    # The change comes from a project that was saved before the text
+    # around it was kept, or the text around it was changed by another
+    # correction: only the place is known.
+    if text[start:end] == change.replacement:
+        return start
     return None
 
 
@@ -55,12 +69,22 @@ class AcceptedChange:
         replacement: str,
         position: int,
         message: str = "",
+        before: str = "",
+        after: str = "",
     ) -> None:
         self.module = module
         self.original = original
         self.replacement = replacement
         self.position = position
         self.message = message
+        # The text that surrounds the change, so that the change can be
+        # found again in a text that was written by hand after it.
+        self.before = before
+        self.after = after
+        # Is the text around the change still the text that was kept?
+        # It is not when another correction was accepted later and
+        # touched it.
+        self.context_stale = False
 
     def describe(self) -> str:
         return f"{self.original} → {self.replacement}"
@@ -72,6 +96,8 @@ class AcceptedChange:
             "replacement": self.replacement,
             "position": self.position,
             "message": self.message,
+            "before": self.before,
+            "after": self.after,
         }
 
     @classmethod
@@ -82,6 +108,8 @@ class AcceptedChange:
             replacement=str(data.get("replacement", "")),
             position=int(data.get("position", 0)),
             message=str(data.get("message", "")),
+            before=str(data.get("before", "")),
+            after=str(data.get("after", "")),
         )
 
 
@@ -180,6 +208,20 @@ class SuggestionSession:
             return None
         start, end = place
         new_text = self.current_text[:start] + suggestion.replacement + self.current_text[end:]
+        # The changes that were accepted before this one and that are
+        # after it in the text move to the right, so that the place of
+        # every change is the place it has in the text as it is now.
+        shift = len(suggestion.replacement) - len(suggestion.original)
+        stop = start + len(suggestion.replacement)
+        for change in self.accepted:
+            if change.position >= start:
+                change.position += shift
+            # The text around the change is not the text that was kept
+            # when the new correction touches it.
+            first = change.position - len(change.before)
+            last = change.position + len(change.replacement) + len(change.after)
+            if start < last and first < stop:
+                change.context_stale = True
         self.accepted.append(
             AcceptedChange(
                 module=suggestion.module,
@@ -187,6 +229,13 @@ class SuggestionSession:
                 replacement=suggestion.replacement,
                 position=start,
                 message=suggestion.message,
+                before=new_text[max(0, start - CONTEXT_SIZE) : start],
+                after=new_text[
+                    start
+                    + len(suggestion.replacement) : start
+                    + len(suggestion.replacement)
+                    + CONTEXT_SIZE
+                ],
             )
         )
         self.current_text = new_text
@@ -210,33 +259,38 @@ class SuggestionSession:
         back in that text, so that what the user wrote after them is
         kept.
 
+        The corrections are taken back in the order they were accepted,
+        the last one first, so that a correction that was made on the
+        text of another one is taken back after it.
+
         A correction is only taken back where it really is: the place is
-        looked for with the text around the correction.  A correction
-        whose place cannot be found is not taken back at all, so that a
-        text that was never corrected is not changed.  The corrections
-        that were not taken back are in ``last_undo_skipped``.
+        looked for with the text that surrounded it when it was
+        accepted.  A correction whose place cannot be found is not taken
+        back at all, so that a text that was never corrected is not
+        changed.  The corrections that were not taken back are in
+        ``last_undo_skipped``.
         """
         result = self.current_text if text is None else text
-        source = self.current_text
         self.last_undo_skipped = []
-        places: list[tuple[int, AcceptedChange]] = []
-        for change in self.accepted:
+        for change in reversed(list(self.accepted)):
             if not change.replacement:
                 continue
-            place = _place_of_change(change, source, result)
+            place = _place_of_change(change, result)
             if place is None:
                 self.last_undo_skipped.append(change)
                 continue
-            places.append((place, change))
-        # The corrections are taken back from the last one to the first
-        # one, so that the place of a correction is not moved by the
-        # taking back of another one.
-        for place, change in sorted(places, key=lambda item: item[0], reverse=True):
             result = (
                 result[:place]
                 + change.original
                 + result[place + len(change.replacement) :]
             )
+            # The changes that are after this one in the text move to
+            # the left, so that the place of every change is the place
+            # it has in the text as it is now.
+            shift = len(change.original) - len(change.replacement)
+            for other in self.accepted:
+                if other is not change and other.position >= place:
+                    other.position += shift
         self.current_text = result
         self.accepted = []
         self._round_shifts = []

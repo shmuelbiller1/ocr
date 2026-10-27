@@ -292,6 +292,73 @@ class SessionTests(unittest.TestCase):
         # undo, and they are of no use now.
         self.assertEqual(session.pending(), [])
 
+    def test_the_corrections_are_taken_back_whatever_the_order_of_acceptance(
+        self,
+    ) -> None:
+        """The place of a correction is kept when another one is accepted."""
+        session = SuggestionSession("a,b,c")
+        first = Suggestion(
+            module=KIND_GRAMMAR,
+            original=",",
+            replacement=", ",
+            message="",
+            start=1,
+            end=2,
+        )
+        second = Suggestion(
+            module=KIND_GRAMMAR,
+            original=",",
+            replacement=", ",
+            message="",
+            start=3,
+            end=4,
+        )
+        session.set_suggestions([first, second], "a,b,c")
+
+        # The second correction is accepted first, and then the first
+        # one, so that the place of the first one is not the place it
+        # has in the text any more.
+        session.accept(second)
+        session.accept(first)
+        self.assertEqual(session.current_text, "a, b, c")
+
+        text = session.undo_all()
+        self.assertEqual(text, "a,b,c")
+        self.assertEqual(session.last_undo_skipped, [])
+
+    def test_the_corrections_that_depend_on_each_other_are_taken_back(self) -> None:
+        """A correction that was made on the text of another one."""
+        session = SuggestionSession("a ,b")
+        first = Suggestion(
+            module=KIND_GRAMMAR,
+            original=" ,",
+            replacement=",",
+            message="",
+            start=1,
+            end=3,
+        )
+        session.set_suggestions([first], "a ,b")
+        session.accept(first)
+        self.assertEqual(session.current_text, "a,b")
+
+        # The suggestions are checked again, and the space after the
+        # comma is added.
+        second = Suggestion(
+            module=KIND_GRAMMAR,
+            original=",",
+            replacement=", ",
+            message="",
+            start=1,
+            end=2,
+        )
+        session.set_suggestions([second], session.current_text)
+        session.accept(second)
+        self.assertEqual(session.current_text, "a, b")
+
+        text = session.undo_all()
+        self.assertEqual(text, "a ,b")
+        self.assertEqual(session.last_undo_skipped, [])
+
     def test_the_undo_does_not_change_a_text_that_was_not_corrected(self) -> None:
         """A correction is not taken back in a place that was not corrected."""
         session = SuggestionSession("שלום , עולם, סוף")

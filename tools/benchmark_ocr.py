@@ -116,6 +116,7 @@ def ground_truth_of(path: Path) -> tuple[str, dict]:
         "lines": 0,
         "lines_with_text": 0,
         "lines_from_words": 0,
+        "lines_incomplete": 0,
         "words": 0,
         "words_with_text": 0,
         "characters": 0,
@@ -124,21 +125,29 @@ def ground_truth_of(path: Path) -> tuple[str, dict]:
         if _tag(line) != "TextLine":
             continue
         report["lines"] += 1
+        words = [
+            child for child in line if _tag(child) == "Word"
+        ]
+        words_with_text = sum(1 for word in words if _word_text(word))
+        report["words"] += len(words)
+        report["words_with_text"] += words_with_text
+        own = _own_text(line)
         text = _line_text(line)
+        if not own and words:
+            report["lines_from_words"] += 1
+            if words_with_text != len(words):
+                # The line has no text of its own, and only some of
+                # its words have one: the line is not fully
+                # transcribed, and the words that were not transcribed
+                # would be counted as mistakes of the engine.
+                report["lines_incomplete"] += 1
         if not text:
+            report["lines_incomplete"] += 1
             continue
         lines.append(text)
         report["lines_with_text"] += 1
         report["characters"] += len(text)
-        if not _own_text(line):
-            report["lines_from_words"] += 1
-        for child in line:
-            if _tag(child) != "Word":
-                continue
-            report["words"] += 1
-            if _word_text(child):
-                report["words_with_text"] += 1
-    report["complete"] = report["lines"] == report["lines_with_text"]
+    report["complete"] = report["lines_incomplete"] == 0
     return "\n".join(lines), report
 
 
@@ -377,23 +386,34 @@ def main(argv: list[str] | None = None) -> int:
 
     if not results:
         raise SystemExit("no page with a ground truth was found in the dataset")
-    total_reference = sum(item["characters_reference"] for item in results)
-    total_cer = sum(
-        item["cer"] * item["characters_reference"] for item in results
-    ) / max(1, total_reference)
-    total_words = sum(item["words_reference"] for item in results)
-    total_wer = sum(item["word_errors"] for item in results) / max(1, total_words)
-    # The ground truth of every page has to be complete, or the
-    # measurement is not a measurement of the recognition.
+    # A page whose ground truth is not complete is not a measurement of
+    # the recognition: the text that was not transcribed would be
+    # counted as a mistake of the engine.  Such a page is left out of
+    # the rate of the corpus, and it is named in the report.
     incomplete = [
         item["page"]
         for item in results
         if not item["ground_truth"]["complete"]
     ]
+    measured = [
+        item for item in results if item["ground_truth"]["complete"]
+    ]
+    if not measured:
+        raise SystemExit(
+            "the ground truth of every page is incomplete, so there is "
+            "nothing to measure"
+        )
+    total_reference = sum(item["characters_reference"] for item in measured)
+    total_cer = sum(
+        item["cer"] * item["characters_reference"] for item in measured
+    ) / max(1, total_reference)
+    total_words = sum(item["words_reference"] for item in measured)
+    total_wer = sum(item["word_errors"] for item in measured) / max(1, total_words)
     report = {
         "engine": engine.name,
         "model": str(model_path),
-        "pages": len(results),
+        "pages": len(measured),
+        "pages_seen": len(results),
         "corpus": {
             "name": "The Pinkas Dataset",
             "citation": DATASET_CITATION,
@@ -408,7 +428,7 @@ def main(argv: list[str] | None = None) -> int:
             "cer": round(total_cer, 4),
             "wer": round(total_wer, 4),
             "seconds_per_page": round(
-                sum(item["seconds"] for item in results) / max(1, len(results)), 2
+                sum(item["seconds"] for item in measured) / max(1, len(measured)), 2
             ),
             "characters_reference": total_reference,
             "words_reference": total_words,

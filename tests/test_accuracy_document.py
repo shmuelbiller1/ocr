@@ -47,6 +47,21 @@ class AccuracyDocumentTests(unittest.TestCase):
             self.assertIn("## Next", text)
             self.assertNotIn("<!-- RESULTS -->", text)
 
+    def test_a_page_with_an_incomplete_ground_truth_is_named(self) -> None:
+        """The numbers of a page that was not fully transcribed are marked."""
+        report = json.loads(json.dumps(REPORT))
+        report["pages"] = 1
+        report["summary"]["pages_with_incomplete_ground_truth"] = ["page_02.jpg"]
+        report["results"][0]["ground_truth"] = {"complete": False}
+        section = writer.build_section(report)
+        self.assertIn("page_02.jpg", section)
+        self.assertIn("not complete", section)
+        self.assertIn("are not part of the rates above", section)
+
+    def test_a_complete_ground_truth_is_not_warned_about(self) -> None:
+        section = writer.build_section(REPORT)
+        self.assertNotIn("not part of the rates above", section)
+
     def test_writing_the_same_numbers_again_changes_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             document = Path(folder) / "OCR_ACCURACY.md"
