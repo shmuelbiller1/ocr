@@ -66,23 +66,31 @@ Measured with kraken PP-OCRv6 (Apache-2.0) on 8 pages of The Pinkas Dataset:
 
 | | |
 | --- | --- |
-| Character error rate | **56.3%** |
-| Word error rate | **92.1%** |
-| Seconds per page | 17.18 |
-| Pages | 8 |
-| Characters of the ground truth | 20049 |
-| Words of the ground truth | 4045 |
+| Character error rate | **61.5%** |
+| Word error rate | **96.4%** |
+| Seconds per page | 21.54 |
+| Pages measured | 7 |
+| Pages seen | 8 |
+| Characters of the ground truth | 16892 |
+| Words of the ground truth | 3404 |
 
-| Page | Characters in the ground truth | Character error rate | Word error rate | Seconds |
-| --- | --- | --- | --- | --- |
-| Page 105_1.jpg | 2862 | 64.6% | 98.6% | 23.62 |
-| Page 105_2.jpg | 3008 | 75.6% | 100.3% | 19.41 |
-| Page 107_1.jpg | 2287 | 35.3% | 82.2% | 15.21 |
-| Page 112_1.jpg | 2641 | 48.8% | 90.9% | 16.69 |
-| Page 112_2.jpg | 1617 | 57.8% | 94.0% | 12.82 |
-| Page 113_1.jpg | 3157 | 28.3% | 69.1% | 19.24 |
-| Page 113_2.jpg | 1895 | 73.0% | 99.2% | 13.34 |
-| Page 114_2.jpg | 2582 | 71.7% | 106.8% | 17.10 |
+| Page | Characters in the ground truth | Character error rate | Word error rate | Seconds | Ground truth |
+| --- | --- | --- | --- | --- | --- |
+| Page 105_1.jpg | 2862 | 64.6% | 98.6% | 30.10 | complete |
+| Page 105_2.jpg | 3008 | 75.6% | 100.3% | 24.79 | complete |
+| Page 107_1.jpg | 2287 | 35.3% | 82.2% | 19.41 | complete |
+| Page 112_1.jpg | 2641 | 48.8% | 90.9% | 21.21 | complete |
+| Page 112_2.jpg | 1617 | 57.8% | 94.0% | 16.08 | complete |
+| Page 113_1.jpg | 3157 | 28.3% | 69.1% | 24.78 | **not complete** |
+| Page 113_2.jpg | 1895 | 73.0% | 99.2% | 17.18 | complete |
+| Page 114_2.jpg | 2582 | 71.7% | 106.8% | 21.99 | complete |
+
+> **The ground truth of `Page 113_1.jpg` is not complete, and it is not
+> part of the rates above.**  Two of its lines are not fully
+> transcribed, and the text that was not transcribed would be counted
+> as a mistake of the engine.  Its numbers are in the table for the
+> sake of completeness, and they are not a measurement of the
+> recognition.
 
 The rate of the corpus is the number of the characters that were not
 read right over the number of the characters of the ground truth of the
@@ -99,7 +107,7 @@ The numbers were produced by `tools/benchmark_ocr.py` in the `ocr-engine` job of
 The numbers are the ones that were measured on real handwritten pages
 with a published transcription, and they are much worse than the numbers
 that the authors of the model published for their own test set (6.5%
-character error rate against the 56.3% that was measured here).
+character error rate against the 61.5% that was measured here).
 
 Three things are known to make the measurement worse, and they are
 named here so that nobody has to guess:
@@ -129,11 +137,9 @@ report says how many lines the file holds, how many of them have a
 text, and how many were read from the words alone, so that a number
 that comes from an incomplete ground truth can be seen and not
 believed.  In this measurement **the ground truth of one page is not
-complete**: the file of `Page 113_1.jpg` holds 45 lines, and one of
-them has no text at all.  The rate of the corpus therefore holds a
-little text that the engine was never asked to read.  The report says
-which pages are like that, and the numbers of the other seven pages
-are not affected by it.
+complete**: the file of `Page 113_1.jpg` holds 45 lines, and two of
+them are not fully transcribed.  That page is left out of the rate of
+the corpus, and the report says which pages are like that.
 
 ## Reproducing the measurement
 
