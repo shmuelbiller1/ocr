@@ -17,6 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from tools.benchmark_ocr import (  # noqa: E402
+    _line_text,
+    _word_text,
     download_dataset,
     extract_dataset,
     find_pages,
@@ -74,16 +76,26 @@ def main(argv: list[str] | None = None) -> int:
         }
         print(f"    the file holds: {interesting}")
         text = read_page_xml(xml_path)
-        print(f"    the text that is read: {len(text)} characters")
-        print(f"    the first lines: {text.splitlines()[:3]}")
+        lines = [line for line in text.splitlines() if line.strip()]
+        print(f"    the text that is read: {len(text)} characters in {len(lines)} lines")
+        print(f"    the first lines: {lines[:3]}")
 
-        # The first line as it is in the file, so that the structure is
-        # visible and not only the result.
+        # The shape of a line, so that the structure is visible and not
+        # only the result: the order of the children, the text of the
+        # line itself and the words that are inside it.
         for element in tree.iter():
-            if element.tag.rsplit("}", 1)[-1] == "TextLine":
-                raw = ElementTree.tostring(element, encoding="unicode")
-                print(f"    the first line in the file: {raw[:600]}")
-                break
+            if element.tag.rsplit("}", 1)[-1] != "TextLine":
+                continue
+            children = [child.tag.rsplit("}", 1)[-1] for child in element]
+            print(f"    a line holds: {children}")
+            print(f"    the text of that line: {_line_text(element)!r}")
+            words = [
+                _word_text(child)
+                for child in element
+                if child.tag.rsplit("}", 1)[-1] == "Word"
+            ]
+            print(f"    its words: {words[:8]}")
+            break
 
         try:
             from PIL import Image

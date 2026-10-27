@@ -73,6 +73,51 @@ class AccuracyTests(unittest.TestCase):
             path.write_text(xml, encoding="utf-8")
             self.assertEqual(benchmark.read_page_xml(path), "שלום")
 
+    def test_the_text_of_a_line_is_not_the_text_of_its_first_word(self) -> None:
+        """A line has a text of its own, next to the texts of its words.
+
+        This is the shape of the Pinkas corpus: every line holds the
+        text of the whole line and, beside it, the words of the line.
+        """
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2018-07-15">
+          <Page>
+            <TextRegion>
+              <TextLine id="l0">
+                <Coords points="1,2 3,4"/>
+                <TextEquiv><Unicode>דיא ע"י צלין</Unicode></TextEquiv>
+                <Word id="w0"><TextEquiv><Unicode>דיא</Unicode></TextEquiv></Word>
+                <Word id="w1"><TextEquiv><Unicode>ע"י</Unicode></TextEquiv></Word>
+                <Word id="w2"><TextEquiv><Unicode>צלין</Unicode></TextEquiv></Word>
+              </TextLine>
+            </TextRegion>
+          </Page>
+        </PcGts>
+        """
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "page.xml"
+            path.write_text(xml, encoding="utf-8")
+            self.assertEqual(benchmark.read_page_xml(path), 'דיא ע"י צלין')
+
+    def test_the_words_of_a_line_are_joined_when_the_line_has_no_text(self) -> None:
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2018-07-15">
+          <Page>
+            <TextRegion>
+              <TextLine id="l0">
+                <TextEquiv><Unicode/></TextEquiv>
+                <Word id="w0"><TextEquiv><Unicode>דיא</Unicode></TextEquiv></Word>
+                <Word id="w1"><TextEquiv><Unicode>צלין</Unicode></TextEquiv></Word>
+              </TextLine>
+            </TextRegion>
+          </Page>
+        </PcGts>
+        """
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "page.xml"
+            path.write_text(xml, encoding="utf-8")
+            self.assertEqual(benchmark.read_page_xml(path), "דיא צלין")
+
     def test_a_page_without_a_ground_truth_is_not_measured(self) -> None:
         class Engine:
             def recognize(self, image):  # noqa: N802 - the name of the engine

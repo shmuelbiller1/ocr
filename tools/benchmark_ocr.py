@@ -100,8 +100,7 @@ def read_page_xml(path: Path) -> str:
     tree = ElementTree.parse(path)
     lines = []
     for line in tree.iter():
-        tag = line.tag.rsplit("}", 1)[-1]
-        if tag != "TextLine":
+        if _tag(line) != "TextLine":
             continue
         text = _line_text(line)
         if text:
@@ -109,15 +108,56 @@ def read_page_xml(path: Path) -> str:
     return "\n".join(lines)
 
 
-def _line_text(line) -> str:
-    """The text of one line, wherever it sits inside the element."""
-    for element in line.iter():
-        if element.tag.rsplit("}", 1)[-1] != "Unicode":
+def _tag(element) -> str:
+    """The name of an element, without the namespace it may have."""
+    return element.tag.rsplit("}", 1)[-1]
+
+
+def _own_text(element) -> list[str]:
+    """The texts that belong to the element itself.
+
+    The words of a line have texts of their own, and they are not the
+    text of the line, so the words are left out.
+    """
+    found = []
+    for child in element:
+        tag = _tag(child)
+        if tag == "Word":
             continue
-        text = (element.text or "").strip()
+        if tag == "Unicode":
+            text = (child.text or "").strip()
+            if text:
+                found.append(text)
+            continue
+        found.extend(_own_text(child))
+    return found
+
+
+def _line_text(line) -> str:
+    """The text of one line.
+
+    A line carries the text of the whole line, in a ``Unicode`` element
+    that belongs to the line itself.  When it has none, the words of the
+    line are joined together.
+    """
+    own = _own_text(line)
+    if own:
+        return max(own, key=len)
+
+    words = []
+    for child in line:
+        if _tag(child) != "Word":
+            continue
+        text = _word_text(child)
         if text:
-            return text
-    return ""
+            words.append(text)
+    return " ".join(words)
+
+
+def _word_text(word) -> str:
+    """The text of one word."""
+    texts = _own_text(word)
+    return max(texts, key=len) if texts else ""
 
 
 def download_dataset(target: Path) -> Path:
@@ -197,8 +237,14 @@ def measure_page(
         # "the error rate is 1200%" can be looked at and understood.
         "reference_sample": reference[:200],
         "hypothesis_sample": hypothesis[:200],
-        "lines_reference": len([line for line in reference.splitlines() if line]),
-        "lines_hypothesis": len([line for line in hypothesis.splitlines() if line]),
+        # The lines are counted before the text is normalised, because
+        # the normalisation turns every line into one long line.
+        "lines_reference": len(
+            [line for line in reference_raw.splitlines() if line.strip()]
+        ),
+        "lines_hypothesis": len(
+            [line for line in recognised.text.splitlines() if line.strip()]
+        ),
     }
 
 
