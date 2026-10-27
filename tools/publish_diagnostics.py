@@ -27,6 +27,9 @@ def run(command: list[str]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    branch = BRANCH
+    if argv and argv[0].startswith("--branch="):
+        branch = argv.pop(0).split("=", 1)[1]
     if not argv:
         print("nothing to publish")
         return 0
@@ -51,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         print("no diagnostics were found")
         return 0
 
-    if run(["git", "checkout", "-B", BRANCH]) != 0:
+    if run(["git", "checkout", "-B", branch]) != 0:
         return 1
     run(["git", "add", "-f", FOLDER])
     run(
@@ -67,9 +70,9 @@ def main(argv: list[str] | None = None) -> int:
             "--allow-empty",
         ]
     )
-    if run(["git", "push", "--force", "origin", f"HEAD:refs/heads/{BRANCH}"]) != 0:
+    if run(["git", "push", "--force", "origin", f"HEAD:refs/heads/{branch}"]) != 0:
         return 1
-    print(f"published {copied} to {BRANCH}")
+    print(f"published {copied} to {branch}")
     return 0
 
 

@@ -256,15 +256,18 @@ jobs:
           python-version: '3.12'
       - name: Install the recognition engine
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<2.14"
-          python -m pip install "kraken==7.1.1" "pillow==11.3.0"
-          python -c "import torch, kraken; print('torch', torch.__version__); print('kraken', kraken.__version__)"
+          set -o pipefail
+          {
+            python -m pip install --upgrade pip
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<2.14"
+            python -m pip install "kraken==7.1.1" "pillow==11.3.0"
+            python -c "import torch, kraken; print('torch', torch.__version__); print('kraken', kraken.__version__)"
+          } 2>&1 | tee install-engine.log
           python -c "import torch, kraken; print('::warning title=Engine versions::torch ' + torch.__version__ + ' / kraken ' + kraken.__version__)"
       - name: Download and check the recognition model
         run: |
-          python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models --print-digest > model-digest.txt
-          cat model-digest.txt
+          set -o pipefail
+          python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models --print-digest 2>&1 | tee model-download.log | tee model-digest.txt
           python - <<'PY'
           import json, pathlib
           text = pathlib.Path('model-digest.txt').read_text(encoding='utf-8')
@@ -273,11 +276,12 @@ jobs:
           PY
       - name: Measure the accuracy on real handwritten pages
         run: |
+          set -o pipefail
           python tools/benchmark_ocr.py \
             --model .cache/models/small.safetensors \
             --cache .cache/pinkas \
             --pages 3 \
-            --output ocr-accuracy.json
+            --output ocr-accuracy.json 2>&1 | tee benchmark.log
       - name: Publish the accuracy report
         if: always()
         run: |
@@ -302,6 +306,12 @@ jobs:
           name: ocr-accuracy-report
           path: ocr-accuracy.json
           if-no-files-found: warn
+      - name: Publish the diagnostics
+        if: always()
+        continue-on-error: true
+        permissions:
+          contents: write
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log model-download.log model-digest.txt benchmark.log ocr-accuracy.json
 
   ocr-worker-windows:
     name: OCR worker (Windows)
@@ -312,16 +322,23 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install the recognition engine
+        shell: pwsh
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<2.14"
-          python -m pip install "kraken==7.1.1" "pillow==11.3.0"
+          python -m pip install --upgrade pip 2>&1 | Out-File -Encoding utf8 install-engine.log
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<2.14" 2>&1 | Tee-Object -FilePath install-engine.log -Append
+          if ($LASTEXITCODE -ne 0) { throw 'the engine could not be installed' }
+          python -m pip install "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Tee-Object -FilePath install-engine.log -Append
+          if ($LASTEXITCODE -ne 0) { throw 'kraken could not be installed' }
       - name: Download the recognition model
-        run: python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models
+        shell: pwsh
+        run: |
+          python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | Tee-Object -FilePath model-download.log
+          if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
       - name: Build the OCR worker
-        run: >-
-          python -m PyInstaller --noconfirm --clean --onefile --console
-          --name ocr-worker ocr_worker/main.py
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --console --name ocr-worker ocr_worker/main.py 2>&1 | Tee-Object -FilePath build-worker.log
+          if ($LASTEXITCODE -ne 0) { throw 'the worker could not be built' }
       - name: Recognise a page with the packaged worker
         shell: pwsh
         run: |
@@ -343,3 +360,10 @@ jobs:
           name: ocr-worker-Windows
           path: dist/ocr-worker.exe
           if-no-files-found: error
+      - name: Publish the diagnostics
+        if: always()
+        continue-on-error: true
+        permissions:
+          contents: write
+        shell: pwsh
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json
