@@ -56,20 +56,27 @@ def main(argv: list[str] | None = None) -> int:
 
     if run(["git", "checkout", "-B", branch]) != 0:
         return 1
-    run(["git", "add", "-f", FOLDER])
-    run(
-        [
-            "git",
-            "-c",
-            "user.name=github-actions[bot]",
-            "-c",
-            "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-            "commit",
-            "-m",
-            "ci: diagnostics of this build",
-            "--allow-empty",
-        ]
-    )
+    if run(["git", "add", "-f", FOLDER]) != 0:
+        sys.stderr.write("the diagnostics could not be added to the index\n")
+        return 1
+    if (
+        run(
+            [
+                "git",
+                "-c",
+                "user.name=github-actions[bot]",
+                "-c",
+                "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+                "commit",
+                "-m",
+                "ci: diagnostics of this build",
+                "--allow-empty",
+            ]
+        )
+        != 0
+    ):
+        sys.stderr.write("the diagnostics could not be committed\n")
+        return 1
     if run(["git", "push", "--force", "origin", f"HEAD:refs/heads/{branch}"]) != 0:
         return 1
     print(f"published {copied} to {branch}")

@@ -209,12 +209,17 @@ jobs:
           {
             python -m pip install --upgrade pip
             # torch and torchvision have to be a matching pair, and both
-            # have to come from the same place.  When kraken brings its
-            # own torchvision, pip replaces the CPU build of torch with
-            # the GPU build of PyPI, and the two do not work together.
-            python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.13,<2.15" "torchvision>=0.28,<0.30"
+            # have to come from the same place.  kraken asks for
+            # torch<=2.14, and the torchvision that belongs to torch
+            # 2.14.1 asks for torch 2.14.1, so pip leaves the two
+            # apart and the recognition dies with "operator
+            # torchvision::nms does not exist".  The pair is pinned.
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
             python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
           } 2>&1 | tee install-engine.log
+      - name: Check that torch and torchvision belong together
+        run: |
+          python -c "import torch, torchvision, torchvision._C; print('torch', torch.__version__); print('torchvision', torchvision.__version__)" 2>&1 | tee check-engine.log
       - name: Download and check the recognition model
         run: |
           set -o pipefail
@@ -235,12 +240,17 @@ jobs:
       - name: Write the results into the documentation
         if: always()
         continue-on-error: true
+        env:
+          # The name of the branch is handed over through the
+          # environment, so that a branch name can never become part of
+          # the commands of the build.
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
           if [ -f ocr-accuracy.json ]; then
             python tools/write_accuracy_results.py --report ocr-accuracy.json --document docs/OCR_ACCURACY.md
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            branch="${{ github.event.pull_request.head.ref || github.ref_name }}"
+            branch="$HEAD_BRANCH"
             git add docs/OCR_ACCURACY.md
             if ! git diff --cached --quiet; then
               git commit -m "docs: the accuracy that was measured on the corpus"
@@ -252,17 +262,7 @@ jobs:
         run: |
           if [ -f ocr-accuracy.json ]; then
             cat ocr-accuracy.json
-            python - <<'PY'
-            import json, pathlib
-            report = json.loads(pathlib.Path("ocr-accuracy.json").read_text(encoding="utf-8"))
-            summary = report.get("summary", {})
-            message = (
-                f"the engine recognised {report.get('pages', 0)} pages, "
-                f"character error rate {summary.get('cer', 0) * 100:.1f}%, "
-                f"word error rate {summary.get('wer', 0) * 100:.1f}%"
-            )
-            print(f"::notice title=Accuracy::{message}")
-            PY
+            python tools/accuracy_notice.py --report ocr-accuracy.json
           fi
       - name: Upload the accuracy report
         if: always()
@@ -291,10 +291,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip 2>&1 | Out-File -Encoding utf8 install-engine.log
           # torch and torchvision must be a matching pair from the same
-          # place, otherwise the recognition fails to start.
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.13,<2.15" "torchvision>=0.28,<0.30" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          # place, otherwise the recognition fails to start.  kraken asks
+          # for torch<=2.14, and the torchvision that belongs to torch
+          # 2.14.1 asks for torch 2.14.1, so pip leaves the two apart
+          # and the worker dies with "operator torchvision::nms does not
+          # exist".  The pair is pinned.
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           python -m pip install "pyinstaller==6.16.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+      - name: Check that torch and torchvision belong together
+        shell: pwsh
+        run: |
+          python -c "import torch, torchvision, torchvision._C; print('torch', torch.__version__); print('torchvision', torchvision.__version__)" 2>&1 | Out-File -Encoding utf8 check-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'torch and torchvision do not belong together' }
       - name: Download and check the recognition model
         shell: pwsh
         run: |
@@ -305,6 +314,7 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --onedir --console `
             --collect-all kraken `
+            --collect-all torchvision `
             --name ocr-worker ocr_worker/main.py 2>&1 | Tee-Object -FilePath build-worker.log
           if ($LASTEXITCODE -ne 0) { throw 'the worker could not be built' }
       - name: Recognise a page with the packaged worker
@@ -331,4 +341,4 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log check-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json
