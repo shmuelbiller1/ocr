@@ -189,6 +189,59 @@ jobs:
         shell: pwsh
         run: |
           python tools/build_release.py --app dist/HebrewNotesWorkbench --worker dist/ocr-worker --download-licences
+      - name: Download the recognition model
+        shell: pwsh
+        run: |
+          python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download.log
+          if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
+      - name: Check the release as a user gets it
+        shell: pwsh
+        run: |
+          # The archive is unpacked as a user unpacks it, and the
+          # program and the worker are started from the unpacked
+          # folder, so that the build says whether the archive holds
+          # everything that is needed to read a page.
+          $folder = Join-Path $env:RUNNER_TEMP 'release-check'
+          if (Test-Path $folder) { Remove-Item -Recurse -Force $folder }
+          New-Item -ItemType Directory -Path $folder | Out-Null
+          $archive = (Get-ChildItem 'release' -Filter '*.zip' | Select-Object -First 1)
+          if (-not $archive) { throw 'the archive for the user was not made' }
+          Expand-Archive -Path $archive.FullName -DestinationPath $folder
+          Get-ChildItem $folder -Recurse -File |
+            ForEach-Object { "$($_.FullName) $($_.Length)" } |
+            Out-File -Encoding utf8 'release-listing.txt'
+          $program = Get-ChildItem $folder -Recurse -Filter 'HebrewNotesWorkbench.exe' | Select-Object -First 1
+          if (-not $program) { throw 'the program is not in the archive' }
+          $worker = Get-ChildItem $folder -Recurse -Filter 'ocr-worker.exe' | Select-Object -First 1
+          if (-not $worker) { throw 'the worker of the recognition is not in the archive' }
+          # The program starts from the unpacked folder.
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe $program.FullName `
+            -Report (Join-Path $folder 'selftest.json') `
+            -StdOut 'release-selftest-out.txt' `
+            -StdErr 'release-selftest-err.txt'
+          if (-not (Test-Path (Join-Path $folder 'selftest.json'))) {
+            Write-Output '::error title=Release::the unpacked program did not write its report'
+            throw 'the unpacked program did not start'
+          }
+          # The worker reads a page from the unpacked folder.
+          $job = @{ document = (Resolve-Path 'samples\scan_page_1.png').Path; model_path = (Resolve-Path '.cache\models\small.safetensors').Path } | ConvertTo-Json
+          $job | Set-Content -Encoding utf8 release-job.json
+          $process = Start-Process -FilePath $worker.FullName `
+            -ArgumentList '--job','release-job.json','--result','release-result.json' `
+            -Wait -PassThru -RedirectStandardOutput 'release-worker-out.txt' -RedirectStandardError 'release-worker-err.txt'
+          Write-Host "worker exit code: $($process.ExitCode)"
+          if (Test-Path 'release-worker-err.txt') {
+            Get-Content 'release-worker-err.txt' | Select-Object -Last 20 |
+              ForEach-Object { Write-Output "::warning title=Release worker::$_" }
+          }
+          if (-not (Test-Path 'release-result.json')) { throw 'the unpacked worker did not write a result' }
+          $result = Get-Content 'release-result.json' -Raw | ConvertFrom-Json
+          if ($result.error) {
+            Write-Output "::error title=Release worker::$($result.error)"
+            throw 'the unpacked worker reported an error'
+          }
+          Write-Output "::warning title=Release worker::recognised $($result.text.Length) characters from the unpacked folder"
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
@@ -196,7 +249,7 @@ jobs:
         run: |
           Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-worker.log install-engine.log build-console.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt
+          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-worker.log install-engine.log build-console.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-err.txt release-worker-out.txt release-worker-err.txt release-result.json
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4

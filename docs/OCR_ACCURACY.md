@@ -53,14 +53,75 @@ cursive.
 
 ## Measured results
 
-The numbers in this section are filled in by the `ocr-engine` job of the
-build itself: the job measures the accuracy, writes the result of the
-measurement into this file and sends it back to the branch.  The numbers
-are therefore always the ones that were measured, and never numbers that
-somebody wrote by hand.  The report they come from is also uploaded as
-the artefact `ocr-accuracy-report`.
+The numbers in this section are produced by the `ocr-engine` job of the
+build: the job measures the accuracy on the pages of the corpus and
+uploads the report as the artefact `ocr-accuracy-report` and the page
+with the numbers as the artefact `ocr-accuracy-document`.  The numbers
+below are the ones of that measurement, taken from the report of the
+build of the 27th of October 2026 (commit `4a69fa1`).
 
-<!-- RESULTS -->
+<!-- RESULTS:BEGIN -->
+
+Measured with kraken PP-OCRv6 (Apache-2.0) on 8 pages of The Pinkas Dataset:
+
+| | |
+| --- | --- |
+| Character error rate | **56.3%** |
+| Word error rate | **92.1%** |
+| Seconds per page | 20.93 |
+| Pages | 8 |
+
+| Page | Characters in the ground truth | Character error rate | Word error rate | Seconds |
+| --- | --- | --- | --- | --- |
+| Page 105_1.jpg | 2862 | 64.6% | 98.6% | 28.77 |
+| Page 105_2.jpg | 3008 | 75.6% | 100.3% | 23.91 |
+| Page 107_1.jpg | 2287 | 35.3% | 82.2% | 18.24 |
+| Page 112_1.jpg | 2641 | 48.8% | 90.9% | 20.11 |
+| Page 112_2.jpg | 1617 | 57.8% | 94.0% | 15.19 |
+| Page 113_1.jpg | 3157 | 28.3% | 69.1% | 23.76 |
+| Page 113_2.jpg | 1895 | 73.0% | 99.2% | 16.34 |
+| Page 114_2.jpg | 2582 | 71.7% | 106.8% | 21.15 |
+
+The numbers were produced by `tools/benchmark_ocr.py` in the `ocr-engine` job of the build, and the report they come from is uploaded as the artefact `ocr-accuracy-report`.
+
+<!-- RESULTS:END -->
+
+### What these numbers mean
+
+**The engine works, and it is not accurate enough to be used as it is.**
+The numbers are the ones that were measured on real handwritten pages
+with a published transcription, and they are much worse than the numbers
+that the authors of the model published for their own test set (6.5%
+character error rate against the 56.3% that was measured here).
+
+Three things are known to make the measurement worse, and they are
+named here so that nobody has to guess:
+
+1. **The corpus is hard.**  The pages are early modern cursive of
+   1500-1800, written with a quill pen in a script that few people can
+   read today.  The model is a general multilingual model of modern
+   handwriting.
+2. **The engine reads the whole page, and the ground truth is the text
+   of the lines.**  The engine also reads the numbers and the notes in
+   the margin of the page, and they are not part of the ground truth,
+   so every one of them counts as an error.
+3. **The order of the lines of the page and the order of the lines of
+   the ground truth are not always the same**, and a line that is out
+   of place makes every character of it wrong.
+
+So the numbers are an honest measure of the *engine on this corpus*,
+and they say that the text of a historical page has to be read and
+corrected by a person.  That is what the program does: the recognition
+result is written into the editor as a starting point, and the program
+says right after it that every line has to be checked before it is
+exported or printed.  **The program never changes the text by itself,
+and it never presents a recognition result as finished.**
+
+The ground truth of every page was checked before the measurement: the
+report says how many lines the file holds, how many of them have a
+text, and how many were read from the words alone, so that a number
+that comes from an incomplete ground truth can be seen and not
+believed.
 
 ## Reproducing the measurement
 
