@@ -246,6 +246,14 @@ def measure_page(
         # "the error rate is 1200%" can be looked at and understood.
         "reference_sample": reference[:200],
         "hypothesis_sample": hypothesis[:200],
+        # The first lines of both sides, one by one, so that a
+        # difference between the two can be seen and not only counted.
+        "reference_lines_sample": [
+            line[:70] for line in reference_raw.splitlines() if line.strip()
+        ][:4],
+        "hypothesis_lines_sample": [
+            line[:70] for line in recognised.text.splitlines() if line.strip()
+        ][:4],
         # The lines are counted before the text is normalised, because
         # the normalisation turns every line into one long line.
         "lines_reference": len(
@@ -312,6 +320,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"    ground truth: {measured['reference_sample']}", flush=True)
         print(f"    recognised:   {measured['hypothesis_sample']}", flush=True)
+        for number, (want, got) in enumerate(
+            zip(
+                measured["reference_lines_sample"],
+                measured["hypothesis_lines_sample"],
+            ),
+            start=1,
+        ):
+            print(f"      line {number} of the ground truth: {want}", flush=True)
+            print(f"      line {number} of the result:      {got}", flush=True)
 
     if not results:
         raise SystemExit("no page with a ground truth was found in the dataset")

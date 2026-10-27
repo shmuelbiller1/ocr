@@ -34,6 +34,34 @@ def count_tags(tree) -> dict[str, int]:
     return counts
 
 
+def _tag(element) -> str:
+    return element.tag.rsplit("}", 1)[-1]
+
+
+def _points(element) -> list[tuple[float, float]]:
+    """The points of the Coords of a line, when it has any."""
+    for child in element:
+        if _tag(child) != "Coords":
+            continue
+        points: list[tuple[float, float]] = []
+        for point in child:
+            if _tag(point) != "Point":
+                continue
+            try:
+                points.append((float(point.get("x", "0")), float(point.get("y", "0"))))
+            except (TypeError, ValueError):
+                continue
+        return points
+    return []
+
+
+def _top(points: list[tuple[float, float]]) -> float | None:
+    """The place of the line on the page: the smallest y of its points."""
+    if not points:
+        return None
+    return round(min(point[1] for point in points), 1)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", help="folder with an extracted corpus")
@@ -104,6 +132,25 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"    the image is {handle.width}x{handle.height} pixels")
         except Exception as exc:  # pragma: no cover - defensive
             print(f"    the image could not be opened: {exc!r}")
+
+        # Where every line is on the page.  The order of the lines in
+        # the file is the order of the reading, but it is worth seeing
+        # it: when the file is not in the order of the page, every
+        # measurement of the page is wrong.
+        region = -1
+        for element in tree.iter():
+            tag = _tag(element)
+            if tag == "TextRegion":
+                region += 1
+            if tag != "TextLine":
+                continue
+            text = _line_text(element)
+            if not text:
+                continue
+            print(
+                f"    line: region {region} at y={_top(_points(element))} "
+                f"text={text[:48]!r}"
+            )
     return 0
 
 
