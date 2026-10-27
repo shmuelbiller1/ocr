@@ -83,7 +83,10 @@ MODEL_ARTIFACTS: dict[str, ModelArtifact] = {
         url="https://zenodo.org/api/records/21788405/files/small.safetensors/content",
         size_bytes=13_065_380,
         md5="07279cd68cd4402807542799f12d0f4a",
-        sha256=None,  # pinned after the first verified download, see docs/OCR_ACCURACY.md
+        # The digest of the file of the record above, taken from the
+        # mirror of the same record (the model card points at the same
+        # Zenodo DOI) and checked by the build after every download.
+        sha256="3108259779f5abfed3908a1c9eafba64d17e4a2a169368c539ecfeff04c018f3",
         license="Apache-2.0",
         license_url="https://zenodo.org/records/21788405",
         script="Hebrew (among 43 other languages)",
@@ -101,7 +104,7 @@ MODEL_ARTIFACTS: dict[str, ModelArtifact] = {
         url="https://zenodo.org/api/records/21788410/files/medium.safetensors/content",
         size_bytes=63_779_644,
         md5="e3411a453ce3b9e9efae3f8631d85762",
-        sha256=None,
+        sha256="15313b51ace64cbfa81f8f6ef25ad64f04e5a6fb7f7823e67b107527bc081ac9",
         license="Apache-2.0",
         license_url="https://zenodo.org/records/21788410",
         script="Hebrew (among 43 other languages)",

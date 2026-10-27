@@ -90,43 +90,68 @@ class WorkerEngine:
                 "--result",
                 str(result_path),
             ]
+            error_path = Path(folder) / "error.txt"
             started = time.monotonic()
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            while True:
-                code = process.poll()
-                if code is not None:
-                    break
-                if cancel and cancel():
-                    process.terminate()
-                    try:
-                        process.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
+            # The output of the worker goes to files, not to pipes that
+            # nobody reads.  A pipe that is not read fills up and stops
+            # the worker in the middle of the work.
+            with open(error_path, "wb") as error_file:
+                process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.DEVNULL,
+                    stderr=error_file,
+                )
+                try:
+                    while True:
+                        code = process.poll()
+                        if code is not None:
+                            break
+                        if cancel and cancel():
+                            process.terminate()
+                            try:
+                                process.wait(timeout=10)
+                            except subprocess.TimeoutExpired:
+                                process.kill()
+                                process.wait()
+                            raise EngineCancelled("המשימה בוטלה.")
+                        if time.monotonic() - started > self.timeout_seconds:
+                            process.kill()
+                            process.wait()
+                            raise EngineTimeout(
+                                "זיהוי המסמך ארך מהזמן המותר. אפשר לנסות מסמך קצר יותר."
+                            )
+                        if progress:
+                            progress("מזהה את המסמך...")
+                        time.sleep(0.5)
+                finally:
+                    if process.poll() is None:
                         process.kill()
-                    raise EngineCancelled("המשימה בוטלה.")
-                if time.monotonic() - started > self.timeout_seconds:
-                    process.kill()
-                    raise EngineTimeout(
-                        "זיהוי המסמך ארך מהזמן המותר. אפשר לנסות מסמך קצר יותר."
-                    )
-                if progress:
-                    progress("מזהה את המסמך...")
-                time.sleep(0.5)
+                        process.wait()
 
-            stdout, stderr = process.communicate()
+            payload: dict = {}
+            if result_path.is_file():
+                try:
+                    payload = json.loads(result_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    payload = {}
+
+            # The worker writes what went wrong into its result file, so
+            # that message is used before the exit code is looked at.
+            if payload.get("error"):
+                raise EngineFailure(str(payload["error"]))
+
             if process.returncode != 0:
-                detail = (stderr or b"").decode("utf-8", "replace").strip()
+                detail = ""
+                if error_path.is_file():
+                    detail = error_path.read_text(
+                        encoding="utf-8", errors="replace"
+                    ).strip()
                 raise EngineFailure(
                     "מנוע הזיהוי נכשל:"
                     + (f"\n{detail}" if detail else f" (קוד {process.returncode})")
                 )
             if not result_path.is_file():
                 raise EngineFailure("מנוע הזיהוי לא החזיר תוצאה.")
-
-            payload = json.loads(result_path.read_text(encoding="utf-8"))
 
         if payload.get("error"):
             raise EngineFailure(str(payload["error"]))

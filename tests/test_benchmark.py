@@ -53,6 +53,67 @@ class AccuracyTests(unittest.TestCase):
             path.write_text(xml, encoding="utf-8")
             self.assertEqual(benchmark.read_page_xml(path), "שלום\nעולם")
 
+    def test_the_text_of_a_line_is_found_inside_a_text_equiv(self) -> None:
+        """The text of a line sits deeper than the direct children."""
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15">
+          <Page>
+            <TextRegion>
+              <TextLine id="line_1">
+                <TextEquiv>
+                  <Unicode>שלום</Unicode>
+                </TextEquiv>
+              </TextLine>
+            </TextRegion>
+          </Page>
+        </PcGts>
+        """
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "page.xml"
+            path.write_text(xml, encoding="utf-8")
+            self.assertEqual(benchmark.read_page_xml(path), "שלום")
+
+    def test_a_page_without_a_ground_truth_is_not_measured(self) -> None:
+        class Engine:
+            def recognize(self, image):  # noqa: N802 - the name of the engine
+                raise AssertionError("the page should not be recognised")
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            image = root / "page.jpg"
+            image.write_bytes(b"image")
+            xml = root / "page.xml"
+            xml.write_text(
+                "<PcGts><Page><TextRegion><TextLine>"
+                "</TextLine></TextRegion></Page></PcGts>",
+                encoding="utf-8",
+            )
+            self.assertIsNone(benchmark.measure_page(Engine(), image, xml, root))
+
+    def test_a_page_is_measured_against_its_ground_truth(self) -> None:
+        class Engine:
+            def recognize(self, image):  # noqa: N802 - the name of the engine
+                class Result:
+                    text = "שלום"
+
+                return Result()
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            image = root / "page.jpg"
+            image.write_bytes(b"image")
+            xml = root / "page.xml"
+            xml.write_text(
+                "<PcGts><Page><TextRegion><TextLine>"
+                "<TextEquiv><Unicode>שלום</Unicode></TextEquiv>"
+                "</TextLine></TextRegion></Page></PcGts>",
+                encoding="utf-8",
+            )
+            measured = benchmark.measure_page(Engine(), image, xml, root)
+            self.assertIsNotNone(measured)
+            self.assertEqual(measured["cer"], 0.0)
+            self.assertEqual(measured["wer"], 0.0)
+
     def test_pages_are_paired_with_their_ground_truth(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

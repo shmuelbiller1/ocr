@@ -132,6 +132,10 @@ class Project:
         try:
             with os.fdopen(handle, "w", encoding="utf-8") as stream:
                 stream.write(payload)
+                # The text of the user must not be lost if the machine
+                # loses power in the middle of the writing.
+                stream.flush()
+                os.fsync(stream.fileno())
             os.replace(temp_name, target)
         except BaseException:
             Path(temp_name).unlink(missing_ok=True)

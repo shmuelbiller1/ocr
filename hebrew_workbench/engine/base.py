@@ -134,5 +134,16 @@ class OCREngine(Protocol):
     def available(self) -> bool:
         """Return ``True`` when the engine can recognise a document now."""
 
-    def recognize(self, file_path: Path) -> OCRResult:
-        """Recognise ``file_path`` and return the transcription."""
+    def recognize(
+        self,
+        file_path: Path,
+        progress: Callable[[str], None] | None = None,
+        cancel: Callable[[], bool] | None = None,
+    ) -> OCRResult:
+        """Recognise ``file_path`` and return the transcription.
+
+        The two callbacks are optional: an engine that cannot report
+        progress or cannot be stopped simply ignores them.  The
+        application looks at the signature of the method before it
+        passes them on.
+        """

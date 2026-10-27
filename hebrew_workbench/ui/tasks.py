@@ -20,6 +20,7 @@ class TaskThread(QThread):
     progress = Signal(str)
     succeeded = Signal(object)
     failed = Signal(str)
+    cancelled = Signal()
 
     def __init__(self, function: Callable[[Callable[[str], None], Callable[[], bool]], object], parent=None) -> None:
         super().__init__(parent)
@@ -30,16 +31,22 @@ class TaskThread(QThread):
         self._cancelled = True
 
     @property
-    def cancelled(self) -> bool:
+    def is_cancelled(self) -> bool:
+        """Was the job asked to stop?"""
         return self._cancelled
 
     def run(self) -> None:  # noqa: D102 - Qt override
         try:
             result = self._function(self.progress.emit, lambda: self._cancelled)
         except Exception as exc:
+            if self._cancelled:
+                # The user asked to stop, and the work reported that it
+                # was stopped.  This is not a failure.
+                self.cancelled.emit()
+                return
             self.failed.emit(str(exc))
             return
         if self._cancelled:
-            self.failed.emit("המשימה בוטלה.")
+            self.cancelled.emit()
             return
         self.succeeded.emit(result)

@@ -91,20 +91,33 @@ def word_error_rate(reference: str, hypothesis: str) -> float:
 
 
 def read_page_xml(path: Path) -> str:
-    """The ground truth of a page: its lines, in reading order."""
+    """The ground truth of a page: its lines, in reading order.
+
+    The text of a line sits in a ``Unicode`` element inside a
+    ``TextEquiv`` element inside the ``TextLine`` element, so the whole
+    line is searched and not only its direct children.
+    """
     tree = ElementTree.parse(path)
     lines = []
     for line in tree.iter():
         tag = line.tag.rsplit("}", 1)[-1]
         if tag != "TextLine":
             continue
-        for child in line:
-            if child.tag.rsplit("}", 1)[-1] == "Unicode":
-                text = (child.text or "").strip()
-                if text:
-                    lines.append(text)
-                break
+        text = _line_text(line)
+        if text:
+            lines.append(text)
     return "\n".join(lines)
+
+
+def _line_text(line) -> str:
+    """The text of one line, wherever it sits inside the element."""
+    for element in line.iter():
+        if element.tag.rsplit("}", 1)[-1] != "Unicode":
+            continue
+        text = (element.text or "").strip()
+        if text:
+            return text
+    return ""
 
 
 def download_dataset(target: Path) -> Path:
@@ -145,6 +158,44 @@ def find_pages(root: Path) -> list[tuple[Path, Path]]:
     return pairs
 
 
+def measure_page(
+    engine,
+    image: Path,
+    xml_path: Path,
+    dataset_root: Path,
+) -> dict | None:
+    """Recognise a page and compare the result with its ground truth.
+
+    ``None`` is returned when the page has no ground truth, because such
+    a page cannot be measured.
+    """
+    reference_raw = read_page_xml(xml_path)
+    if not reference_raw.strip():
+        return None
+
+    started = time.monotonic()
+    recognised = engine.recognize(image)
+    seconds = time.monotonic() - started
+
+    reference = normalise(reference_raw)
+    hypothesis = normalise(recognised.text)
+    reference_points = normalise(reference_raw, keep_points=True)
+    hypothesis_points = normalise(recognised.text, keep_points=True)
+
+    return {
+        "page": image.name,
+        "ground_truth_file": str(xml_path.relative_to(dataset_root)),
+        "characters_reference": len(reference),
+        "characters_hypothesis": len(hypothesis),
+        "cer": round(character_error_rate(reference, hypothesis), 4),
+        "cer_with_points": round(
+            character_error_rate(reference_points, hypothesis_points), 4
+        ),
+        "wer": round(word_error_rate(reference, hypothesis), 4),
+        "seconds": round(seconds, 2),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, help="path to the recognition model")
@@ -178,38 +229,24 @@ def main(argv: list[str] | None = None) -> int:
 
     results = []
     for index, (image, xml_path) in enumerate(pairs, start=1):
-        reference_raw = read_page_xml(xml_path)
-        started = time.monotonic()
         print(f"[{index}/{len(pairs)}] recognising {image.name} ...", flush=True)
-        recognised = engine.recognize(image)
-        seconds = time.monotonic() - started
-
-        reference = normalise(reference_raw)
-        hypothesis = normalise(recognised.text)
-        reference_points = normalise(reference_raw, keep_points=True)
-        hypothesis_points = normalise(recognised.text, keep_points=True)
-
-        results.append(
-            {
-                "page": image.name,
-                "ground_truth_file": str(xml_path.relative_to(dataset_root)),
-                "characters_reference": len(reference),
-                "characters_hypothesis": len(hypothesis),
-                "cer": round(character_error_rate(reference, hypothesis), 4),
-                "cer_with_points": round(
-                    character_error_rate(reference_points, hypothesis_points), 4
-                ),
-                "wer": round(word_error_rate(reference, hypothesis), 4),
-                "seconds": round(seconds, 2),
-            }
-        )
+        measured = measure_page(engine, image, xml_path, dataset_root)
+        if measured is None:
+            # A page without a ground truth cannot be measured.  It is
+            # left out, so that the numbers are not made worse by a file
+            # that was not read.
+            print("    no ground truth, the page is left out", flush=True)
+            continue
+        results.append(measured)
         print(
-            f"    CER {results[-1]['cer'] * 100:.1f}%  "
-            f"WER {results[-1]['wer'] * 100:.1f}%  "
-            f"{seconds:.1f}s",
+            f"    CER {measured['cer'] * 100:.1f}%  "
+            f"WER {measured['wer'] * 100:.1f}%  "
+            f"{measured['seconds']:.1f}s",
             flush=True,
         )
 
+    if not results:
+        raise SystemExit("no page with a ground truth was found in the dataset")
     total_reference = sum(item["characters_reference"] for item in results)
     total_cer = sum(
         item["cer"] * item["characters_reference"] for item in results

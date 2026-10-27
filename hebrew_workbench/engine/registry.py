@@ -106,8 +106,42 @@ class EngineRegistry:
                 "Choose or install an engine adapter."
             )
         try:
-            return self.engine.recognize(path)
+            return self._recognize(path, progress, cancel)
         except (EngineUnavailable, EngineTimeout, EngineCancelled):
             raise
         except Exception as exc:
             raise EngineError(f"The engine failed: {exc}") from exc
+
+    def _recognize(
+        self,
+        path: Path,
+        progress: Callable[[str], None] | None,
+        cancel: Callable[[], bool] | None,
+    ) -> OCRResult:
+        """Call the engine, with the callbacks when it can take them.
+
+        An adapter that was written for the first version of the
+        contract only knows the path of the document.  It keeps working:
+        the callbacks are simply not passed on to it.
+        """
+        import inspect
+
+        try:
+            parameters = inspect.signature(self.engine.recognize).parameters
+        except (TypeError, ValueError):
+            parameters = {}
+
+        def accepts(name: str) -> bool:
+            if name in parameters:
+                return True
+            return any(
+                item.kind is inspect.Parameter.VAR_KEYWORD
+                for item in parameters.values()
+            )
+
+        keywords: dict = {}
+        if progress is not None and accepts("progress"):
+            keywords["progress"] = progress
+        if cancel is not None and accepts("cancel"):
+            keywords["cancel"] = cancel
+        return self.engine.recognize(path, **keywords)

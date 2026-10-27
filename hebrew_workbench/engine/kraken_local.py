@@ -11,6 +11,7 @@ and verified against the digests published by the model authors.
 
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 from typing import Callable
@@ -44,7 +45,12 @@ def kraken_importable() -> bool:
 
 
 def default_segmentation_model() -> Path | None:
-    """The line segmentation model that ships with `kraken`."""
+    """The line segmentation model that ships with `kraken`.
+
+    ``None`` when the file cannot be found, so that the availability
+    check can report a missing model instead of failing later, in the
+    middle of a recognition.
+    """
     try:
         from importlib import resources
 
@@ -52,9 +58,12 @@ def default_segmentation_model() -> Path | None:
     except Exception:
         return None
     try:
-        return Path(str(path))
+        resolved = Path(str(path))
     except Exception:
         return None
+    if not resolved.is_file():
+        return None
+    return resolved
 
 
 def build_manifest(model_path: Path | None, artifact_id: str = "kraken-ppocrv6-small") -> EngineManifest:
@@ -146,7 +155,12 @@ class KrakenEngine:
                     if progress:
                         progress(f"מזהה עמוד {number} מתוך {preview.page_count}...")
                     page_image = preview.render(number).image
-                    pages.append(self._recognize_page(number, page_image))
+                    budget = (
+                        None
+                        if deadline is None
+                        else max(0.0, deadline - time.monotonic())
+                    )
+                    pages.append(self._recognize_page(number, page_image, budget))
         except PreviewError as exc:
             raise EngineFailure(str(exc)) from exc
 
@@ -170,7 +184,40 @@ class KrakenEngine:
         self._segmentation_model = SegmentationTaskModel.load_model(str(segmentation_path))
         self._recognition_model = RecognitionTaskModel.load_model(str(self.model_path))
 
-    def _recognize_page(self, number: int, image) -> PageResult:
+    def _recognize_page(
+        self, number: int, image, budget: float | None = None
+    ) -> PageResult:
+        """Recognise one page, and give up when the time is up.
+
+        The engine of `kraken` cannot be interrupted in the middle of a
+        page.  The work is therefore done in a thread that is left behind
+        when the time is up, so that the program is not held up by it.
+        """
+        if budget is None:
+            return self._recognize_page_now(number, image)
+
+        outcome: dict = {}
+
+        def work() -> None:
+            try:
+                outcome["page"] = self._recognize_page_now(number, image)
+            except BaseException as exc:  # noqa: BLE001 - reported below
+                outcome["error"] = exc
+
+        thread = threading.Thread(
+            target=work, name=f"kraken-page-{number}", daemon=True
+        )
+        thread.start()
+        thread.join(budget)
+        if thread.is_alive():
+            raise EngineTimeout(
+                f"הזיהוי של עמוד {number} עבר את מגבלת הזמן של {self.timeout_seconds:.0f} שניות."
+            )
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["page"]
+
+    def _recognize_page_now(self, number: int, image) -> PageResult:
         from kraken.configs import RecognitionInferenceConfig, SegmentationInferenceConfig
 
         self._load_models()
@@ -204,10 +251,16 @@ class KrakenEngine:
                 )
             )
         page_text = "\n".join(line.text for line in lines)
+        confidences = [
+            line.confidence for line in lines if line.confidence is not None
+        ]
+        page_confidence = (
+            round(sum(confidences) / len(confidences), 4) if confidences else None
+        )
         return PageResult(
             number=number,
             text=page_text,
-            confidence=_mean_confidence(None) if not lines else None,
+            confidence=page_confidence,
             lines=tuple(lines),
         )
 

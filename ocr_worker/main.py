@@ -60,7 +60,11 @@ def main(argv: list[str] | None = None) -> int:
             ],
         }
     except Exception as exc:
-        payload = {"error": f"{exc}", "traceback": traceback.format_exc()}
+        message = str(exc) or type(exc).__name__
+        # The message also goes to the error output, so that it is not
+        # lost when the result file cannot be read.
+        print(message, file=sys.stderr)
+        payload = {"error": message, "traceback": traceback.format_exc()}
 
     result_path.parent.mkdir(parents=True, exist_ok=True)
     result_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")

@@ -168,8 +168,20 @@ class DocumentPreview:
             scale = 1.0
             if target_width and width:
                 scale = max(0.1, min(6.0, target_width / float(width)))
+            # The size of the page is checked before the picture is made,
+            # so that a page with unusual proportions cannot use more
+            # memory than the machine has.
+            if width and height:
+                pixels = width * height * scale * scale
+                if pixels > MAX_PIXELS:
+                    smaller = (MAX_PIXELS / float(width * height)) ** 0.5
+                    if smaller < 0.05:
+                        raise PreviewError("העמוד גדול מדי להצגה במלואו.")
+                    scale = smaller
             bitmap = page.render(scale=scale)
             return bitmap.to_pil().convert("RGB")
+        except PreviewError:
+            raise
         except Exception as exc:
             raise PreviewError(f"לא ניתן להציג את העמוד {page_number}: {exc}") from exc
         finally:
@@ -185,11 +197,10 @@ class DocumentPreview:
         except ImportError as exc:  # pragma: no cover - dependency is declared
             raise PreviewError("חבילת תמונות (Pillow) אינה מותקנת.") from exc
         try:
-            if page_number == 1:
-                image = self._image
-            else:
-                self._image.seek(page_number - 1)
-                image = self._image
+            # Every page starts at its own frame, so that the first
+            # frame is shown again after another one was looked at.
+            self._image.seek(page_number - 1)
+            image = self._image
             image = ImageOps.exif_transpose(image) or image
             return image.convert("RGB")
         except Exception as exc:

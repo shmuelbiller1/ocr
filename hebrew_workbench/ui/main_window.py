@@ -72,6 +72,7 @@ class MainWindow(QMainWindow):
         self.project = Project()
         self.registry = EngineRegistry()
         self.engines: list = []
+        self._shown_entry = None
         self._loading = False
         self.task: TaskThread | None = None
 
@@ -403,8 +404,14 @@ class MainWindow(QMainWindow):
             return
         for row in rows:
             if 0 <= row < len(self.project):
-                self.project.remove(row)
+                removed = self.project.remove(row)
+                if removed is self._shown_entry:
+                    self._shown_entry = None
         self._sync_document_list()
+        self._loading = True
+        self.editor.clear()
+        self._loading = False
+        self.doc_path_label.setText("לא נבחר מסמך")
         self.preview.set_document(None)
         self.statusBar().showMessage(f"הוסרו {len(rows)} מסמכים מהרשימה.", 5000)
 
@@ -421,14 +428,18 @@ class MainWindow(QMainWindow):
         if answer != QMessageBox.Yes:
             return
         self.project.clear()
+        self._shown_entry = None
         self._sync_document_list()
         self.preview.set_document(None)
+        self._loading = True
         self.editor.clear()
+        self._loading = False
         self.statusBar().showMessage("הרשימה נוקתה. הקבצים על הדיסק לא נגעו.", 5000)
 
     def _on_document_selected(self, row: int) -> None:
         self._store_editor_text()
         if not (0 <= row < len(self.project)):
+            self._shown_entry = None
             self.editor.clear()
             self.doc_path_label.setText("לא נבחר מסמך")
             self.preview.set_document(None)
@@ -437,6 +448,7 @@ class MainWindow(QMainWindow):
         self._loading = True
         self.editor.setPlainText(entry.transcription)
         self._loading = False
+        self._shown_entry = entry
         self.doc_path_label.setText(entry.path)
         self.preview.set_document(entry.path)
 
@@ -446,9 +458,16 @@ class MainWindow(QMainWindow):
         self._store_editor_text()
 
     def _store_editor_text(self) -> None:
-        row = self.doc_list.currentRow()
-        if 0 <= row < len(self.project):
-            self.project[row].transcription = self.editor.toPlainText()
+        """Save the text of the document that is in the editor.
+
+        The document is the one that is *shown*, and not the one that is
+        selected in the list: when the user moves to another document,
+        the list has already changed, and the text of the old document
+        would be written into the new one.
+        """
+        entry = self._shown_entry
+        if entry is not None:
+            entry.transcription = self.editor.toPlainText()
 
     # -- projects ----------------------------------------------------------
     def save_project(self) -> None:
@@ -486,9 +505,12 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "פתיחת הפרויקט", f"לא ניתן לפתוח: {exc}")
             return
         self.project = project
+        self._shown_entry = None
         self._sync_document_list()
         self.preview.set_document(None)
+        self._loading = True
         self.editor.clear()
+        self._loading = False
         if len(self.project):
             self.doc_list.setCurrentRow(0)
         self.statusBar().showMessage(
@@ -528,18 +550,22 @@ class MainWindow(QMainWindow):
 
         self.task = TaskThread(work, self)
         self.task.progress.connect(self._on_task_progress)
-        self.task.succeeded.connect(self._on_ocr_done)
+        self.task.succeeded.connect(
+            lambda result: self._on_ocr_done(result, entry)
+        )
         self.task.failed.connect(self._on_task_failed)
+        self.task.cancelled.connect(self._on_task_cancelled)
         self.task.finished.connect(self._on_task_finished)
         self.task.start()
 
     def _on_task_progress(self, message: str) -> None:
         self.statusBar().showMessage(message)
 
-    def _on_ocr_done(self, result) -> None:
-        entry = self._current_entry()
+    def _on_ocr_done(self, result, entry=None) -> None:
+        if entry is None:
+            entry = self._current_entry()
         self._loading = True
-        self.editor.setPlainText(result.text)
+        self._replace_editor_text(result.text)
         self._loading = False
         if entry is not None:
             entry.transcription = result.text
@@ -549,6 +575,20 @@ class MainWindow(QMainWindow):
             "יש לבדוק כל שורה לפני הייצוא.",
             10000,
         )
+
+    def _replace_editor_text(self, text: str) -> None:
+        """Put a new text into the editor, in a way that can be undone.
+
+        The user has to be able to take back a recognition result with
+        the usual undo, so the text is replaced with a cursor and not
+        with ``setPlainText``.
+        """
+        cursor = self.editor.textCursor()
+        cursor.select(cursor.SelectionType.Document)
+        cursor.insertText(text)
+
+    def _on_task_cancelled(self) -> None:
+        self.statusBar().showMessage("המשימה בוטלה. הטקסט נשאר כפי שהיה.", 6000)
 
     def _on_task_failed(self, message: str) -> None:
         self.statusBar().showMessage("המשימה לא הושלמה. הטקסט נשאר כפי שהיה.", 8000)
@@ -569,6 +609,12 @@ class MainWindow(QMainWindow):
     def install_model(self) -> None:
         """Download the recognition model after asking the user."""
         from ..engine.models import MODEL_ARTIFACTS, InstallError, install_artifact
+
+        if self.task is not None and self.task.isRunning():
+            QMessageBox.information(
+                self, "התקנת מודל הזיהוי", "כבר מתבצעת משימה. אפשר לנסות שוב אחרי שהיא תסתיים."
+            )
+            return
 
         artifact = MODEL_ARTIFACTS["kraken-ppocrv6-small"]
         answer = QMessageBox.question(
@@ -770,7 +816,14 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt naming
         if self.task is not None and self.task.isRunning():
             self.task.cancel()
-            self.task.wait(3000)
+            if not self.task.wait(3000):
+                # The work did not stop.  The window stays open, so that
+                # the user does not lose the text they wrote.
+                self.statusBar().showMessage(
+                    "המשימה עוד לא נעצרה. החלון נשאר פתוח.", 8000
+                )
+                event.ignore()
+                return
         self._store_editor_text()
         self.preview.close_document()
         event.accept()

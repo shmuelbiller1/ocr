@@ -37,6 +37,18 @@ sys.stderr.write("the model file is missing\\n")
 sys.exit(3)
 '''
 
+# A worker that reports what went wrong in its result file, the way the
+# real worker does.
+FAILING_WORKER_WITH_REPORT = '''\
+import json, sys
+args = dict(zip(sys.argv[1::2], sys.argv[2::2]))
+json.dump(
+    {"error": "the model file is missing", "traceback": "..."},
+    open(args["--result"], "w", encoding="utf-8"),
+)
+sys.exit(1)
+'''
+
 
 def write_stub(folder: Path, name: str, source: str) -> Path:
     """Write a stub worker that can be started like the real one."""
@@ -149,6 +161,66 @@ class WorkerTests(unittest.TestCase):
             with self.assertRaises(EngineFailure) as caught:
                 engine.recognize(document)
             self.assertIn("model file is missing", str(caught.exception))
+
+    def test_the_message_of_the_worker_is_used(self) -> None:
+        """The worker says what went wrong; the client says it too."""
+        from hebrew_workbench.engine.base import EngineFailure
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            worker = write_stub(root, "reporting-worker", FAILING_WORKER_WITH_REPORT)
+            model = root / "small.safetensors"
+            model.write_bytes(b"weights")
+            document = root / "page.png"
+            document.write_bytes(b"image")
+
+            engine = WorkerEngine(worker, model)
+            with self.assertRaises(EngineFailure) as caught:
+                engine.recognize(document)
+            self.assertIn("the model file is missing", str(caught.exception))
+
+    def test_the_callbacks_are_given_to_an_engine_that_wants_them(self) -> None:
+        """The user can stop the work and sees what it is doing."""
+        seen: dict = {}
+
+        class Engine:
+            name = "engine with callbacks"
+
+            def available(self) -> bool:
+                return True
+
+            def recognize(self, path, progress=None, cancel=None):
+                seen["progress"] = progress
+                seen["cancel"] = cancel
+                return OCRResult("שלום", self.name)
+
+        messages: list[str] = []
+        registry = EngineRegistry(Engine())
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "page.png"
+            path.write_bytes(b"image")
+            registry.transcribe(path, progress=messages.append, cancel=lambda: False)
+        self.assertIsNotNone(seen.get("progress"))
+        self.assertIsNotNone(seen.get("cancel"))
+
+    def test_an_engine_without_the_callbacks_still_works(self) -> None:
+        """An adapter of the first version of the contract keeps working."""
+
+        class OldEngine:
+            name = "old adapter"
+
+            def available(self) -> bool:
+                return True
+
+            def recognize(self, path) -> OCRResult:
+                return OCRResult("שלום", self.name)
+
+        registry = EngineRegistry(OldEngine())
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "page.png"
+            path.write_bytes(b"image")
+            result = registry.transcribe(path, progress=lambda message: None)
+        self.assertEqual(result.text, "שלום")
 
     def test_a_missing_worker_is_not_available(self) -> None:
         engine = WorkerEngine("does-not-exist.exe", "does-not-exist.safetensors")

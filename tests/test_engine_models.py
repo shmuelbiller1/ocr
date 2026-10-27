@@ -106,6 +106,16 @@ class ModelTests(unittest.TestCase):
             self.assertGreater(artifact.size_bytes, 0)
             self.assertEqual(len(artifact.md5), 32)
 
+    def test_known_models_have_a_pinned_sha256(self) -> None:
+        """Every model file is checked against two digests."""
+        for artifact in models.MODEL_ARTIFACTS.values():
+            self.assertIsNotNone(artifact.sha256)
+            self.assertEqual(len(artifact.sha256 or ""), 64)
+            self.assertTrue(
+                all(char in "0123456789abcdef" for char in artifact.sha256 or "")
+            )
+            self.assertNotEqual(artifact.sha256, "0" * 64)
+
     def test_models_directory_follows_the_environment(self) -> None:
         import os
 
