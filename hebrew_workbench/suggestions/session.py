@@ -14,6 +14,36 @@ from .base import Suggestion
 
 __all__ = ["SuggestionSession", "AcceptedChange"]
 
+# The sizes of the text around a correction that are used to find it
+# back in a text that was written by hand after it.
+CONTEXT_SIZES = (40, 20, 10)
+
+
+def _place_of_change(change: "AcceptedChange", old: str, new: str) -> int | None:
+    """Where the correction is in the new text.
+
+    The place is looked for with the text that surrounds the
+    correction, so that a correction is not taken back in a place where
+    the user wrote something else.  When the place cannot be found, or
+    when the same text is in more than one place, nothing is returned:
+    a correction that cannot be told apart is not taken back.
+    """
+    start = change.position
+    end = start + len(change.replacement)
+    for size in CONTEXT_SIZES:
+        before = old[max(0, start - size) : start]
+        after = old[end : end + size]
+        piece = before + change.replacement + after
+        found = new.find(piece)
+        if found < 0:
+            continue
+        if new.find(piece, found + 1) >= 0:
+            # The same text is in two places, and the place of the
+            # correction cannot be told.
+            continue
+        return found + len(before)
+    return None
+
 
 class AcceptedChange:
     """One change that the user accepted."""
@@ -63,6 +93,9 @@ class SuggestionSession:
         self.suggestions: list[Suggestion] = []
         self.accepted: list[AcceptedChange] = []
         self.refused: list[Suggestion] = []
+        # The corrections that could not be taken back in the last time
+        # the user took back the corrections.
+        self.last_undo_skipped: list[AcceptedChange] = []
         # The places of the proposals of the last round, and the change
         # every accepted correction made to the length of the text.
         # The proposals keep the places they had when the round began,
@@ -176,29 +209,34 @@ class SuggestionSession:
         When the text of the editor is given, the corrections are taken
         back in that text, so that what the user wrote after them is
         kept.
+
+        A correction is only taken back where it really is: the place is
+        looked for with the text around the correction.  A correction
+        whose place cannot be found is not taken back at all, so that a
+        text that was never corrected is not changed.  The corrections
+        that were not taken back are in ``last_undo_skipped``.
         """
         result = self.current_text if text is None else text
-        for change in reversed(self.accepted):
-            replacement = change.replacement
-            if not replacement:
+        source = self.current_text
+        self.last_undo_skipped = []
+        places: list[tuple[int, AcceptedChange]] = []
+        for change in self.accepted:
+            if not change.replacement:
                 continue
-            start = change.position
-            if result[start : start + len(replacement)] == replacement:
-                result = (
-                    result[:start] + change.original + result[start + len(replacement) :]
-                )
+            place = _place_of_change(change, source, result)
+            if place is None:
+                self.last_undo_skipped.append(change)
                 continue
-            # The text was written after the correction, so its place is
-            # looked for near the place where the correction was made.
-            found = result.find(replacement, max(0, start - 200))
-            if found < 0:
-                found = result.find(replacement)
-            if found >= 0:
-                result = (
-                    result[:found]
-                    + change.original
-                    + result[found + len(replacement) :]
-                )
+            places.append((place, change))
+        # The corrections are taken back from the last one to the first
+        # one, so that the place of a correction is not moved by the
+        # taking back of another one.
+        for place, change in sorted(places, key=lambda item: item[0], reverse=True):
+            result = (
+                result[:place]
+                + change.original
+                + result[place + len(change.replacement) :]
+            )
         self.current_text = result
         self.accepted = []
         self._round_shifts = []

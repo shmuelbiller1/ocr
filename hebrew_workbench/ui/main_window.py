@@ -991,7 +991,18 @@ class MainWindow(QMainWindow):
         self._store_editor_text()
         self._refresh_suggestions(session)
         self._store_changes()
-        self.statusBar().showMessage("כל שינויי התיקון בוטלו.", 6000)
+        skipped = len(session.last_undo_skipped)
+        if skipped:
+            # A correction whose place could not be found is not taken
+            # back, so that a text that was never corrected is not
+            # changed.  The user is told about it.
+            self.statusBar().showMessage(
+                f"{skipped} שינויי תיקון לא ניתן לבטל, "
+                "מפני שהטקסט שסביבם שונה.",
+                8000,
+            )
+        else:
+            self.statusBar().showMessage("כל שינויי התיקון בוטלו.", 6000)
 
     def _store_changes(self) -> None:
         """Keep the changes of the document that is open."""

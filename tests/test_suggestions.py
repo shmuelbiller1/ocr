@@ -267,6 +267,57 @@ class SessionTests(unittest.TestCase):
         # The user wrote something after the correction was made.
         text = session.undo_all("שלום,עולם ועוד מילה")
         self.assertEqual(text, "שלום ,עולם ועוד מילה")
+
+    def test_the_undo_does_not_change_a_text_that_was_not_corrected(self) -> None:
+        """A correction is not taken back in a place that was not corrected."""
+        session = SuggestionSession("שלום , עולם, סוף")
+        from hebrew_workbench.suggestions import Suggestion
+
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original=" ,",
+                    replacement=",",
+                    message="אין רווח לפני הפסיק",
+                    start=4,
+                    end=6,
+                )
+            ],
+            "שלום , עולם, סוף",
+        )
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "שלום, עולם, סוף")
+        # The user deleted the first clause, so the correction is not
+        # in the text any more.  The comma that is left was never
+        # corrected, and it must not be changed.
+        text = session.undo_all("עולם, סוף")
+        self.assertEqual(text, "עולם, סוף")
+        self.assertEqual(len(session.last_undo_skipped), 1)
+
+    def test_the_undo_finds_the_correction_after_a_change_before_it(self) -> None:
+        """The place of a correction is found even when the text moved."""
+        session = SuggestionSession("שלום ,עולם")
+        from hebrew_workbench.suggestions import Suggestion
+
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original=" ,",
+                    replacement=",",
+                    message="אין רווח לפני הפסיק",
+                    start=4,
+                    end=6,
+                )
+            ],
+            "שלום ,עולם",
+        )
+        session.accept(session.pending()[0])
+        # The user wrote something before the correction.
+        text = session.undo_all("טקסט שנכתב לפני שלום,עולם")
+        self.assertEqual(text, "טקסט שנכתב לפני שלום ,עולם")
+        self.assertEqual(session.last_undo_skipped, [])
         self.assertEqual(session.accepted, [])
 
     def test_the_changes_of_a_saved_project_are_taken_back_into_the_session(
