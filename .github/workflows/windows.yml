@@ -104,34 +104,88 @@ jobs:
         run: |
           $report = 'selftest-windows.json'
           if (Test-Path $report) { Remove-Item $report }
-          $exe = (Resolve-Path 'dist\HebrewNotesWorkbench.exe').Path
-          $info = New-Object System.Diagnostics.ProcessStartInfo
-          $info.FileName = $exe
-          $info.Arguments = "--selftest --selftest-report `"$report`""
-          $info.UseShellExecute = $false
-          $info.RedirectStandardOutput = $true
-          $info.RedirectStandardError = $true
-          $process = [System.Diagnostics.Process]::Start($info)
-          $stdout = $process.StandardOutput.ReadToEndAsync()
-          $stderr = $process.StandardError.ReadToEndAsync()
-          if (-not $process.WaitForExit(180000)) {
-            $process.Kill()
-            Write-Output '::error title=Self-test::the packaged executable did not finish within 180 seconds'
-            throw 'The packaged executable hung'
-          }
-          $code = $process.ExitCode
-          $out = $stdout.Result
-          $err = $stderr.Result
-          $out | Out-File -Encoding utf8 'selftest-out.txt'
-          $err | Out-File -Encoding utf8 'selftest-err.txt'
-          @("exit code: $code", "exe size: $((Get-Item $exe).Length) bytes") |
-            Out-File -Encoding utf8 'selftest-exit.txt'
-          Write-Host "exit code: $code"
-          if ($out) { $out.Split("`n") | ForEach-Object { Write-Host "out: $_" } }
-          if ($err) { $err.Split("`n") | ForEach-Object { Write-Output "::error title=Self-test::$_" } }
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe 'dist\HebrewNotesWorkbench.exe' `
+            -Report $report `
+            -StdOut 'selftest-out.txt' `
+            -StdErr 'selftest-err.txt'
           if (-not (Test-Path $report)) {
-            Write-Output "::error title=Self-test::no report was written (exit code $code)"
-            throw "The packaged executable failed its self-test (exit code $code)"
+            Write-Output "::error title=Self-test::no report was written"
+            throw 'The packaged executable did not write its report'
+          }
+          $data = Get-Content $report -Raw | ConvertFrom-Json
+          $data.results | ForEach-Object {
+            $line = "$($_.name) ok=$($_.ok) $($_.detail)"
+            if ($_.ok) { Write-Host $line } else { Write-Output "::error title=Self-test::$line" }
+          }
+          if (-not $data.ok) {
+            throw 'The self-test reported failures'
+          }
+      - name: Build a console executable for diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --console `
+            --name HebrewNotesWorkbench-console app.py
+      - name: Show what the console build reports
+        if: failure()
+        shell: pwsh
+        run: |
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe 'dist\HebrewNotesWorkbench-console.exe' `
+            -Report 'selftest-console.json' `
+            -StdOut 'console-out.txt' `
+            -StdErr 'console-err.txt'
+      - name: Publish the diagnostics
+        if: failure()
+        run: python tools/publish_diagnostics.py selftest-linux.json test-output.txt
+
+  test-and-package:
+    name: Windows executable
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run the test suite
+        run: |
+          python -m unittest discover -s tests -t . -v
+      - name: Install packaging tool
+        run: python -m pip install pyinstaller==6.16.0
+      - name: Build Windows executable
+        run: >-
+          python -m PyInstaller --noconfirm --clean --onefile --windowed
+          --add-data "samples;samples"
+          --name HebrewNotesWorkbench app.py
+      - name: Verify the executable exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist\HebrewNotesWorkbench.exe')) {
+            Write-Output '::error title=Packaging::the executable was not produced'
+            throw 'Missing exe'
+          }
+          $size = (Get-Item 'dist\HebrewNotesWorkbench.exe').Length
+          Write-Host "exe size: $size bytes"
+      - name: Start the packaged executable (self-test)
+        shell: pwsh
+        run: |
+          $report = 'selftest-windows.json'
+          if (Test-Path $report) { Remove-Item $report }
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe 'dist\HebrewNotesWorkbench.exe' `
+            -Report $report `
+            -StdOut 'selftest-out.txt' `
+            -StdErr 'selftest-err.txt'
+          if (-not (Test-Path $report)) {
+            Write-Output "::error title=Self-test::no report was written"
+            throw 'The packaged executable did not write its report'
           }
           $data = Get-Content $report -Raw | ConvertFrom-Json
           $data.results | ForEach-Object {
@@ -177,7 +231,7 @@ jobs:
         run: |
           Get-ChildItem dist -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.Name) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py selftest-windows.json selftest-exit.txt selftest-out.txt selftest-err.txt selftest-console.json console-out.txt console-err.txt console-exit.txt dist-listing.txt
+          python tools/publish_diagnostics.py selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
