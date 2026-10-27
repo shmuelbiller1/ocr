@@ -5,6 +5,10 @@ actually starts.  ``hebrew_workbench.selftest`` runs a small number of
 staged checks inside the real application and writes a JSON report, so
 the CI job can fail loudly instead of assuming that a produced ``.exe``
 file means a working application.
+
+The self-test is written to survive a broken installation: every stage is
+guarded, the report file is written even when a stage crashes, and the
+process always ends with a meaningful exit code.
 """
 
 from __future__ import annotations
@@ -39,6 +43,14 @@ class _Report:
     @property
     def ok(self) -> bool:
         return all(result.ok for result in self.results)
+
+
+def _write_line(text: str) -> None:
+    """Print without ever raising (a windowed build has no console)."""
+    try:
+        print(text)
+    except Exception:
+        pass
 
 
 def _check_imports(report: _Report) -> None:
@@ -113,7 +125,11 @@ def _check_gui(report: _Report) -> None:
 
         from .ui.main_window import MainWindow
     except Exception as exc:  # pragma: no cover - defensive
-        report.add("gui-startup", False, f"the user interface could not be imported: {exc}")
+        report.add(
+            "gui-startup",
+            False,
+            f"the user interface could not be imported: {exc}\n{traceback.format_exc()}",
+        )
         return
 
     app = QApplication.instance() or QApplication([])
@@ -124,11 +140,14 @@ def _check_gui(report: _Report) -> None:
         visible = window.isVisible()
         title = window.windowTitle()
         window.close()
-    except Exception as exc:  # pragma: no cover - defensive
-        report.add("gui-startup", False, f"the main window could not be created: {exc}")
-        return
-    finally:
         app.processEvents()
+    except Exception as exc:  # pragma: no cover - defensive
+        report.add(
+            "gui-startup",
+            False,
+            f"the main window could not be created: {exc}\n{traceback.format_exc()}",
+        )
+        return
     report.add(
         "gui-startup",
         bool(visible) and bool(title),
@@ -144,10 +163,29 @@ def run_checks() -> list[CheckResult]:
         True,
         f"python {platform.python_version()} on {platform.platform()}",
     )
-    _check_imports(report)
-    _check_engine_contract(report)
-    _check_gui(report)
+    for name, check in (
+        ("core-imports", _check_imports),
+        ("engine-contract", _check_engine_contract),
+        ("gui-startup", _check_gui),
+    ):
+        try:
+            check(report)
+        except Exception as exc:  # pragma: no cover - defensive
+            report.add(name, False, f"the check crashed: {exc!r}")
     return report.results
+
+
+def _write_report(path: str | Path, payload: dict) -> bool:
+    try:
+        target = Path(path)
+        if target.parent and str(target.parent) not in ("", "."):
+            target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        return True
+    except Exception:
+        return False
 
 
 def main(report_path: str | Path | None = None) -> int:
@@ -155,27 +193,29 @@ def main(report_path: str | Path | None = None) -> int:
 
     Returns the process exit code: ``0`` when every check passed.
     """
-    results = run_checks()
+    results: list[CheckResult] = []
+    crash = ""
+    try:
+        results = run_checks()
+    except Exception as exc:  # pragma: no cover - defensive
+        crash = f"{exc!r}\n{traceback.format_exc()}"
+        results = [CheckResult("selftest", False, f"the self-test crashed: {crash}")]
+
     payload = {
-        "ok": all(result.ok for result in results),
+        "ok": all(result.ok for result in results) and not crash,
         "python": sys.version,
         "results": [result.to_dict() for result in results],
     }
-    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    if crash:
+        payload["crash"] = crash
+
     if report_path:
-        target = Path(report_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
-    try:
-        print(text)
-    except Exception:  # pragma: no cover - a windowed build has no stdout
-        pass
+        _write_report(report_path, payload)
+
+    _write_line(json.dumps(payload, ensure_ascii=False, indent=2))
     for result in results:
         status = "PASS" if result.ok else "FAIL"
-        try:
-            print(f"[{status}] {result.name}: {result.detail}", file=sys.stderr)
-        except Exception:  # pragma: no cover
-            pass
+        _write_line(f"[{status}] {result.name}: {result.detail}")
     return 0 if payload["ok"] else 1
 
 
