@@ -104,24 +104,33 @@ jobs:
         run: |
           $report = 'selftest-windows.json'
           if (Test-Path $report) { Remove-Item $report }
-          $process = Start-Process -FilePath 'dist\HebrewNotesWorkbench.exe' `
-            -ArgumentList '--selftest','--selftest-report',$report `
-            -PassThru -RedirectStandardOutput 'selftest-out.txt' -RedirectStandardError 'selftest-err.txt'
-          # WaitForExit on the process object itself, so that the exit code
-          # of the packaged executable can be read afterwards.
+          $exe = (Resolve-Path 'dist\HebrewNotesWorkbench.exe').Path
+          $info = New-Object System.Diagnostics.ProcessStartInfo
+          $info.FileName = $exe
+          $info.Arguments = "--selftest --selftest-report `"$report`""
+          $info.UseShellExecute = $false
+          $info.RedirectStandardOutput = $true
+          $info.RedirectStandardError = $true
+          $process = [System.Diagnostics.Process]::Start($info)
+          $stdout = $process.StandardOutput.ReadToEndAsync()
+          $stderr = $process.StandardError.ReadToEndAsync()
           if (-not $process.WaitForExit(180000)) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            $process.Kill()
             Write-Output '::error title=Self-test::the packaged executable did not finish within 180 seconds'
             throw 'The packaged executable hung'
           }
           $code = $process.ExitCode
+          $out = $stdout.Result
+          $err = $stderr.Result
+          $out | Out-File -Encoding utf8 'selftest-out.txt'
+          $err | Out-File -Encoding utf8 'selftest-err.txt'
+          @("exit code: $code", "exe size: $((Get-Item $exe).Length) bytes") |
+            Out-File -Encoding utf8 'selftest-exit.txt'
           Write-Host "exit code: $code"
-          "exit code: $code" | Out-File -Encoding utf8 'selftest-exit.txt'
+          if ($out) { $out.Split("`n") | ForEach-Object { Write-Host "out: $_" } }
+          if ($err) { $err.Split("`n") | ForEach-Object { Write-Output "::error title=Self-test::$_" } }
           if (-not (Test-Path $report)) {
             Write-Output "::error title=Self-test::no report was written (exit code $code)"
-            if (Test-Path 'selftest-err.txt') {
-              Get-Content 'selftest-err.txt' | ForEach-Object { Write-Output "::error title=Self-test::$_" }
-            }
             throw "The packaged executable failed its self-test (exit code $code)"
           }
           $data = Get-Content $report -Raw | ConvertFrom-Json
@@ -142,19 +151,33 @@ jobs:
         if: failure()
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath 'dist\HebrewNotesWorkbench-console.exe' `
-            -ArgumentList '--selftest','--selftest-report','selftest-console.json' `
-            -Wait -PassThru -RedirectStandardOutput 'console-out.txt' -RedirectStandardError 'console-err.txt'
-          Write-Host "exit code: $($process.ExitCode)"
-          "exit code: $($process.ExitCode)" | Out-File -Encoding utf8 'console-exit.txt'
-          if (Test-Path 'console-out.txt') { Get-Content 'console-out.txt' | ForEach-Object { Write-Output "::error title=Console build::$_" } }
-          if (Test-Path 'console-err.txt') { Get-Content 'console-err.txt' | ForEach-Object { Write-Output "::error title=Console build::$_" } }
+          $exe = (Resolve-Path 'dist\HebrewNotesWorkbench-console.exe').Path
+          $info = New-Object System.Diagnostics.ProcessStartInfo
+          $info.FileName = $exe
+          $info.Arguments = '--selftest --selftest-report "selftest-console.json"'
+          $info.UseShellExecute = $false
+          $info.RedirectStandardOutput = $true
+          $info.RedirectStandardError = $true
+          $process = [System.Diagnostics.Process]::Start($info)
+          $stdout = $process.StandardOutput.ReadToEndAsync()
+          $stderr = $process.StandardError.ReadToEndAsync()
+          $null = $process.WaitForExit(180000)
+          $out = $stdout.Result
+          $err = $stderr.Result
+          $out | Out-File -Encoding utf8 'console-out.txt'
+          $err | Out-File -Encoding utf8 'console-err.txt'
+          @("exit code: $($process.ExitCode)", "exe size: $((Get-Item $exe).Length) bytes") |
+            Out-File -Encoding utf8 'console-exit.txt'
+          if ($out) { $out.Split("`n") | ForEach-Object { Write-Host "out: $_" } }
+          if ($err) { $err.Split("`n") | ForEach-Object { Write-Output "::error title=Console build::$_" } }
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
         shell: pwsh
         run: |
-          python tools/publish_diagnostics.py selftest-windows.json selftest-exit.txt selftest-out.txt selftest-err.txt selftest-console.json console-out.txt console-err.txt console-exit.txt
+          Get-ChildItem dist -ErrorAction SilentlyContinue |
+            ForEach-Object { "$($_.Name) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
+          python tools/publish_diagnostics.py selftest-windows.json selftest-exit.txt selftest-out.txt selftest-err.txt selftest-console.json console-out.txt console-err.txt console-exit.txt dist-listing.txt
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
