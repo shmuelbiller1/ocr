@@ -39,8 +39,11 @@ Hebrew-script notes into editable, printable documents.
 | Print | **Works** | Print dialog with the Windows printers, print preview, and "save as PDF" |
 | Sample pages | **Works** | `File > Open samples` loads the synthetic pages from `samples/` |
 | OCR engine slot | **Fails closed on purpose** | `Run OCR` reports that no engine is installed and changes nothing |
-| Handwriting recognition with a real model | **Not implemented** | Planned with one licensed, pretrained model |
-| Spelling / grammar / `לשון הספר` | **Not implemented** | Planned as separate, opt-in modules with a review step |
+| Handwriting recognition with a real model | **Works, needs the model** | kraken + PP-OCRv6 (Apache-2.0); the model is installed by the user and checked against two digests; the accuracy is measured in `docs/OCR_ACCURACY.md` |
+| Spelling proposals | **Works, needs a word list** | The word list of the user; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
+| Grammar proposals | **Works, a few rules** | Punctuation and spacing |
+| `לשון הספר` proposals | **Not implemented** | The module exists, is switched off, and says so; see `docs/SUGGESTIONS.md` |
+| Accepting and refusing proposals | **Works** | Every proposal is shown first and is accepted or refused on its own; every accepted change is logged and can be undone |
 | Text search inside the document | **Not implemented** | Planned |
 
 ## Running it from source
@@ -60,21 +63,29 @@ the documents you open.
 `push` or `pull_request` runs `.github/workflows/windows.yml`, which
 
 1. runs the unit tests,
-2. builds `dist/HebrewNotesWorkbench.exe` with PyInstaller,
+2. builds `dist/HebrewNotesWorkbench/` with PyInstaller,
 3. **starts the packaged executable** and runs its self-test (the test also
-   creates the real main window), and
-4. uploads the executable as the workflow artifact
-   `HebrewNotesWorkbench-Windows`.
+   creates the real main window),
+4. puts the program, the licence texts and a readme for the user into one
+   archive (`release/HebrewNotesWorkbench-<version>-win64.zip`), and
+5. uploads the folder and the archive as the workflow artifacts
+   `HebrewNotesWorkbench-Windows` and `HebrewNotesWorkbench-release`.
 
-A user without Python downloads the artifact, unpacks it, and starts
-`HebrewNotesWorkbench.exe`.
+A user without Python downloads the archive, unpacks the folder, and
+starts `HebrewNotesWorkbench.exe`.  The application is a folder and not a
+single file on purpose: the Qt libraries stay separate files, so that they
+can be replaced, as the LGPL requires.
 
 ## Building the executable by hand
 
 ```bash
 pip install -r requirements.txt pyinstaller==6.16.0
-pyinstaller --noconfirm --clean --onefile --windowed --name HebrewNotesWorkbench app.py
+pyinstaller --noconfirm --clean --onedir --windowed --add-data "samples;samples" --name HebrewNotesWorkbench app.py
+python tools/build_release.py --app dist/HebrewNotesWorkbench --download-licences
 ```
+
+The second command writes the archive for the user and prints the
+SHA-256 of the archive.
 
 ## Repository layout
 
@@ -82,8 +93,9 @@ pyinstaller --noconfirm --clean --onefile --windowed --name HebrewNotesWorkbench
 app.py                        launcher (--selftest, --version)
 hebrew_workbench/
     engine/                   replaceable OCR adapters (base contract + registry)
+    suggestions/              the spelling, grammar and style modules (proposals only)
     preview/                  offline rendering of PDF pages and images
-    ui/                       the Qt main window and the preview pane
+    ui/                       the Qt main window, the preview pane, the proposals pane
     exporting.py              TXT, DOCX and printing helpers
     project.py                workspace model: documents + their transcriptions
     resources.py              finding the files that ship with the application

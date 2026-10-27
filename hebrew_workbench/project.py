@@ -35,6 +35,9 @@ class DocumentEntry:
     transcription: str = ""
     engine_name: str = ""
     notes: str = ""
+    #: The corrections that the user accepted, in the order they were
+    #: accepted.  They are kept so that they can be shown and undone.
+    changes: list[dict] = field(default_factory=list)
 
     @property
     def file_path(self) -> Path:
@@ -55,6 +58,7 @@ class DocumentEntry:
             "transcription": self.transcription,
             "engine_name": self.engine_name,
             "notes": self.notes,
+            "changes": list(self.changes),
         }
 
     @classmethod
@@ -65,6 +69,7 @@ class DocumentEntry:
             transcription=str(data.get("transcription", "")),
             engine_name=str(data.get("engine_name", "")),
             notes=str(data.get("notes", "")),
+            changes=[dict(item) for item in data.get("changes", [])],
         )
 
 

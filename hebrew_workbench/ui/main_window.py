@@ -45,7 +45,9 @@ from ..engine.registry import EngineRegistry
 from ..exporting import ExportError, build_print_document, print_document, write_docx
 from ..project import PROJECT_SUFFIX, Project
 from ..resources import samples_directory
+from ..suggestions import SuggestionRegistry, SuggestionSession
 from .preview_pane import PreviewPane
+from .suggestions_pane import SuggestionsPane
 from .tasks import TaskThread
 
 __all__ = ["MainWindow", "run", "SUPPORTED_SUFFIXES"]
@@ -72,6 +74,8 @@ class MainWindow(QMainWindow):
         self.project = Project()
         self.registry = EngineRegistry()
         self.engines: list = []
+        self.suggestion_modules = SuggestionRegistry()
+        self.suggestions = SuggestionSession()
         self._shown_entry = None
         self._loading = False
         self.task: TaskThread | None = None
@@ -85,6 +89,7 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._build_toolbar()
         self._build_status_bar()
+        self._build_suggestions_dock()
         self._sync_document_list()
         self.refresh_engines()
 
@@ -204,6 +209,15 @@ class MainWindow(QMainWindow):
         self.install_engine_action = QAction("התקנת מודל הזיהוי...", self)
         self.install_engine_action.triggered.connect(self.install_model)
 
+        self.check_suggestions_action = QAction("בדיקת הצעות תיקון", self)
+        self.check_suggestions_action.triggered.connect(self.check_suggestions)
+
+        self.undo_changes_action = QAction("ביטול כל שינויי התיקון", self)
+        self.undo_changes_action.triggered.connect(self.undo_all_changes)
+
+        self.choose_dictionary_action = QAction("בחירת מילון לאיות...", self)
+        self.choose_dictionary_action.triggered.connect(self.choose_dictionary)
+
         self.cancel_action = QAction("ביטול המשימה", self)
         self.cancel_action.triggered.connect(self.cancel_task)
         self.cancel_action.setEnabled(False)
@@ -244,6 +258,12 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(self.install_engine_action)
         tools_menu.addAction(self.engine_status_action)
 
+        suggestions_menu = self.menuBar().addMenu("הצעות תיקון")
+        suggestions_menu.addAction(self.check_suggestions_action)
+        suggestions_menu.addAction(self.undo_changes_action)
+        suggestions_menu.addSeparator()
+        suggestions_menu.addAction(self.choose_dictionary_action)
+
         help_menu = self.menuBar().addMenu("עזרה")
         about = QAction("אודות", self)
         about.triggered.connect(self.show_about)
@@ -281,6 +301,23 @@ class MainWindow(QMainWindow):
         }
         for action, icon in mapping.items():
             action.setIcon(style.standardIcon(icon))
+
+    def _build_suggestions_dock(self) -> None:
+        """The pane with the proposals for corrections."""
+        from PySide6.QtWidgets import QDockWidget
+
+        self.suggestions_pane = SuggestionsPane(self)
+        self.suggestions_pane.check_requested.connect(self.check_suggestions)
+        self.suggestions_pane.undo_requested.connect(self.undo_all_changes)
+        self.suggestions_pane.accept_requested.connect(self.accept_suggestion)
+        self.suggestions_pane.refuse_requested.connect(self.refuse_suggestion)
+
+        self.suggestions_dock = QDockWidget("הצעות תיקון", self)
+        self.suggestions_dock.setObjectName("suggestions-dock")
+        self.suggestions_dock.setWidget(self.suggestions_pane)
+        self.suggestions_dock.setMinimumWidth(300)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.suggestions_dock)
+        self.suggestions_dock.hide()
 
     def _build_status_bar(self) -> None:
         status = QStatusBar()
@@ -803,6 +840,101 @@ class MainWindow(QMainWindow):
 
     def show_engine_status(self) -> None:
         QMessageBox.information(self, "מצב המנועים", self.registry.status())
+
+    # -- the proposals for corrections -------------------------------------
+    def check_suggestions(self) -> None:
+        """Ask the modules what they would change, and show the proposals."""
+        entry = self._current_entry()
+        if entry is None:
+            QMessageBox.information(
+                self, "הצעות תיקון", "יש לבחור מסמך לפני בדיקת הצעות."
+            )
+            return
+        text = self.editor.toPlainText()
+        if not text.strip():
+            self.suggestions_pane.show_suggestions([])
+            self.statusBar().showMessage("אין טקסט לבדיקה.", 5000)
+            return
+        proposals = self.suggestion_modules.check(text)
+        self.suggestions.set_suggestions(proposals, text)
+        self.suggestions_pane.show_suggestions(self.suggestions.pending())
+        self.suggestions_dock.show()
+        if proposals:
+            self.statusBar().showMessage(
+                f"נמצאו {len(proposals)} הצעות. כל הצעה מתקבלת או נדחית בנפרד.",
+                8000,
+            )
+        else:
+            self.statusBar().showMessage("לא נמצאו הצעות לתיקון.", 5000)
+
+    def accept_suggestion(self, suggestion) -> None:
+        """Apply one proposal that the user accepted."""
+        outcome = self.suggestions.accept(suggestion)
+        if outcome is None:
+            self.statusBar().showMessage(
+                "ההצעה כבר אינה מתאימה לטקסט, ולכן לא הוחלה.", 6000
+            )
+            self.suggestions_pane.show_suggestions(self.suggestions.pending())
+            return
+        text, position = outcome
+        self._loading = True
+        self.editor.setPlainText(text)
+        self._loading = False
+        self.suggestions_pane.show_suggestions(self.suggestions.pending())
+        self.suggestions_pane.set_undo_available(bool(self.suggestions.accepted))
+        self._store_changes()
+        self.statusBar().showMessage(
+            f"ההצעה התקבלה. נשארו {len(self.suggestions.pending())} הצעות.", 5000
+        )
+
+    def refuse_suggestion(self, suggestion) -> None:
+        """The user does not want this proposal."""
+        self.suggestions.refuse(suggestion)
+        self.suggestions_pane.show_suggestions(self.suggestions.pending())
+        self.statusBar().showMessage("ההצעה נדחתה. הטקסט לא השתנה.", 5000)
+
+    def undo_all_changes(self) -> None:
+        """Take back every correction that was accepted."""
+        if not self.suggestions.accepted:
+            self.statusBar().showMessage("אין שינויים לביטול.", 5000)
+            return
+        text = self.suggestions.undo_all()
+        self._loading = True
+        self.editor.setPlainText(text)
+        self._loading = False
+        self.suggestions_pane.set_undo_available(False)
+        self._store_changes()
+        self.statusBar().showMessage("כל שינויי התיקון בוטלו.", 6000)
+
+    def _store_changes(self) -> None:
+        """Keep the changes of the document that is open."""
+        entry = self._shown_entry
+        if entry is not None:
+            entry.changes = self.suggestions.change_log()
+
+    def choose_dictionary(self) -> None:
+        """Let the user point at a word list for the spelling module."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "בחירת מילון לבדיקת איות",
+            "",
+            "מילונים (*.dic *.txt *.lst);;כל הקבצים (*)",
+        )
+        if not path:
+            return
+        module = self.suggestion_modules.module("spelling")
+        if module is None:
+            return
+        try:
+            module.set_dictionary(path)
+        except OSError as exc:
+            QMessageBox.warning(self, "בחירת מילון", f"לא ניתן לקרוא את המילון: {exc}")
+            return
+        self.suggestions_pane.show_suggestions([])
+        self.statusBar().showMessage(
+            f"המילון של מודל האיות הוא עכשיו: {path} ({module.word_count} מילים)",
+            8000,
+        )
 
     def show_about(self) -> None:
         QMessageBox.about(
