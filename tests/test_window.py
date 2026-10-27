@@ -123,6 +123,52 @@ class DocumentTextTests(unittest.TestCase):
         self.assertEqual(self.window.editor.toPlainText(), "הטקסט של המסמך השני")
         self.assertEqual(second.transcription, "הטקסט של המסמך השני")
 
+    def test_the_recognition_clears_the_corrections_of_the_old_text(self) -> None:
+        """The corrections of the old text do not belong to the new text."""
+        self.add_two_documents()
+        first = self.window.project[0]
+        self.window.doc_list.setCurrentRow(0)
+        self.app.processEvents()
+
+        class Result:
+            text = "תוצאת הזיהוי"
+            engine_name = "מנוע הבדיקה"
+            duration_seconds = 1.5
+
+        # The document has corrections of an earlier text.
+        first.changes = [
+            {
+                "module": "spelling",
+                "original": "שלום ,",
+                "replacement": "שלום,",
+                "position": 0,
+                "message": "",
+            }
+        ]
+        self.window._on_ocr_done(Result(), first)
+
+        self.assertEqual(first.changes, [])
+        self.assertEqual(self.window.suggestions.accepted, [])
+        self.assertEqual(self.window.suggestions.current_text, "תוצאת הזיהוי")
+        self.assertFalse(self.window.suggestions.undo_available)
+
+    def test_the_list_shows_the_document_that_is_in_the_editor(self) -> None:
+        """After a removal the list and the editor show the same document."""
+        self.add_two_documents()
+        first = self.window.project[0]
+        self.window.editor.setPlainText("הטקסט של המסמך הראשון")
+        self.window.doc_list.setCurrentRow(0)
+        self.app.processEvents()
+
+        # The second document is removed, and the first one stays in
+        # the editor.
+        self.window.doc_list.clearSelection()
+        self.window.doc_list.item(1).setSelected(True)
+        self.window.remove_selected_documents()
+
+        self.assertEqual(self.window.doc_list.currentRow(), 0)
+        self.assertIs(self.window._shown_entry, first)
+
 
 if __name__ == "__main__":
     unittest.main()

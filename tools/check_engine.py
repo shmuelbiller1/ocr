@@ -23,6 +23,14 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError as exc:
         sys.stderr.write(f"the engine could not be imported: {exc!r}\n")
         return 1
+    except RuntimeError as exc:
+        # When torch and torchvision do not belong together, torchvision
+        # cannot load its own part and says so while it is imported.
+        sys.stderr.write(
+            "the engine could not be imported, and the reason is given "
+            f"here: {exc!r}\n"
+        )
+        return 1
 
     print(f"torch {torch.__version__}")
     print(f"torchvision {torchvision.__version__}")

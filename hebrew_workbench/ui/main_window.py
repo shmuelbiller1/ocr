@@ -455,6 +455,15 @@ class MainWindow(QMainWindow):
             # The document that was shown is still there, so it stays in
             # the editor and its text is not lost.
             self._show_entry(self._shown_entry)
+            # The list is built again, and the row of the document that
+            # is shown is chosen again, so that the list and the editor
+            # always show the same document.  The signals are held, so
+            # that the editor is not loaded a second time.
+            row = self.project.index_of(self._shown_entry.path)
+            if row is not None:
+                self.doc_list.blockSignals(True)
+                self.doc_list.setCurrentRow(row)
+                self.doc_list.blockSignals(False)
         else:
             self._clear_editor()
         self.statusBar().showMessage(f"הוסרו {len(rows)} מסמכים מהרשימה.", 5000)
@@ -644,6 +653,13 @@ class MainWindow(QMainWindow):
         if entry is not None:
             entry.transcription = result.text
             entry.engine_name = result.engine_name
+            # The text of the document is new, and the corrections that
+            # were made on the old text do not belong to it any more.
+            # Their places are of no use, and a correction that is
+            # looked for in the new text could be found in a place that
+            # was never corrected.
+            entry.changes = []
+            self._sessions.pop(str(entry.path), None)
         if entry is not None and entry is self._shown_entry:
             # The document that was recognised is still the one that is
             # shown, so the editor may show the result.  When the user
@@ -653,6 +669,10 @@ class MainWindow(QMainWindow):
             self._loading = True
             self._replace_editor_text(result.text)
             self._loading = False
+            # The session of the document is new, because the text of
+            # the document is new.
+            self.suggestions = self._session_for(entry)
+            self._refresh_suggestions(self.suggestions)
         self.statusBar().showMessage(
             f"הזיהוי בוצע באמצעות {result.engine_name} ב-{result.duration_seconds:.1f} שניות. "
             "יש לבדוק כל שורה לפני הייצוא.",
@@ -986,7 +1006,10 @@ class MainWindow(QMainWindow):
         # editor now, so that what the user wrote after them is kept.
         text = session.undo_all(self.editor.toPlainText())
         self._loading = True
-        self.editor.setPlainText(text)
+        # The text is put in with the cursor and not with
+        # `setPlainText`, so that the undo of the editor keeps working
+        # and the user can take back a change that was wrong.
+        self._replace_editor_text(text)
         self._loading = False
         self._store_editor_text()
         self._refresh_suggestions(session)
@@ -1002,7 +1025,10 @@ class MainWindow(QMainWindow):
                 8000,
             )
         else:
-            self.statusBar().showMessage("כל שינויי התיקון בוטלו.", 6000)
+            self.statusBar().showMessage(
+                "כל שינויי התיקון בוטלו. יש לבדוק את ההצעות שוב.",
+                8000,
+            )
 
     def _store_changes(self) -> None:
         """Keep the changes of the document that is open."""

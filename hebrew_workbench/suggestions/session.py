@@ -240,6 +240,13 @@ class SuggestionSession:
         self.current_text = result
         self.accepted = []
         self._round_shifts = []
+        # The proposals of the last round have the places of the text
+        # as it was before the corrections were taken back, and they
+        # are of no use now.  They are taken away, so that a proposal
+        # is never applied to a place that it does not belong to; the
+        # user has to check the suggestions again.
+        self.suggestions = []
+        self.refused = []
         return result
 
     # -- the changes of a project ------------------------------------------

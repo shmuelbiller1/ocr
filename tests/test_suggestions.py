@@ -13,6 +13,7 @@ from hebrew_workbench.suggestions import (
     GrammarModule,
     SpellingModule,
     StyleModule,
+    Suggestion,
     SuggestionRegistry,
     SuggestionSession,
 )
@@ -267,6 +268,29 @@ class SessionTests(unittest.TestCase):
         # The user wrote something after the correction was made.
         text = session.undo_all("שלום,עולם ועוד מילה")
         self.assertEqual(text, "שלום ,עולם ועוד מילה")
+
+    def test_the_proposals_are_taken_away_when_the_corrections_are_undone(self) -> None:
+        """A proposal of the old places is of no use after the undo."""
+        session = self.make_session()
+        session.accept(session.pending()[0])
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original="עולם!",
+                    replacement="עולם.",
+                    message="",
+                    start=7,
+                    end=12,
+                )
+            ],
+            session.current_text,
+        )
+        self.assertEqual(len(session.pending()), 1)
+        session.undo_all()
+        # The places of the proposals belonged to the text before the
+        # undo, and they are of no use now.
+        self.assertEqual(session.pending(), [])
 
     def test_the_undo_does_not_change_a_text_that_was_not_corrected(self) -> None:
         """A correction is not taken back in a place that was not corrected."""
