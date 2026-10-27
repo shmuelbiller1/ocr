@@ -192,6 +192,14 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Restore the cache of the engine
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/models
+            .cache/pinkas
+          key: engine-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ github.sha }}
+          restore-keys: engine-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -200,8 +208,12 @@ jobs:
           set -o pipefail
           {
             python -m pip install --upgrade pip
-            python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<2.14"
-            python -m pip install "kraken==7.1.1" "pillow==11.3.0"
+            # torch and torchvision have to be a matching pair, and both
+            # have to come from the same place.  When kraken brings its
+            # own torchvision, pip replaces the CPU build of torch with
+            # the GPU build of PyPI, and the two do not work together.
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.13,<2.15" "torchvision>=0.28,<0.30"
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
           } 2>&1 | tee install-engine.log
       - name: Download and check the recognition model
         run: |
@@ -273,8 +285,10 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip 2>&1 | Out-File -Encoding utf8 install-engine.log
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<2.14" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
-          python -m pip install "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          # torch and torchvision must be a matching pair from the same
+          # place, otherwise the recognition fails to start.
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.13,<2.15" "torchvision>=0.28,<0.30" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           python -m pip install "pyinstaller==6.16.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
       - name: Download and check the recognition model
         shell: pwsh

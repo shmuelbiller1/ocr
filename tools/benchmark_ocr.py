@@ -193,6 +193,10 @@ def measure_page(
         ),
         "wer": round(word_error_rate(reference, hypothesis), 4),
         "seconds": round(seconds, 2),
+        # A short piece of both texts, so that a report that says
+        # "the error rate is 1200%" can be looked at and understood.
+        "reference_sample": reference[:200],
+        "hypothesis_sample": hypothesis[:200],
     }
 
 
@@ -244,6 +248,8 @@ def main(argv: list[str] | None = None) -> int:
             f"{measured['seconds']:.1f}s",
             flush=True,
         )
+        print(f"    ground truth: {measured['reference_sample']}", flush=True)
+        print(f"    recognised:   {measured['hypothesis_sample']}", flush=True)
 
     if not results:
         raise SystemExit("no page with a ground truth was found in the dataset")
