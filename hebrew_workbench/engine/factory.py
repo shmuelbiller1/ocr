@@ -36,7 +36,11 @@ def worker_path() -> Path | None:
         candidates.append(Path(bundle) / "ocr-worker")
     candidates.append(models_directory().parent / "ocr-worker.exe")
     candidates.append(models_directory().parent / "ocr-worker")
-    candidates.append(Path(sys.executable).resolve().parent / "ocr-worker.exe")
+    program_folder = Path(sys.executable).resolve().parent
+    candidates.append(program_folder / "ocr-worker.exe")
+    # The worker that comes with the program is a folder of its own,
+    # with its own libraries beside it.
+    candidates.append(program_folder / "ocr-worker" / "ocr-worker.exe")
     for candidate in candidates:
         if candidate.is_file():
             return candidate

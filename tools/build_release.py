@@ -5,6 +5,8 @@
 The result is a ZIP file with
 
 * the application itself, exactly as it was built,
+* the folder `ocr-worker` with the recognition worker, so that the
+  program can read handwriting without anything else,
 * a folder `LICENCES` with the licence texts of the components that are
   inside the application, and a notice that says what every component
   is and where its licence comes from,
@@ -13,6 +15,9 @@ The result is a ZIP file with
 
 The script prints the SHA-256 of the ZIP, so that the file that is
 published can be checked by the person who downloads it.
+
+The archive is not made when a licence text is missing: a program that
+is given to somebody has to carry the licence of every part of it.
 """
 
 from __future__ import annotations
@@ -64,6 +69,17 @@ LICENCE_TEXTS = [
     ),
 ]
 
+#: The packages that are inside the application, and whose licence text
+#: has to be in the release.  The release is not made when one of them
+#: is missing.
+REQUIRED_LICENCE_PACKAGES = (
+    "pyside6_essentials",
+    "shiboken6",
+    "pillow",
+    "pypdfium2",
+    "python_docx",
+)
+
 README = """מסמך למשתמש - Hebrew Notes Workbench
 ====================================
 
@@ -92,13 +108,15 @@ README = """מסמך למשתמש - Hebrew Notes Workbench
 קבצים
 -----
 * HebrewNotesWorkbench.exe - התוכנה.
+* ocr-worker - תיקיית מנוע הזיהוי. התוכנה מוצאת אותו בעצמה, ולכן אין
+  צורך להתקין Python ואין צורך להתקין דבר אחר.
 * LICENCES - טקסטים של הרישיונות של הרכיבים שבתוכנה, ורשימה שלהם.
 * samples - דפי דוגמה (דפים מלאכותיים, לא סריקות אמיתיות).
 
 דרך לשמירה על התוכנה
 --------------------
-רישיון התוכנה עצמה: ראו את הקובץ LICENSE בתיקייה הזו. רכיבי Qt מגיעים
-עם רישיון LGPL, ולכן אפשר להחליף את קובצי ה-DLL של Qt שבתיקייה
+רישיון התוכנה עצמה: ראו את הקובץ LICENSE בתיקיית LICENCES. רכיבי Qt
+מגיעים עם רישיון LGPL, ולכן אפשר להחליף את קובצי ה-DLL של Qt שבתיקייה
 _INTERNAL בלי לשנות את שאר התוכנה.
 
 English
@@ -150,6 +168,21 @@ def licence_files(site_packages: Path) -> list[tuple[str, Path]]:
                 if path.is_file():
                     found.append((info.name, path))
     return found
+
+
+def missing_licence_packages(site_packages: Path) -> list[str]:
+    """The packages whose licence text was not found.
+
+    A program that is given to somebody has to carry the licence of
+    every part of it, so the release is not made when one of them is
+    missing.
+    """
+    found = {package.lower() for package, _ in licence_files(site_packages)}
+    missing = []
+    for package in REQUIRED_LICENCE_PACKAGES:
+        if not any(name.startswith(package) for name in found):
+            missing.append(package)
+    return missing
 
 
 def fetch_text(url: str) -> str:
@@ -229,11 +262,23 @@ def build_notice(site_packages: Path) -> str:
 
 
 def build_release(
-    app: Path, output: Path, site_packages: Path, fetch_licences: bool = False
+    app: Path,
+    output: Path,
+    site_packages: Path,
+    fetch_licences: bool = False,
+    worker: Path | None = None,
+    fetch=None,
 ) -> Path:
     """Copy the application, add the licences and the readme, and zip it."""
     if not app.is_dir():
         raise SystemExit(f"the application was not found: {app}")
+
+    missing_packages = missing_licence_packages(site_packages)
+    if missing_packages:
+        raise SystemExit(
+            "the licence texts of these packages were not found, so the "
+            "program is not given to anybody: " + ", ".join(missing_packages)
+        )
 
     staging = output.parent / f"{output.stem}-content"
     if staging.exists():
@@ -243,6 +288,14 @@ def build_release(
     app_name = app.name
     shutil.copytree(app, staging / app_name)
 
+    # The worker of the recognition goes with the program, so that the
+    # program can read handwriting without anything else.
+    if worker is not None:
+        source = Path(worker)
+        if not source.is_dir():
+            raise SystemExit(f"the recognition worker was not found: {source}")
+        shutil.copytree(source, staging / app_name / "ocr-worker")
+
     # The licences and the readme go into the folder of the program, so
     # that the user has to unpack only one folder.
     licences = staging / app_name / "LICENCES"
@@ -250,18 +303,22 @@ def build_release(
     third_party = REPO_ROOT / "docs" / "THIRD_PARTY.md"
     if third_party.is_file():
         shutil.copy2(third_party, licences / "THIRD_PARTY.md")
+    application_licence = REPO_ROOT / "LICENSE"
+    if application_licence.is_file():
+        shutil.copy2(application_licence, licences / "LICENSE")
     (licences / "NOTICE.txt").write_text(
         build_notice(site_packages), encoding="utf-8"
     )
     for package, path in licence_files(site_packages):
         shutil.copy2(path, licences / f"{package}-{path.name}")
     if fetch_licences:
-        missing = download_licence_texts(licences)
+        missing = download_licence_texts(
+            licences, fetch=fetch if fetch is not None else fetch_text
+        )
         if missing:
-            print(
-                "warning: these licence texts were not fetched: "
-                + ", ".join(missing),
-                file=sys.stderr,
+            raise SystemExit(
+                "these licence texts were not fetched, so the program is not "
+                "given to anybody: " + ", ".join(missing)
             )
     (staging / app_name / "README-להשימה.txt").write_text(README, encoding="utf-8")
 
@@ -296,6 +353,10 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="fetch the licence texts that are not inside the packages",
     )
+    parser.add_argument(
+        "--worker",
+        help="the built recognition worker, to put it into the release",
+    )
     args = parser.parse_args(argv)
 
     app = Path(args.app)
@@ -320,7 +381,12 @@ def main(argv: list[str] | None = None) -> int:
         if children:
             site_packages = children[0]
 
-    archive = build_release(app, output, site_packages, args.download_licences)
+    worker = Path(args.worker) if args.worker else None
+    if worker is not None and not worker.is_absolute():
+        worker = Path.cwd() / worker
+    archive = build_release(
+        app, output, site_packages, args.download_licences, worker
+    )
     digest = sha256_of(archive)
     print(f"release: {archive}")
     print(f"size: {archive.stat().st_size} bytes")

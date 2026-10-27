@@ -23,13 +23,29 @@ class ReleaseTests(unittest.TestCase):
         (app / "_internal" / "Qt6Core.dll").write_bytes(b"the library")
         return app
 
+    def make_packages(self, root: Path) -> Path:
+        """A folder with the licence texts of the packages of the program."""
+        packages = root / "packages"
+        for name in release.REQUIRED_LICENCE_PACKAGES:
+            info = packages / f"{name}-1.0.dist-info"
+            info.mkdir(parents=True, exist_ok=True)
+            (info / "LICENSE").write_text(f"the licence of {name}", encoding="utf-8")
+        return packages
+
+    def make_worker(self, root: Path) -> Path:
+        worker = root / "ocr-worker"
+        (worker / "_internal").mkdir(parents=True)
+        (worker / "ocr-worker.exe").write_bytes(b"the worker")
+        (worker / "_internal" / "torch.dll").write_bytes(b"the library")
+        return worker
+
     def test_the_archive_holds_the_application_the_licences_and_the_readme(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             app = self.make_application(root)
             output = root / "release" / "program.zip"
 
-            release.build_release(app, output, root / "no-packages")
+            release.build_release(app, output, self.make_packages(root))
 
             self.assertTrue(output.is_file())
             with zipfile.ZipFile(output) as archive:
@@ -50,7 +66,7 @@ class ReleaseTests(unittest.TestCase):
             root = Path(folder)
             app = self.make_application(root)
             output = root / "program.zip"
-            release.build_release(app, output, root / "no-packages")
+            release.build_release(app, output, self.make_packages(root))
             with zipfile.ZipFile(output) as archive:
                 notice = archive.read(
                     "HebrewNotesWorkbench/LICENCES/NOTICE.txt"
@@ -63,10 +79,7 @@ class ReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             app = self.make_application(root)
-            packages = root / "packages"
-            info = packages / "pillow-11.3.0.dist-info"
-            info.mkdir(parents=True)
-            (info / "LICENSE").write_text("the licence of pillow", encoding="utf-8")
+            packages = self.make_packages(root)
             output = root / "program.zip"
 
             release.build_release(app, output, packages)
@@ -74,7 +87,7 @@ class ReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(output) as archive:
                 names = archive.namelist()
             self.assertIn(
-                "HebrewNotesWorkbench/LICENCES/pillow-11.3.0.dist-info-LICENSE", names
+                "HebrewNotesWorkbench/LICENCES/pillow-1.0.dist-info-LICENSE", names
             )
 
     def test_a_licence_text_that_is_not_the_right_one_is_not_kept(self) -> None:
@@ -107,8 +120,56 @@ class ReleaseTests(unittest.TestCase):
             root = Path(folder)
             app = self.make_application(root)
             output = root / "program.zip"
-            release.build_release(app, output, root / "no-packages")
+            release.build_release(app, output, self.make_packages(root))
             self.assertEqual(len(release.sha256_of(output)), 64)
+
+    def test_the_archive_holds_the_licence_of_the_program(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            app = self.make_application(root)
+            output = root / "program.zip"
+            release.build_release(app, output, self.make_packages(root))
+            with zipfile.ZipFile(output) as archive:
+                names = archive.namelist()
+            self.assertIn("HebrewNotesWorkbench/LICENCES/LICENSE", names)
+
+    def test_the_archive_holds_the_recognition_worker(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            app = self.make_application(root)
+            worker = self.make_worker(root)
+            output = root / "program.zip"
+            release.build_release(app, output, self.make_packages(root), worker=worker)
+            with zipfile.ZipFile(output) as archive:
+                names = archive.namelist()
+            self.assertIn("HebrewNotesWorkbench/ocr-worker/ocr-worker.exe", names)
+            self.assertIn("HebrewNotesWorkbench/ocr-worker/_internal/torch.dll", names)
+
+    def test_the_release_is_not_made_when_a_licence_text_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            app = self.make_application(root)
+            output = root / "program.zip"
+            with self.assertRaises(SystemExit):
+                release.build_release(app, output, root / "no-packages")
+            self.assertFalse(output.exists())
+
+    def test_the_release_is_not_made_when_a_licence_text_cannot_be_fetched(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            app = self.make_application(root)
+            output = root / "program.zip"
+            with self.assertRaises(SystemExit):
+                release.build_release(
+                    app,
+                    output,
+                    self.make_packages(root),
+                    fetch_licences=True,
+                    fetch=lambda url: "this is not a licence",
+                )
+            self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":

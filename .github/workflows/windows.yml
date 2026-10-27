@@ -102,8 +102,28 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --onedir --windowed `
             --add-data "samples;samples" `
+            --add-data "LICENSE;." `
             --name HebrewNotesWorkbench app.py 2>&1 | Tee-Object -FilePath build-windows.log
           if ($LASTEXITCODE -ne 0) { throw 'the application could not be built' }
+      - name: Install the recognition engine
+        shell: pwsh
+        run: |
+          # The worker of the recognition is given to the user with the
+          # program, so that the program can read handwriting without
+          # anything else.  torch and torchvision have to be a matching
+          # pair from the same place.
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 install-engine.log
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          python tools/check_engine.py 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'torch and torchvision do not belong together' }
+      - name: Build the recognition worker
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onedir --console `
+            --collect-all kraken `
+            --collect-all torchvision `
+            --name ocr-worker ocr_worker/main.py 2>&1 | Tee-Object -FilePath build-worker.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition worker could not be built' }
       - name: Verify the executable exists
         if: always()
         shell: pwsh
@@ -156,7 +176,7 @@ jobs:
       - name: Put the program into a folder for the user
         shell: pwsh
         run: |
-          python tools/build_release.py --app dist/HebrewNotesWorkbench --download-licences
+          python tools/build_release.py --app dist/HebrewNotesWorkbench --worker dist/ocr-worker --download-licences
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
@@ -164,7 +184,7 @@ jobs:
         run: |
           Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-console.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt
+          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-worker.log install-engine.log build-console.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4

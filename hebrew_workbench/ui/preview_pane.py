@@ -172,8 +172,13 @@ class PreviewPane(QWidget):
     def set_zoom(self, factor: float) -> None:
         # The smallest zoom is small enough for a page that was fitted to
         # a small window, so that zooming out always makes the page
-        # smaller.
-        self._zoom = max(MINIMUM_ZOOM, min(MAXIMUM_ZOOM, factor))
+        # smaller.  A long page that was fitted to the window can be
+        # smaller than that, and then the zoom may go further down, so
+        # that zooming out does not make the page bigger.
+        lowest = MINIMUM_ZOOM
+        if self._zoom < MINIMUM_ZOOM:
+            lowest = self._zoom
+        self._zoom = max(lowest, min(MAXIMUM_ZOOM, factor))
         self._apply_zoom()
 
     def _apply_zoom(self) -> None:

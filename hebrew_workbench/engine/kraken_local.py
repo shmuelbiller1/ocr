@@ -33,7 +33,16 @@ __all__ = [
     "default_segmentation_model",
     "build_manifest",
     "make_engine",
+    "OCR_DPI",
 ]
+
+#: The resolution that a page is read at.  A page of a PDF that is
+#: rendered at the resolution of the screen is far too small for a
+#: handwriting: an A4 page would reach the engine with 595 by 842
+#: pixels, while a scan of the same page usually has about 2500 by
+#: 3500 pixels.  Three hundred dots per inch is the resolution that
+#: the writing is usually scanned in.
+OCR_DPI = 300
 
 
 def kraken_importable() -> bool:
@@ -183,7 +192,7 @@ class KrakenEngine:
                         raise EngineCancelled("המשימה בוטלה.")
                     if progress:
                         progress(f"מזהה עמוד {number} מתוך {preview.page_count}...")
-                    page_image = preview.render(number).image
+                    page_image = preview.render(number, dpi=OCR_DPI).image
                     budget = (
                         None
                         if deadline is None

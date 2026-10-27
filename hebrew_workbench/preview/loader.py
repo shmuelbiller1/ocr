@@ -11,6 +11,7 @@ decompression bomb all produce a clear message for the user.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -22,6 +23,7 @@ __all__ = [
     "MAX_FILE_BYTES",
     "MAX_PAGES",
     "MAX_PIXELS",
+    "scale_within_limit",
 ]
 
 #: Largest file the preview will open (bytes).
@@ -31,7 +33,33 @@ MAX_PAGES = 2000
 #: Largest number of pixels a single rendered page may have.
 MAX_PIXELS = 120_000_000
 
+#: The smallest scale that is still worth making.
+MINIMUM_SCALE = 0.05
+
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp", ".gif"}
+
+
+def scale_within_limit(width: float, height: float, scale: float) -> float:
+    """The scale to render a page with, so that it stays inside the limit.
+
+    The size of the picture that PDFium makes is rounded up, so the
+    size of the picture is calculated the same way here.  Without it a
+    page that is exactly at the limit is refused, after the picture was
+    already made and the memory was already used.
+    """
+    if width <= 0 or height <= 0:
+        return scale
+    current = float(scale)
+    for _ in range(12):
+        pixels = math.ceil(width * current) * math.ceil(height * current)
+        if pixels <= MAX_PIXELS:
+            return current
+        if current <= MINIMUM_SCALE:
+            break
+        current = max(
+            MINIMUM_SCALE, current * (MAX_PIXELS / float(pixels)) ** 0.5
+        )
+    raise PreviewError("העמוד גדול מדי להצגה במלואו.")
 
 
 class PreviewError(RuntimeError):
@@ -146,38 +174,52 @@ class DocumentPreview:
         return self._pdf is not None
 
     # -- rendering ---------------------------------------------------------
-    def render(self, page_number: int, target_width: int | None = None) -> PageImage:
-        """Render a single 1-based page."""
+    def render(
+        self,
+        page_number: int,
+        target_width: int | None = None,
+        dpi: int | None = None,
+    ) -> PageImage:
+        """Render a single 1-based page.
+
+        The page is rendered at the width that was asked for, or at the
+        resolution that was asked for.  A page of a PDF that is read at
+        the resolution of the screen loses the details of the writing.
+        """
         if not 1 <= page_number <= self._page_count:
             raise PreviewError(
                 f"מספר העמוד {page_number} אינו תקין (יש {self._page_count} עמודים)."
             )
         if self._pdf is not None:
-            image = self._render_pdf(page_number, target_width)
+            image = self._render_pdf(page_number, target_width, dpi)
         else:
             image = self._render_image(page_number)
         if image.width * image.height > MAX_PIXELS:
             raise PreviewError("העמוד גדול מדי להצגה במלואו.")
         return PageImage(number=page_number, image=image)
 
-    def _render_pdf(self, page_number: int, target_width: int | None):
+    def _render_pdf(
+        self,
+        page_number: int,
+        target_width: int | None,
+        dpi: int | None = None,
+    ):
         assert self._pdf is not None
         page = self._pdf[page_number - 1]
         try:
             width, height = page.get_size()
             scale = 1.0
+            if dpi and width:
+                # A page of a PDF is measured in points, and there are 72
+                # points in an inch.
+                scale = max(0.1, min(6.0, float(dpi) / 72.0))
             if target_width and width:
                 scale = max(0.1, min(6.0, target_width / float(width)))
             # The size of the page is checked before the picture is made,
             # so that a page with unusual proportions cannot use more
             # memory than the machine has.
             if width and height:
-                pixels = width * height * scale * scale
-                if pixels > MAX_PIXELS:
-                    smaller = (MAX_PIXELS / float(width * height)) ** 0.5
-                    if smaller < 0.05:
-                        raise PreviewError("העמוד גדול מדי להצגה במלואו.")
-                    scale = smaller
+                scale = scale_within_limit(width, height, scale)
             bitmap = page.render(scale=scale)
             return bitmap.to_pil().convert("RGB")
         except PreviewError:
