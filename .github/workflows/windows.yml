@@ -17,6 +17,8 @@ jobs:
   unit-tests:
     name: Unit tests (Linux)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -60,10 +62,15 @@ jobs:
       - name: Show the self-test report
         if: always()
         run: cat selftest-linux.json
+      - name: Publish the diagnostics
+        if: failure()
+        run: python tools/publish_diagnostics.py selftest-linux.json test-output.txt
 
   test-and-package:
     name: Windows executable
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -97,25 +104,14 @@ jobs:
         run: |
           $report = 'selftest-windows.json'
           if (Test-Path $report) { Remove-Item $report }
-          $process = Start-Process -FilePath 'dist\HebrewNotesWorkbench.exe' `
-            -ArgumentList '--selftest','--selftest-report',$report `
-            -PassThru -RedirectStandardOutput 'selftest-out.txt' -RedirectStandardError 'selftest-err.txt'
-          try {
-            Wait-Process -Id $process.Id -Timeout 180 -ErrorAction Stop
-          } catch {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            Write-Output '::error title=Self-test::the packaged executable did not finish within 180 seconds'
-            throw 'The packaged executable hung'
-          }
-          $process.Refresh()
-          $code = $process.ExitCode
-          Write-Host "exit code: $code"
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe 'dist\HebrewNotesWorkbench.exe' `
+            -Report $report `
+            -StdOut 'selftest-out.txt' `
+            -StdErr 'selftest-err.txt'
           if (-not (Test-Path $report)) {
-            Write-Output "::error title=Self-test::no report was written (exit code $code)"
-            if (Test-Path 'selftest-err.txt') {
-              Get-Content 'selftest-err.txt' | ForEach-Object { Write-Output "::error title=Self-test::$_" }
-            }
-            throw "The packaged executable failed its self-test (exit code $code)"
+            Write-Output "::error title=Self-test::no report was written"
+            throw 'The packaged executable did not write its report'
           }
           $data = Get-Content $report -Raw | ConvertFrom-Json
           $data.results | ForEach-Object {
@@ -135,12 +131,107 @@ jobs:
         if: failure()
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath 'dist\HebrewNotesWorkbench-console.exe' `
-            -ArgumentList '--selftest','--selftest-report','selftest-console.json' `
-            -Wait -PassThru -RedirectStandardOutput 'console-out.txt' -RedirectStandardError 'console-err.txt'
-          Write-Host "exit code: $($process.ExitCode)"
-          if (Test-Path 'console-out.txt') { Get-Content 'console-out.txt' | ForEach-Object { Write-Output "::error title=Console build::$_" } }
-          if (Test-Path 'console-err.txt') { Get-Content 'console-err.txt' | ForEach-Object { Write-Output "::error title=Console build::$_" } }
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe 'dist\HebrewNotesWorkbench-console.exe' `
+            -Report 'selftest-console.json' `
+            -StdOut 'console-out.txt' `
+            -StdErr 'console-err.txt'
+      - name: Publish the diagnostics
+        if: failure()
+        run: python tools/publish_diagnostics.py selftest-linux.json test-output.txt
+
+  test-and-package:
+    name: Windows executable
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run the test suite
+        run: |
+          python -m unittest discover -s tests -t . -v
+      - name: Install packaging tool
+        run: python -m pip install pyinstaller==6.16.0
+      - name: Build Windows executable
+        run: >-
+          python -m PyInstaller --noconfirm --clean --onefile --windowed
+          --add-data "samples;samples"
+          --name HebrewNotesWorkbench app.py
+      - name: Verify the executable exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist\HebrewNotesWorkbench.exe')) {
+            Write-Output '::error title=Packaging::the executable was not produced'
+            throw 'Missing exe'
+          }
+          $size = (Get-Item 'dist\HebrewNotesWorkbench.exe').Length
+          Write-Host "exe size: $size bytes"
+      - name: Start the packaged executable (self-test)
+        shell: pwsh
+        run: |
+          $report = 'selftest-windows.json'
+          if (Test-Path $report) { Remove-Item $report }
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe 'dist\HebrewNotesWorkbench.exe' `
+            -Report $report `
+            -StdOut 'selftest-out.txt' `
+            -StdErr 'selftest-err.txt'
+          if (-not (Test-Path $report)) {
+            Write-Output "::error title=Self-test::no report was written"
+            throw 'The packaged executable did not write its report'
+          }
+          $data = Get-Content $report -Raw | ConvertFrom-Json
+          $data.results | ForEach-Object {
+            $line = "$($_.name) ok=$($_.ok) $($_.detail)"
+            if ($_.ok) { Write-Host $line } else { Write-Output "::error title=Self-test::$line" }
+          }
+          if (-not $data.ok) {
+            throw 'The self-test reported failures'
+          }
+      - name: Build a console executable for diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --console `
+            --name HebrewNotesWorkbench-console app.py
+      - name: Show what the console build reports
+        if: failure()
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'dist\HebrewNotesWorkbench-console.exe').Path
+          $info = New-Object System.Diagnostics.ProcessStartInfo
+          $info.FileName = $exe
+          $info.Arguments = '--selftest --selftest-report "selftest-console.json"'
+          $info.UseShellExecute = $false
+          $info.RedirectStandardOutput = $true
+          $info.RedirectStandardError = $true
+          $process = [System.Diagnostics.Process]::Start($info)
+          $stdout = $process.StandardOutput.ReadToEndAsync()
+          $stderr = $process.StandardError.ReadToEndAsync()
+          $null = $process.WaitForExit(180000)
+          $out = $stdout.Result
+          $err = $stderr.Result
+          $out | Out-File -Encoding utf8 'console-out.txt'
+          $err | Out-File -Encoding utf8 'console-err.txt'
+          @("exit code: $($process.ExitCode)", "exe size: $((Get-Item $exe).Length) bytes") |
+            Out-File -Encoding utf8 'console-exit.txt'
+          if ($out) { $out.Split("`n") | ForEach-Object { Write-Host "out: $_" } }
+          if ($err) { $err.Split("`n") | ForEach-Object { Write-Output "::error title=Console build::$_" } }
+      - name: Publish the diagnostics
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -ErrorAction SilentlyContinue |
+            ForEach-Object { "$($_.Name) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
+          python tools/publish_diagnostics.py selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
@@ -154,3 +245,125 @@ jobs:
           name: HebrewNotesWorkbench-Windows
           path: dist/HebrewNotesWorkbench.exe
           if-no-files-found: error
+
+  ocr-engine:
+    name: OCR engine on real handwriting
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the recognition engine
+        run: |
+          set -o pipefail
+          {
+            python -m pip install --upgrade pip
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<2.14"
+            python -m pip install "kraken==7.1.1" "pillow==11.3.0"
+            python -c "import torch, kraken; print('torch', torch.__version__); print('kraken', kraken.__version__)"
+          } 2>&1 | tee install-engine.log
+          python -c "import torch, kraken; print('::warning title=Engine versions::torch ' + torch.__version__ + ' / kraken ' + kraken.__version__)"
+      - name: Download and check the recognition model
+        run: |
+          set -o pipefail
+          python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models --print-digest 2>&1 | tee model-download.log | tee model-digest.txt
+          python - <<'PY'
+          import json, pathlib
+          text = pathlib.Path('model-digest.txt').read_text(encoding='utf-8')
+          digest = [line for line in text.splitlines() if line.startswith('sha256:')][0].split(':', 1)[1].strip()
+          print('::warning title=Model digest::sha256 ' + digest)
+          PY
+      - name: Measure the accuracy on real handwritten pages
+        run: |
+          set -o pipefail
+          python tools/benchmark_ocr.py \
+            --model .cache/models/small.safetensors \
+            --cache .cache/pinkas \
+            --pages 3 \
+            --output ocr-accuracy.json 2>&1 | tee benchmark.log
+      - name: Publish the accuracy report
+        if: always()
+        run: |
+          if [ -f ocr-accuracy.json ]; then
+            cat ocr-accuracy.json
+            python - <<'PY'
+          import json, pathlib
+          path = pathlib.Path('ocr-accuracy.json')
+          if path.exists():
+              report = json.loads(path.read_text(encoding='utf-8'))
+              summary = report['summary']
+              for key, value in summary.items():
+                  print(f'::warning title=Accuracy::{key} {value}')
+              for item in report['results']:
+                  print(f"::warning title=Accuracy::{item['page']} CER {item['cer']} WER {item['wer']} {item['seconds']}s")
+          PY
+          fi
+      - name: Upload the accuracy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-accuracy-report
+          path: ocr-accuracy.json
+          if-no-files-found: warn
+      - name: Publish the diagnostics
+        if: always()
+        continue-on-error: true
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log model-download.log model-digest.txt benchmark.log ocr-accuracy.json
+
+  ocr-worker-windows:
+    name: OCR worker (Windows)
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the recognition engine
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip 2>&1 | Out-File -Encoding utf8 install-engine.log
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<2.14" 2>&1 | Tee-Object -FilePath install-engine.log -Append
+          if ($LASTEXITCODE -ne 0) { throw 'the engine could not be installed' }
+          python -m pip install "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Tee-Object -FilePath install-engine.log -Append
+          if ($LASTEXITCODE -ne 0) { throw 'kraken could not be installed' }
+      - name: Download the recognition model
+        shell: pwsh
+        run: |
+          python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | Tee-Object -FilePath model-download.log
+          if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
+      - name: Build the OCR worker
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --console --name ocr-worker ocr_worker/main.py 2>&1 | Tee-Object -FilePath build-worker.log
+          if ($LASTEXITCODE -ne 0) { throw 'the worker could not be built' }
+      - name: Recognise a page with the packaged worker
+        shell: pwsh
+        run: |
+          $job = @{ document = (Resolve-Path 'samples\scan_page_1.png').Path; model_path = (Resolve-Path '.cache\models\small.safetensors').Path } | ConvertTo-Json
+          $job | Set-Content -Encoding utf8 job.json
+          $process = Start-Process -FilePath 'dist\ocr-worker.exe' `
+            -ArgumentList '--job','job.json','--result','result.json' `
+            -Wait -PassThru -RedirectStandardOutput 'worker-out.txt' -RedirectStandardError 'worker-err.txt'
+          Write-Host "exit code: $($process.ExitCode)"
+          if (Test-Path 'worker-out.txt') { Get-Content 'worker-out.txt' | ForEach-Object { Write-Output "::warning title=Worker::$_" } }
+          if (Test-Path 'worker-err.txt') { Get-Content 'worker-err.txt' | Select-Object -Last 20 | ForEach-Object { Write-Output "::warning title=Worker::$_" } }
+          if (-not (Test-Path 'result.json')) { throw 'The worker did not write a result' }
+          $result = Get-Content 'result.json' -Raw | ConvertFrom-Json
+          if ($result.error) { Write-Output "::error title=Worker::$($result.error)"; throw 'The worker reported an error' }
+          Write-Output "::warning title=Worker::recognised $($result.text.Length) characters in $($result.duration_seconds) seconds"
+      - name: Upload the OCR worker
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-worker-Windows
+          path: dist/ocr-worker.exe
+          if-no-files-found: error
+      - name: Publish the diagnostics
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json
