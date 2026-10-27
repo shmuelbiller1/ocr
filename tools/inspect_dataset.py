@@ -1,0 +1,99 @@
+"""Look at the structure of the Pinkas corpus.
+
+The script prints what the ground truth files really hold, so that a
+measurement can be understood and not only believed.
+
+    python tools/inspect_dataset.py --cache .cache/pinkas
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+from xml.etree import ElementTree
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from tools.benchmark_ocr import (  # noqa: E402
+    download_dataset,
+    extract_dataset,
+    find_pages,
+    read_page_xml,
+)
+
+
+def count_tags(tree) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for element in tree.iter():
+        tag = element.tag.rsplit("}", 1)[-1]
+        counts[tag] = counts.get(tag, 0) + 1
+    return counts
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dataset", help="folder with an extracted corpus")
+    parser.add_argument("--cache", default=".cache/pinkas", help="download cache")
+    parser.add_argument("--pages", type=int, default=2, help="how many pages to show")
+    args = parser.parse_args(argv)
+
+    if args.dataset:
+        dataset_root = Path(args.dataset)
+    else:
+        cache = Path(args.cache)
+        archive = download_dataset(cache)
+        dataset_root = extract_dataset(archive, cache / "extracted")
+
+    print(f"the corpus is in {dataset_root}")
+    xml_files = sorted(dataset_root.rglob("*.xml"))
+    print(f"there are {len(xml_files)} ground truth files")
+
+    pairs = find_pages(dataset_root)
+    print(f"there are {len(pairs)} pages with a ground truth")
+
+    for image, xml_path in pairs[: max(1, args.pages)]:
+        print("")
+        print(f"--- {image.name}")
+        tree = ElementTree.parse(xml_path)
+        counts = count_tags(tree)
+        interesting = {
+            tag: number
+            for tag, number in sorted(counts.items())
+            if tag
+            in {
+                "Page",
+                "TextRegion",
+                "TextLine",
+                "Word",
+                "TextEquiv",
+                "Unicode",
+                "Image",
+            }
+        }
+        print(f"    the file holds: {interesting}")
+        text = read_page_xml(xml_path)
+        print(f"    the text that is read: {len(text)} characters")
+        print(f"    the first lines: {text.splitlines()[:3]}")
+
+        # The first line as it is in the file, so that the structure is
+        # visible and not only the result.
+        for element in tree.iter():
+            if element.tag.rsplit("}", 1)[-1] == "TextLine":
+                raw = ElementTree.tostring(element, encoding="unicode")
+                print(f"    the first line in the file: {raw[:600]}")
+                break
+
+        try:
+            from PIL import Image
+
+            with Image.open(image) as handle:
+                print(f"    the image is {handle.width}x{handle.height} pixels")
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"    the image could not be opened: {exc!r}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

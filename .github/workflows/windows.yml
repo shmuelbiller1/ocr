@@ -227,6 +227,11 @@ jobs:
             --model .cache/models/small.safetensors \
             --download --cache .cache/pinkas --pages 10 --output ocr-accuracy.json 2>&1 | tee benchmark.log
           if [ "$?" -ne 0 ]; then throw 'the measurement failed'; fi
+      - name: Look at the corpus
+        if: always()
+        continue-on-error: true
+        run: |
+          python tools/inspect_dataset.py --cache .cache/pinkas 2>&1 | tee corpus-structure.log || true
       - name: Write the results into the documentation
         if: always()
         continue-on-error: true
@@ -269,7 +274,7 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log model-download.log benchmark.log ocr-accuracy.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log model-download.log benchmark.log corpus-structure.log ocr-accuracy.json
 
   ocr-worker-windows:
     name: OCR worker (Windows)

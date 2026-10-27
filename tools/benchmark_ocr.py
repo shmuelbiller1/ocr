@@ -197,6 +197,8 @@ def measure_page(
         # "the error rate is 1200%" can be looked at and understood.
         "reference_sample": reference[:200],
         "hypothesis_sample": hypothesis[:200],
+        "lines_reference": len([line for line in reference.splitlines() if line]),
+        "lines_hypothesis": len([line for line in hypothesis.splitlines() if line]),
     }
 
 
@@ -246,6 +248,11 @@ def main(argv: list[str] | None = None) -> int:
             f"    CER {measured['cer'] * 100:.1f}%  "
             f"WER {measured['wer'] * 100:.1f}%  "
             f"{measured['seconds']:.1f}s",
+            flush=True,
+        )
+        print(
+            f"    lines: {measured['lines_reference']} in the ground truth, "
+            f"{measured['lines_hypothesis']} in the result",
             flush=True,
         )
         print(f"    ground truth: {measured['reference_sample']}", flush=True)
