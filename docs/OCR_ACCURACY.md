@@ -68,19 +68,26 @@ Measured with kraken PP-OCRv6 (Apache-2.0) on 8 pages of The Pinkas Dataset:
 | --- | --- |
 | Character error rate | **56.3%** |
 | Word error rate | **92.1%** |
-| Seconds per page | 20.93 |
+| Seconds per page | 17.18 |
 | Pages | 8 |
+| Characters of the ground truth | 20049 |
+| Words of the ground truth | 4045 |
 
 | Page | Characters in the ground truth | Character error rate | Word error rate | Seconds |
 | --- | --- | --- | --- | --- |
-| Page 105_1.jpg | 2862 | 64.6% | 98.6% | 28.77 |
-| Page 105_2.jpg | 3008 | 75.6% | 100.3% | 23.91 |
-| Page 107_1.jpg | 2287 | 35.3% | 82.2% | 18.24 |
-| Page 112_1.jpg | 2641 | 48.8% | 90.9% | 20.11 |
-| Page 112_2.jpg | 1617 | 57.8% | 94.0% | 15.19 |
-| Page 113_1.jpg | 3157 | 28.3% | 69.1% | 23.76 |
-| Page 113_2.jpg | 1895 | 73.0% | 99.2% | 16.34 |
-| Page 114_2.jpg | 2582 | 71.7% | 106.8% | 21.15 |
+| Page 105_1.jpg | 2862 | 64.6% | 98.6% | 23.62 |
+| Page 105_2.jpg | 3008 | 75.6% | 100.3% | 19.41 |
+| Page 107_1.jpg | 2287 | 35.3% | 82.2% | 15.21 |
+| Page 112_1.jpg | 2641 | 48.8% | 90.9% | 16.69 |
+| Page 112_2.jpg | 1617 | 57.8% | 94.0% | 12.82 |
+| Page 113_1.jpg | 3157 | 28.3% | 69.1% | 19.24 |
+| Page 113_2.jpg | 1895 | 73.0% | 99.2% | 13.34 |
+| Page 114_2.jpg | 2582 | 71.7% | 106.8% | 17.10 |
+
+The rate of the corpus is the number of the characters that were not
+read right over the number of the characters of the ground truth of the
+whole corpus, and not the average of the rates of the pages, so that a
+page with few characters does not count as much as a page with many.
 
 The numbers were produced by `tools/benchmark_ocr.py` in the `ocr-engine` job of the build, and the report they come from is uploaded as the artefact `ocr-accuracy-report`.
 
@@ -121,7 +128,12 @@ The ground truth of every page was checked before the measurement: the
 report says how many lines the file holds, how many of them have a
 text, and how many were read from the words alone, so that a number
 that comes from an incomplete ground truth can be seen and not
-believed.
+believed.  In this measurement **the ground truth of one page is not
+complete**: the file of `Page 113_1.jpg` holds 45 lines, and one of
+them has no text at all.  The rate of the corpus therefore holds a
+little text that the engine was never asked to read.  The report says
+which pages are like that, and the numbers of the other seven pages
+are not affected by it.
 
 ## Reproducing the measurement
 
