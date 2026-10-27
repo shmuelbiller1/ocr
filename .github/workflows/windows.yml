@@ -107,14 +107,13 @@ jobs:
           $process = Start-Process -FilePath 'dist\HebrewNotesWorkbench.exe' `
             -ArgumentList '--selftest','--selftest-report',$report `
             -PassThru -RedirectStandardOutput 'selftest-out.txt' -RedirectStandardError 'selftest-err.txt'
-          try {
-            Wait-Process -Id $process.Id -Timeout 180 -ErrorAction Stop
-          } catch {
+          # WaitForExit on the process object itself, so that the exit code
+          # of the packaged executable can be read afterwards.
+          if (-not $process.WaitForExit(180000)) {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
             Write-Output '::error title=Self-test::the packaged executable did not finish within 180 seconds'
             throw 'The packaged executable hung'
           }
-          $process.Refresh()
           $code = $process.ExitCode
           Write-Host "exit code: $code"
           "exit code: $code" | Out-File -Encoding utf8 'selftest-exit.txt'
@@ -151,10 +150,11 @@ jobs:
           if (Test-Path 'console-out.txt') { Get-Content 'console-out.txt' | ForEach-Object { Write-Output "::error title=Console build::$_" } }
           if (Test-Path 'console-err.txt') { Get-Content 'console-err.txt' | ForEach-Object { Write-Output "::error title=Console build::$_" } }
       - name: Publish the diagnostics
-        if: failure()
+        if: always()
+        continue-on-error: true
         shell: pwsh
         run: |
-          python tools/publish_diagnostics.py selftest-windows.json selftest-exit.txt selftest-out.txt selftest-err.txt selftest-console.json console-out.txt console-err.txt
+          python tools/publish_diagnostics.py selftest-windows.json selftest-exit.txt selftest-out.txt selftest-err.txt selftest-console.json console-out.txt console-err.txt console-exit.txt
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
