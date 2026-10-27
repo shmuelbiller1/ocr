@@ -91,21 +91,55 @@ def word_error_rate(reference: str, hypothesis: str) -> float:
 
 
 def read_page_xml(path: Path) -> str:
-    """The ground truth of a page: its lines, in reading order.
+    """The ground truth of a page: its lines, in reading order."""
+    text, _report = ground_truth_of(path)
+    return text
+
+
+def ground_truth_of(path: Path) -> tuple[str, dict]:
+    """The ground truth of a page, and what the file really holds.
 
     The text of a line sits in a ``Unicode`` element inside a
-    ``TextEquiv`` element inside the ``TextLine`` element, so the whole
-    line is searched and not only its direct children.
+    ``TextEquiv`` element inside the ``TextLine`` element.  When a
+    line has no text of its own, the words of the line are joined
+    together.
+
+    The report says how many lines and how many words the file holds,
+    how many of them have a text, and how many lines were read from
+    the words alone.  A file whose lines do not all have a text is not
+    a full ground truth, and the measurement of such a page is not a
+    measurement of the recognition.
     """
     tree = ElementTree.parse(path)
     lines = []
+    report = {
+        "lines": 0,
+        "lines_with_text": 0,
+        "lines_from_words": 0,
+        "words": 0,
+        "words_with_text": 0,
+        "characters": 0,
+    }
     for line in tree.iter():
         if _tag(line) != "TextLine":
             continue
+        report["lines"] += 1
         text = _line_text(line)
-        if text:
-            lines.append(text)
-    return "\n".join(lines)
+        if not text:
+            continue
+        lines.append(text)
+        report["lines_with_text"] += 1
+        report["characters"] += len(text)
+        if not _own_text(line):
+            report["lines_from_words"] += 1
+        for child in line:
+            if _tag(child) != "Word":
+                continue
+            report["words"] += 1
+            if _word_text(child):
+                report["words_with_text"] += 1
+    report["complete"] = report["lines"] == report["lines_with_text"]
+    return "\n".join(lines), report
 
 
 def _tag(element) -> str:
@@ -209,7 +243,7 @@ def measure_page(
     ``None`` is returned when the page has no ground truth, because such
     a page cannot be measured.
     """
-    reference_raw = read_page_xml(xml_path)
+    reference_raw, ground_truth = ground_truth_of(xml_path)
     if not reference_raw.strip():
         return None
 
@@ -227,6 +261,9 @@ def measure_page(
     return {
         "page": image.name,
         "ground_truth_file": str(xml_path.relative_to(dataset_root)),
+        # What the file of the ground truth really holds, so that the
+        # measurement can be understood and not only believed.
+        "ground_truth": ground_truth,
         "characters_reference": len(reference),
         "characters_hypothesis": len(hypothesis),
         "cer": round(character_error_rate(reference, hypothesis), 4),
@@ -320,6 +357,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"    ground truth: {measured['reference_sample']}", flush=True)
         print(f"    recognised:   {measured['hypothesis_sample']}", flush=True)
+        truth = measured["ground_truth"]
+        print(
+            f"    the ground truth holds {truth['lines']} lines, "
+            f"{truth['lines_with_text']} of them have a text, "
+            f"{truth['lines_from_words']} were read from the words alone, "
+            f"and it holds {truth['words']} words",
+            flush=True,
+        )
         for number, (want, got) in enumerate(
             zip(
                 measured["reference_lines_sample"],
@@ -338,6 +383,13 @@ def main(argv: list[str] | None = None) -> int:
     ) / max(1, total_reference)
     total_words = sum(item["words_reference"] for item in results)
     total_wer = sum(item["word_errors"] for item in results) / max(1, total_words)
+    # The ground truth of every page has to be complete, or the
+    # measurement is not a measurement of the recognition.
+    incomplete = [
+        item["page"]
+        for item in results
+        if not item["ground_truth"]["complete"]
+    ]
     report = {
         "engine": engine.name,
         "model": str(model_path),
@@ -358,6 +410,10 @@ def main(argv: list[str] | None = None) -> int:
             "seconds_per_page": round(
                 sum(item["seconds"] for item in results) / max(1, len(results)), 2
             ),
+            "characters_reference": total_reference,
+            "words_reference": total_words,
+            "ground_truth_complete": not incomplete,
+            "pages_with_incomplete_ground_truth": incomplete,
         },
         "results": results,
     }

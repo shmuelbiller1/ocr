@@ -279,23 +279,17 @@ jobs:
       - name: Write the results into the documentation
         if: always()
         continue-on-error: true
-        env:
-          # The name of the branch is handed over through the
-          # environment, so that a branch name can never become part of
-          # the commands of the build.
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
           if [ -f ocr-accuracy.json ]; then
             python tools/write_accuracy_results.py --report ocr-accuracy.json --document docs/OCR_ACCURACY.md
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            branch="$HEAD_BRANCH"
-            git add docs/OCR_ACCURACY.md
-            if ! git diff --cached --quiet; then
-              git commit -m "docs: the accuracy that was measured on the corpus"
-              git push origin "HEAD:$branch"
-            fi
           fi
+      - name: Upload the documentation with the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-accuracy-document
+          path: docs/OCR_ACCURACY.md
+          if-no-files-found: warn
       - name: Publish the accuracy report
         if: always()
         run: |

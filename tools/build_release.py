@@ -69,16 +69,46 @@ LICENCE_TEXTS = [
     ),
 ]
 
-#: The packages that are inside the application, and whose licence text
-#: has to be in the release.  The release is not made when one of them
-#: is missing.
-REQUIRED_LICENCE_PACKAGES = (
+#: The packages that are inside the application.  Only the licence
+#: texts of these packages are put into the release.
+PACKAGES_IN_THE_APP = (
     "pyside6_essentials",
     "shiboken6",
     "pillow",
     "pypdfium2",
     "python_docx",
+    "lxml",
 )
+
+#: The packages whose licence text has to be inside the installed
+#: package.  The release is not made when one of them is missing.  The
+#: Qt packages are not among them: their licence is the LGPL, and its
+#: text is fetched (see LICENCE_TEXTS).
+REQUIRED_LICENCE_PACKAGES = (
+    "pillow",
+    "pypdfium2",
+    "python_docx",
+    "lxml",
+)
+
+#: The files of an installed package that are not licence texts.
+NOT_LICENCE_FILES = {
+    "METADATA",
+    "RECORD",
+    "WHEEL",
+    "INSTALLER",
+    "REQUESTED",
+    "entry_points.txt",
+    "top_level.txt",
+    "direct_url.json",
+    "AUTHORS.txt",
+    "CHANGES.txt",
+    "CHANGELOG.md",
+    "CONTRIBUTORS.txt",
+    "HISTORY.txt",
+    "NEWS.txt",
+    "zip-safe",
+}
 
 README = """מסמך למשתמש - Hebrew Notes Workbench
 ====================================
@@ -153,21 +183,62 @@ def default_site_packages() -> Path:
 
 
 def licence_files(site_packages: Path) -> list[tuple[str, Path]]:
-    """Every licence text that is inside the installed packages."""
+    """Every licence text that is inside the installed packages.
+
+    Only the packages that are inside the application are looked at.
+    The name of the file of a licence is not the same in every
+    package: some use ``LICENSE``, some ``LICENSE.txt``, some
+    ``licenses/LICENSE`` and some the name of the licence itself, like
+    ``Apache-2.0.txt``.  Every text file of the package that is not
+    one of the known files of the format is taken, so that no licence
+    is left out.
+    """
     found: list[tuple[str, Path]] = []
     if not site_packages.is_dir():
         return found
     for info in sorted(site_packages.glob("*.dist-info")):
-        for candidate in ("LICENSE", "LICENSE.txt", "COPYING", "NOTICE"):
-            path = info / candidate
-            if path.is_file():
-                found.append((info.name, path))
+        name = info.name.lower()
+        if not any(name.startswith(package) for package in PACKAGES_IN_THE_APP):
+            continue
+        for path in sorted(info.iterdir()):
+            if not path.is_file():
+                continue
+            if path.name in NOT_LICENCE_FILES:
+                continue
+            if path.suffix.lower() not in (".txt", ".md") and path.name.upper() not in (
+                "LICENSE",
+                "COPYING",
+                "NOTICE",
+            ):
+                continue
+            found.append((info.name, path))
         licences = info / "licenses"
         if licences.is_dir():
             for path in sorted(licences.rglob("*")):
-                if path.is_file():
+                if not path.is_file():
+                    continue
+                if path.suffix.lower() in (".txt", ".md") or path.name.upper() in (
+                    "LICENSE",
+                    "COPYING",
+                    "NOTICE",
+                ):
                     found.append((info.name, path))
     return found
+
+
+def licence_name(package: str, path: Path, info: Path) -> str:
+    """The name a licence text gets in the release.
+
+    Two files of a package can have the same name in different
+    folders, so the name of the folder is added when there is one.
+    """
+    try:
+        relative = path.relative_to(info)
+    except ValueError:  # pragma: no cover - defensive
+        return f"{package}-{path.name}"
+    if len(relative.parts) > 1:
+        return f"{package}-{relative.parent.name}-{path.name}"
+    return f"{package}-{path.name}"
 
 
 def missing_licence_packages(site_packages: Path) -> list[str]:
@@ -310,7 +381,8 @@ def build_release(
         build_notice(site_packages), encoding="utf-8"
     )
     for package, path in licence_files(site_packages):
-        shutil.copy2(path, licences / f"{package}-{path.name}")
+        info = site_packages / package
+        shutil.copy2(path, licences / licence_name(package, path, info))
     if fetch_licences:
         missing = download_licence_texts(
             licences, fetch=fetch if fetch is not None else fetch_text
@@ -320,6 +392,26 @@ def build_release(
                 "these licence texts were not fetched, so the program is not "
                 "given to anybody: " + ", ".join(missing)
             )
+    else:
+        # The texts that are in the repository are used, so that a
+        # release can be made without a network.
+        repository = REPO_ROOT / "docs" / "licences"
+        if repository.is_dir():
+            for name, _url, _marker in LICENCE_TEXTS:
+                source = repository / name
+                if source.is_file() and not (licences / name).is_file():
+                    shutil.copy2(source, licences / name)
+    # The texts of the licences that are not inside the packages have to
+    # be in the release: the LGPL of the Qt libraries, the GPL that it
+    # points at, and the licence of Python.
+    absent = [name for name, _url, _marker in LICENCE_TEXTS if not (licences / name).is_file()]
+    if absent:
+        raise SystemExit(
+            "these licence texts are not in the release, so the program is "
+            "not given to anybody: "
+            + ", ".join(absent)
+            + ".  Use --download-licences to fetch them."
+        )
     (staging / app_name / "README-להשימה.txt").write_text(README, encoding="utf-8")
 
     if output.exists():

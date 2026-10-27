@@ -32,6 +32,25 @@ class ReleaseTests(unittest.TestCase):
             (info / "LICENSE").write_text(f"the licence of {name}", encoding="utf-8")
         return packages
 
+    def fetch_text(self, url: str) -> str:
+        """A stand-in for the texts that are fetched from the network."""
+        return (
+            "GNU LESSER GENERAL PUBLIC LICENSE\n"
+            "GNU GENERAL PUBLIC LICENSE\n"
+            "PYTHON SOFTWARE FOUNDATION LICENSE\n"
+        )
+
+    def build(self, app: Path, output: Path, packages: Path, worker: Path | None = None):
+        """Make a release with licence texts that were fetched."""
+        return release.build_release(
+            app,
+            output,
+            packages,
+            fetch_licences=True,
+            worker=worker,
+            fetch=self.fetch_text,
+        )
+
     def make_worker(self, root: Path) -> Path:
         worker = root / "ocr-worker"
         (worker / "_internal").mkdir(parents=True)
@@ -45,7 +64,7 @@ class ReleaseTests(unittest.TestCase):
             app = self.make_application(root)
             output = root / "release" / "program.zip"
 
-            release.build_release(app, output, self.make_packages(root))
+            self.build(app, output, self.make_packages(root))
 
             self.assertTrue(output.is_file())
             with zipfile.ZipFile(output) as archive:
@@ -66,7 +85,7 @@ class ReleaseTests(unittest.TestCase):
             root = Path(folder)
             app = self.make_application(root)
             output = root / "program.zip"
-            release.build_release(app, output, self.make_packages(root))
+            self.build(app, output, self.make_packages(root))
             with zipfile.ZipFile(output) as archive:
                 notice = archive.read(
                     "HebrewNotesWorkbench/LICENCES/NOTICE.txt"
@@ -82,7 +101,7 @@ class ReleaseTests(unittest.TestCase):
             packages = self.make_packages(root)
             output = root / "program.zip"
 
-            release.build_release(app, output, packages)
+            self.build(app, output, packages)
 
             with zipfile.ZipFile(output) as archive:
                 names = archive.namelist()
@@ -120,7 +139,7 @@ class ReleaseTests(unittest.TestCase):
             root = Path(folder)
             app = self.make_application(root)
             output = root / "program.zip"
-            release.build_release(app, output, self.make_packages(root))
+            self.build(app, output, self.make_packages(root))
             self.assertEqual(len(release.sha256_of(output)), 64)
 
     def test_the_archive_holds_the_licence_of_the_program(self) -> None:
@@ -128,7 +147,7 @@ class ReleaseTests(unittest.TestCase):
             root = Path(folder)
             app = self.make_application(root)
             output = root / "program.zip"
-            release.build_release(app, output, self.make_packages(root))
+            self.build(app, output, self.make_packages(root))
             with zipfile.ZipFile(output) as archive:
                 names = archive.namelist()
             self.assertIn("HebrewNotesWorkbench/LICENCES/LICENSE", names)
@@ -139,7 +158,7 @@ class ReleaseTests(unittest.TestCase):
             app = self.make_application(root)
             worker = self.make_worker(root)
             output = root / "program.zip"
-            release.build_release(app, output, self.make_packages(root), worker=worker)
+            self.build(app, output, self.make_packages(root), worker=worker)
             with zipfile.ZipFile(output) as archive:
                 names = archive.namelist()
             self.assertIn("HebrewNotesWorkbench/ocr-worker/ocr-worker.exe", names)
@@ -170,6 +189,28 @@ class ReleaseTests(unittest.TestCase):
                     fetch=lambda url: "this is not a licence",
                 )
             self.assertFalse(output.exists())
+
+    def test_the_release_is_not_made_without_the_licence_of_qt(self) -> None:
+        """The text of the LGPL has to be in the release."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            app = self.make_application(root)
+            output = root / "program.zip"
+            with self.assertRaises(SystemExit):
+                release.build_release(app, output, self.make_packages(root))
+            self.assertFalse(output.exists())
+
+    def test_the_release_holds_the_licence_of_qt_and_of_python(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            app = self.make_application(root)
+            output = root / "program.zip"
+            self.build(app, output, self.make_packages(root))
+            with zipfile.ZipFile(output) as archive:
+                names = archive.namelist()
+            self.assertIn("HebrewNotesWorkbench/LICENCES/LGPL-3.0.txt", names)
+            self.assertIn("HebrewNotesWorkbench/LICENCES/GPL-3.0.txt", names)
+            self.assertIn("HebrewNotesWorkbench/LICENCES/PSF-LICENSE.txt", names)
 
 
 if __name__ == "__main__":

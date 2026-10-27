@@ -195,6 +195,30 @@ class AccuracyTests(unittest.TestCase):
             self.assertEqual(measured["words_reference"], 2)
             self.assertEqual(measured["word_errors"], 0)
 
+    def test_the_report_of_the_ground_truth_says_what_the_file_holds(self) -> None:
+        """A measurement says whether the ground truth was complete."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            xml = root / "page.xml"
+            xml.write_text(
+                "<PcGts><Page><TextRegion>"
+                "<TextLine><Word><TextEquiv><Unicode>שלום</Unicode></TextEquiv></Word>"
+                "</TextLine>"
+                "<TextLine><TextEquiv><Unicode>עולם</Unicode></TextEquiv></TextLine>"
+                "<TextLine></TextLine>"
+                "</TextRegion></Page></PcGts>",
+                encoding="utf-8",
+            )
+            text, report = benchmark.ground_truth_of(xml)
+            self.assertEqual(text, "שלום\nעולם")
+            self.assertEqual(report["lines"], 3)
+            self.assertEqual(report["lines_with_text"], 2)
+            self.assertEqual(report["lines_from_words"], 1)
+            self.assertEqual(report["words"], 1)
+            # One line has no text at all, so the ground truth of this
+            # page is not complete.
+            self.assertFalse(report["complete"])
+
     def test_the_rate_of_the_words_of_the_corpus_weighs_the_pages(self) -> None:
         """A page with few words does not count as much as a page with many."""
         results = [
