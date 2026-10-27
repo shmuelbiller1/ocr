@@ -17,6 +17,8 @@ jobs:
   unit-tests:
     name: Unit tests (Linux)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -60,10 +62,15 @@ jobs:
       - name: Show the self-test report
         if: always()
         run: cat selftest-linux.json
+      - name: Publish the diagnostics
+        if: failure()
+        run: python tools/publish_diagnostics.py selftest-linux.json test-output.txt
 
   test-and-package:
     name: Windows executable
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -110,6 +117,7 @@ jobs:
           $process.Refresh()
           $code = $process.ExitCode
           Write-Host "exit code: $code"
+          "exit code: $code" | Out-File -Encoding utf8 'selftest-exit.txt'
           if (-not (Test-Path $report)) {
             Write-Output "::error title=Self-test::no report was written (exit code $code)"
             if (Test-Path 'selftest-err.txt') {
@@ -139,8 +147,14 @@ jobs:
             -ArgumentList '--selftest','--selftest-report','selftest-console.json' `
             -Wait -PassThru -RedirectStandardOutput 'console-out.txt' -RedirectStandardError 'console-err.txt'
           Write-Host "exit code: $($process.ExitCode)"
+          "exit code: $($process.ExitCode)" | Out-File -Encoding utf8 'console-exit.txt'
           if (Test-Path 'console-out.txt') { Get-Content 'console-out.txt' | ForEach-Object { Write-Output "::error title=Console build::$_" } }
           if (Test-Path 'console-err.txt') { Get-Content 'console-err.txt' | ForEach-Object { Write-Output "::error title=Console build::$_" } }
+      - name: Publish the diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          python tools/publish_diagnostics.py selftest-windows.json selftest-exit.txt selftest-out.txt selftest-err.txt selftest-console.json console-out.txt console-err.txt
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
