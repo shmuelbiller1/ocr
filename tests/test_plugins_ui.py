@@ -13,7 +13,7 @@ if sys.platform.startswith("linux"):
 
 from hebrew_workbench.plugins import PluginRegistry
 from hebrew_workbench.ui.settings_dialog import SettingsDialog
-from tests.qt_app import application  # noqa: E402
+from tests.qt_app import application, temporary_home  # noqa: E402
 
 
 class SettingsDialogTests(unittest.TestCase):
@@ -62,10 +62,19 @@ class SettingsDialogTests(unittest.TestCase):
         seen: list[int] = []
         self.dialog.changed.connect(lambda: seen.append(1))
         box = self.dialog.active_boxes["grammar"]
-        index = box.findData("grammar-hebrew")
-        if index >= 0:
-            box.setCurrentIndex(index)
+        # The first entry is "ללא": the choice that this kind has no
+        # plugin at all.
+        index = box.findData("")
+        self.assertGreater(index, -1)
+        box.setCurrentIndex(index)
         self.assertTrue(seen)
+        self.assertEqual(self.registry.settings.active["grammar"], "")
+
+    def test_the_list_shows_the_plugin_that_is_in_force(self) -> None:
+        box = self.dialog.active_boxes["grammar"]
+        current = self.registry.active("grammar")
+        self.assertIsNotNone(current)
+        self.assertEqual(box.currentData(), current.id)
 
 
 class WindowPluginTests(unittest.TestCase):
@@ -75,12 +84,14 @@ class WindowPluginTests(unittest.TestCase):
         self.app = application()
         from hebrew_workbench.ui.main_window import MainWindow
 
+        self.home = temporary_home()
         self.window = MainWindow()
 
     def tearDown(self) -> None:
         self.window.close()
         self.window.deleteLater()
         self.app.processEvents()
+        self.home.cleanup()
 
     def test_the_window_has_the_plugins(self) -> None:
         ids = {plugin.id for plugin in self.window.plugins.plugins}
@@ -101,6 +112,17 @@ class WindowPluginTests(unittest.TestCase):
         self.window._on_plugins_changed()
         proposals = self.window.suggestion_modules.check("שלום , עולם")
         self.assertEqual(proposals, [])
+
+    def test_when_every_module_is_off_there_are_no_modules_at_all(self) -> None:
+        for plugin in self.window.plugins.by_kind("spelling"):
+            self.window.plugins.set_enabled(plugin.id, False)
+        for plugin in self.window.plugins.by_kind("grammar"):
+            self.window.plugins.set_enabled(plugin.id, False)
+        for plugin in self.window.plugins.by_kind("style"):
+            self.window.plugins.set_enabled(plugin.id, False)
+        self.window._on_plugins_changed()
+        self.assertEqual(self.window.suggestion_modules.modules, [])
+        self.assertEqual(self.window.suggestion_modules.check("שלום , עולם"), [])
 
 
 if __name__ == "__main__":

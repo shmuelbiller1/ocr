@@ -136,7 +136,11 @@ class SettingsDialog(QDialog):
             box.addItem("ללא", "")
             for plugin in self.registry.by_kind(kind):
                 box.addItem(plugin.name, plugin.id)
-            active = self.registry.settings.active.get(kind, "")
+            # The list shows the plugin that is really in force, and
+            # not only the name the user typed: when the choice was not
+            # made yet, the first plugin that is switched on is used.
+            current = self.registry.active(kind)
+            active = current.id if current is not None else ""
             index = box.findData(active)
             if index < 0:
                 index = 0

@@ -97,6 +97,10 @@ class MainWindow(QMainWindow):
         self._build_suggestions_dock()
         self._sync_document_list()
         self.refresh_engines()
+        # The choices of the user about the modules of proposals are
+        # read at once, and not only when the settings screen is
+        # opened.
+        self._refresh_suggestion_modules()
 
     # -- construction ------------------------------------------------------
     def _build_central(self) -> None:
@@ -865,6 +869,9 @@ class MainWindow(QMainWindow):
         """The modules of proposals come from the plugins as well."""
         modules = self.plugins.suggestion_modules()
         if not modules:
+            # Every module of proposals was switched off: the program
+            # must not keep the ones it had before.
+            self.suggestion_modules = SuggestionRegistry([])
             return
         registry = SuggestionRegistry(modules)
         for kind in ("spelling", "grammar", "style"):

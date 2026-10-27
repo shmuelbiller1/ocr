@@ -28,8 +28,12 @@ class SuggestionRegistry:
         self.modules: list[SuggestionModule] = (
             modules if modules is not None else default_modules()
         )
+        # The switch of every module is under its kind, because that is
+        # what the program asks for: a module that is installed by the
+        # user may have a name of its own, but it does the work of one
+        # kind.
         self._enabled: dict[str, bool] = {
-            module.id: module.enabled_by_default for module in self.modules
+            module.kind: module.enabled_by_default for module in self.modules
         }
 
     # -- the modules -------------------------------------------------------

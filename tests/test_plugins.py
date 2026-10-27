@@ -49,13 +49,17 @@ class ExampleEngine:
 '''
 
 
-def make_plugin_folder(folder: Path, manifest: dict | None = None) -> Path:
+def make_plugin_folder(
+    folder: Path, manifest: dict | None = None, code: str | None = None
+) -> Path:
     """Write a plugin folder with a manifest and a module in it."""
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "plugin.json").write_text(
         json.dumps(manifest or MANIFEST, ensure_ascii=False), encoding="utf-8"
     )
-    (folder / "example_engine.py").write_text(PLUGIN_CODE, encoding="utf-8")
+    (folder / "example_engine.py").write_text(
+        code if code is not None else PLUGIN_CODE, encoding="utf-8"
+    )
     return folder
 
 
@@ -241,6 +245,91 @@ class RegistryTests(unittest.TestCase):
         plugin = registry.get("kraken")
         self.assertTrue(plugin.builtin)
         self.assertEqual(len([p for p in registry.plugins if p.id == "kraken"]), 1)
+
+
+class ActiveChoiceTests(unittest.TestCase):
+    """The choice of the user is kept, even when it is "no plugin"."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name) / "plugins"
+        self.registry = PluginRegistry(root=self.root)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_a_kind_without_a_choice_uses_the_first_plugin_that_is_on(self) -> None:
+        self.assertIsNotNone(self.registry.active(KIND_GRAMMAR))
+
+    def test_the_user_can_choose_that_a_kind_has_no_plugin(self) -> None:
+        self.registry.set_active(KIND_GRAMMAR, "")
+        self.assertIsNone(self.registry.active(KIND_GRAMMAR))
+        self.assertEqual(self.registry.settings.active[KIND_GRAMMAR], "")
+
+    def test_the_choice_of_no_plugin_survives_a_restart(self) -> None:
+        self.registry.set_active(KIND_GRAMMAR, "")
+        again = PluginRegistry(root=self.root)
+        self.assertIsNone(again.active(KIND_GRAMMAR))
+
+    def test_a_chosen_plugin_is_the_one_that_is_used(self) -> None:
+        self.registry.set_active(KIND_GRAMMAR, "grammar-hebrew")
+        self.assertEqual(self.registry.active(KIND_GRAMMAR).id, "grammar-hebrew")
+
+
+class ReplacedPluginTests(unittest.TestCase):
+    """A plugin that was replaced is read again, and not from the cache."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name) / "plugins"
+        self.source = Path(self.temporary.name) / "source"
+        self.registry = PluginRegistry(root=self.root)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_the_code_of_a_replaced_plugin_is_read_again(self) -> None:
+        other = PLUGIN_CODE.replace("Example engine", "The second engine")
+        make_plugin_folder(self.source, code=other)
+        installer = PluginInstaller(self.root)
+        installer.install_folder(self.source)
+        self.registry.load()
+        first = self.registry.get("example-engine")
+        self.assertIsNotNone(first)
+        self.assertEqual(first.object.name, "The second engine")
+
+        # The same plugin, with other code, in the same session.
+        make_plugin_folder(self.source, code=PLUGIN_CODE)
+        installer.install_folder(self.source, overwrite=True)
+        self.registry.load()
+        second = self.registry.get("example-engine")
+        self.assertIsNotNone(second)
+        self.assertEqual(second.object.name, "Example engine")
+
+
+class SuggestionModuleIdTests(unittest.TestCase):
+    """A module with a name of its own still does the work of its kind."""
+
+    def test_the_switch_of_a_module_is_by_its_kind(self) -> None:
+        from hebrew_workbench.suggestions.base import SuggestionModule
+        from hebrew_workbench.suggestions.registry import SuggestionRegistry
+
+        class OtherGrammar(SuggestionModule):
+            id = "other-grammar"
+            kind = "grammar"
+            name = "ניסוח אחר"
+
+            def available(self):
+                return True
+
+            def check(self, text):
+                return []
+
+        registry = SuggestionRegistry([OtherGrammar()])
+        registry.set_enabled("grammar", True)
+        self.assertTrue(registry.is_enabled("grammar"))
+        registry.set_enabled("grammar", False)
+        self.assertFalse(registry.is_enabled("grammar"))
 
 
 if __name__ == "__main__":

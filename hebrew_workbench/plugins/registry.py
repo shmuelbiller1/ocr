@@ -25,7 +25,7 @@ from .base import (
 )
 from .builtin import BUILTIN_MANIFESTS
 from .installer import PluginInstaller, read_manifest
-from .loader import load_plugin
+from .loader import forget_modules, load_plugin
 from .paths import plugins_directory
 from .settings import PluginSettings
 
@@ -52,12 +52,23 @@ class PluginRegistry:
         self.settings = PluginSettings.load(self.settings_path)
         self.plugins: list[Plugin] = []
         self.errors: list[str] = []
+        # The folders of the plugins the user installed, so that their
+        # code can be forgotten when the user replaces them.
+        self._folders: dict[str, Path] = {}
         if load:
             self.load()
 
     # -- loading -----------------------------------------------------------
     def load(self) -> None:
-        """Read every manifest and load the code of the plugins."""
+        """Read every manifest and load the code of the plugins.
+
+        The code of the plugins that the user installed is forgotten
+        first, so that a plugin that was replaced is read again from
+        the disk instead of from the cache of Python.
+        """
+        if self._folders:
+            forget_modules(list(self._folders.values()))
+        self._folders = {}
         self.plugins = []
         self.errors = []
         seen: set[str] = set()
@@ -79,6 +90,7 @@ class PluginRegistry:
                 )
                 continue
             seen.add(manifest.id)
+            self._folders[manifest.id] = folder
             self.plugins.append(self._load_one(manifest, [folder]))
 
     def _load_one(self, manifest: PluginManifest, search_paths: list[Path]) -> Plugin:
@@ -138,10 +150,18 @@ class PluginRegistry:
 
     # -- the active plugin of every kind ------------------------------------
     def active(self, kind: str) -> Plugin | None:
-        """The plugin the user chose for this kind."""
+        """The plugin the user chose for this kind.
+
+        When the user chose "no plugin" on purpose, nothing is
+        returned, even when other plugins of this kind are switched
+        on.
+        """
         wanted = self.settings.active.get(kind)
         candidates = self.by_kind(kind)
-        if wanted:
+        if wanted is not None:
+            if not wanted:
+                # The user chose that this kind has no plugin.
+                return None
             for plugin in candidates:
                 if plugin.id == wanted and self.is_enabled(plugin.id):
                     return plugin
@@ -151,11 +171,13 @@ class PluginRegistry:
         return None
 
     def set_active(self, kind: str, plugin_id: str) -> None:
-        """Choose the plugin of a kind."""
-        if plugin_id:
-            self.settings.active[kind] = plugin_id
-        else:
-            self.settings.active.pop(kind, None)
+        """Choose the plugin of a kind.  An empty name means no plugin.
+
+        The choice is kept as it is, so that the program knows that the
+        user does not want a plugin of this kind, and not only that the
+        user did not choose one yet.
+        """
+        self.settings.active[kind] = plugin_id or ""
         self.save()
 
     def kind_enabled(self, kind: str) -> bool:

@@ -14,7 +14,7 @@ if sys.platform.startswith("linux"):
 
 from hebrew_workbench.suggestions import KIND_GRAMMAR, Suggestion
 from hebrew_workbench.ui.suggestions_pane import SuggestionsPane
-from tests.qt_app import application  # noqa: E402
+from tests.qt_app import application, temporary_home  # noqa: E402
 
 
 class SuggestionsPaneTests(unittest.TestCase):
@@ -59,12 +59,14 @@ class WindowSuggestionsTests(unittest.TestCase):
         self.app = application()
         from hebrew_workbench.ui.main_window import MainWindow
 
+        self.home = temporary_home()
         self.window = MainWindow()
 
     def tearDown(self) -> None:
         self.window.close()
         self.window.deleteLater()
         self.app.processEvents()
+        self.home.cleanup()
 
     def sample_page(self) -> Path | None:
         from hebrew_workbench.resources import samples_directory

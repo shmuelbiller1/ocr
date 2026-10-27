@@ -29,3 +29,16 @@ def application() -> QApplication:
     if existing is not None:
         return existing
     return QApplication([])
+
+
+def temporary_home() -> tempfile.TemporaryDirectory:
+    """A data folder of its own for one test.
+
+    The tests must not read or write the data of the user, and one test
+    must not change what another test finds.  Every test that opens the
+    window therefore gets a folder of its own, and the folder is thrown
+    away at the end of the test.
+    """
+    folder = tempfile.TemporaryDirectory(prefix="hebrew-workbench-home-")
+    os.environ["HEBREW_WORKBENCH_HOME"] = folder.name
+    return folder
