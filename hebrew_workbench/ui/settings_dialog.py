@@ -63,7 +63,9 @@ class SettingsDialog(QDialog):
         form = QFormLayout()
         for kind, name in KIND_NAMES.items():
             box = QComboBox()
-            box.currentIndexChanged.connect(self._on_active_changed)
+            box.currentIndexChanged.connect(
+                lambda _index, name=kind: self._on_active_changed(name)
+            )
             self.active_boxes[kind] = box
             form.addRow(name, box)
 
@@ -136,11 +138,15 @@ class SettingsDialog(QDialog):
             box.addItem("ללא", "")
             for plugin in self.registry.by_kind(kind):
                 box.addItem(plugin.name, plugin.id)
-            # The list shows the plugin that is really in force, and
-            # not only the name the user typed: when the choice was not
-            # made yet, the first plugin that is switched on is used.
-            current = self.registry.active(kind)
-            active = current.id if current is not None else ""
+            # The list shows the choice of the user, even when the
+            # plugin of that kind cannot run right now.  When there is
+            # no choice yet, the plugin that is in force is shown.
+            saved = self.registry.settings.active.get(kind)
+            if saved is None:
+                current = self.registry.active(kind)
+                active = current.id if current is not None else ""
+            else:
+                active = saved
             index = box.findData(active)
             if index < 0:
                 index = 0
@@ -148,10 +154,17 @@ class SettingsDialog(QDialog):
             box.blockSignals(False)
 
     # -- the active plugin of every kind ------------------------------------
-    def _on_active_changed(self) -> None:
-        for kind, box in self.active_boxes.items():
-            plugin_id = box.currentData()
-            self.registry.set_active(kind, plugin_id or "")
+    def _on_active_changed(self, kind: str) -> None:
+        """The user chose another plugin for this kind.
+
+        Only this kind is saved: the other kinds keep the choice the
+        user made, even when the plugin of that kind cannot run right
+        now.
+        """
+        box = self.active_boxes.get(kind)
+        if box is None:
+            return
+        self.registry.set_active(kind, box.currentData() or "")
         self.changed.emit()
         self.refresh()
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import sys
+import types
 from pathlib import Path
 
 from .base import PluginError, PluginManifest
@@ -82,20 +83,50 @@ def _module_file(folder: Path, module_name: str) -> tuple[Path, bool] | None:
     return None
 
 
-def _import_from_folder(module_name: str, folder: Path):
+def _private_name(plugin_id: str) -> str:
+    """The name of the package that holds the code of the plugin."""
+    clean = "".join(
+        character if character.isalnum() or character == "_" else "_"
+        for character in plugin_id
+    )
+    return PRIVATE_PREFIX + (clean or "plugin")
+
+
+def _make_package(name: str, folder: Path) -> None:
+    """Make a package of the plugin, so that relative imports work."""
+    module = types.ModuleType(name)
+    module.__path__ = [str(folder)]
+    module.__package__ = name
+    sys.modules[name] = module
+
+
+def _import_from_folder(module_name: str, folder: Path, plugin_id: str):
     """Read the module of the plugin from its own folder.
 
-    The module is given a name of its own, so that it does not take the
-    place of another plugin, and so that a file of a plugin cannot take
-    the place of a module of the program.
+    The code of the plugin is given a package of its own, so that it
+    does not take the place of another plugin, and so that a file of a
+    plugin cannot take the place of a module of the program.  The
+    packages of the plugin are made first, so that a relative import
+    inside the plugin - ``from .helper import NAME`` - works.
     """
+    parts = [part for part in module_name.split(".") if part]
+    if not parts:
+        raise PluginError(f"the module {module_name} has no name")
+
+    root = _private_name(plugin_id)
+    _make_package(root, folder)
+    current = root
+    for number, part in enumerate(parts[:-1], start=1):
+        current = f"{current}.{part}"
+        _make_package(current, folder.joinpath(*parts[:number]))
+
     found = _module_file(folder, module_name)
     if found is None:
         raise PluginError(
             f"the module {module_name} is not in the folder of the plugin"
         )
     file_path, is_package = found
-    name = PRIVATE_PREFIX + module_name.replace(".", "_")
+    name = f"{root}.{module_name}"
     try:
         spec = importlib.util.spec_from_file_location(
             name,
@@ -116,7 +147,7 @@ def _import_from_folder(module_name: str, folder: Path):
     return module
 
 
-def _import(module_name: str, search_paths: list[Path]):
+def _import(module_name: str, search_paths: list[Path], plugin_id: str = ""):
     """Import the module of the plugin."""
     if not search_paths:
         # A plugin that comes with the program: the usual import.
@@ -134,7 +165,7 @@ def _import(module_name: str, search_paths: list[Path]):
         text = str(path)
         if text not in sys.path:
             sys.path.append(text)
-    return _import_from_folder(module_name, search_paths[0])
+    return _import_from_folder(module_name, search_paths[0], plugin_id)
 
 
 def _build(attribute, manifest: PluginManifest):
@@ -164,7 +195,7 @@ def load_object(
         PluginError: when the plugin cannot be loaded.
     """
     module_name, _, attribute_name = manifest.entry.partition(":")
-    module = _import(module_name, list(search_paths or []))
+    module = _import(module_name, list(search_paths or []), manifest.id)
     try:
         attribute = getattr(module, attribute_name)
     except AttributeError as exc:

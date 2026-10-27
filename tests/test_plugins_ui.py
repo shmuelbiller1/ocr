@@ -76,6 +76,16 @@ class SettingsDialogTests(unittest.TestCase):
         self.assertIsNotNone(current)
         self.assertEqual(box.currentData(), current.id)
 
+    def test_the_choice_of_another_kind_is_not_changed(self) -> None:
+        # The user chose the worker of the recognition, which cannot
+        # run yet because the model is not installed.
+        self.registry.set_active("ocr", "kraken-worker")
+        box = self.dialog.active_boxes["grammar"]
+        index = box.findData("grammar-hebrew")
+        self.assertGreater(index, -1)
+        box.setCurrentIndex(index)
+        self.assertEqual(self.registry.settings.active.get("ocr"), "kraken-worker")
+
 
 class WindowPluginTests(unittest.TestCase):
     """The window takes its engines and its modules from the plugins."""

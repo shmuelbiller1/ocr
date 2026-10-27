@@ -440,5 +440,92 @@ class ExampleEngine:
             self.assertEqual(spelling.id, "spelling-hebrew")
 
 
+class PackagePluginTests(unittest.TestCase):
+    """A plugin that is a package, with an import from inside it."""
+
+    def test_a_relative_import_inside_the_plugin_works(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source" / "my_plugin"
+            source.mkdir(parents=True)
+            (source / "__init__.py").write_text("", encoding="utf-8")
+            (source / "helper.py").write_text(
+                'NAME = "the helper"\n', encoding="utf-8"
+            )
+            (source / "engine.py").write_text(
+                "from .helper import NAME\n"
+                "\n"
+                "class Engine:\n"
+                '    name = "Engine of the package"\n'
+                "\n"
+                "    def __init__(self, options=None):\n"
+                "        self.options = dict(options or {})\n"
+                "        self.helper = NAME\n"
+                "\n"
+                "    def available(self):\n"
+                "        return True\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                **MANIFEST,
+                "id": "package-engine",
+                "entry": "my_plugin.engine:Engine",
+            }
+            (Path(folder) / "source" / "plugin.json").write_text(
+                json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+            )
+            PluginInstaller(root).install_folder(Path(folder) / "source")
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("package-engine")
+            self.assertIsNotNone(plugin)
+            self.assertEqual(plugin.error, "")
+            self.assertIsNotNone(plugin.object)
+            self.assertEqual(plugin.object.helper, "the helper")
+            self.assertEqual(plugin.object.name, "Engine of the package")
+
+
+class ManifestOptionTests(unittest.TestCase):
+    """The options of the manifest reach the plugin."""
+
+    CODE = """
+class ExampleEngine:
+    name = "Engine with options"
+
+    def __init__(self):
+        self.options = {}
+
+    def available(self):
+        return True
+
+    def configure(self, options):
+        self.options = dict(options)
+"""
+
+    def test_the_options_of_the_manifest_are_given_to_the_plugin(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "options": {"model_id": "a-model"}}
+            make_plugin_folder(source, manifest=manifest, code=self.CODE)
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("example-engine")
+            self.assertIsNotNone(plugin)
+            self.assertEqual(plugin.error, "")
+            self.assertEqual(plugin.object.options.get("model_id"), "a-model")
+
+    def test_the_choice_of_the_user_is_on_top_of_the_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "options": {"model_id": "a-model"}}
+            make_plugin_folder(source, manifest=manifest, code=self.CODE)
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            registry.set_option("example-engine", "model_id", "another-model")
+            plugin = registry.get("example-engine")
+            self.assertEqual(plugin.object.options.get("model_id"), "another-model")
+
+
 if __name__ == "__main__":
     unittest.main()

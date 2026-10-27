@@ -102,8 +102,15 @@ class PluginRegistry:
         return plugin
 
     def _apply_options(self, plugin: Plugin) -> None:
-        """Give the plugin the settings the user chose for it."""
-        options = self.settings.options.get(plugin.id)
+        """Give the plugin the settings of the manifest and the choices.
+
+        The options of the manifest are the defaults of the plugin, and
+        the choices of the user are put on top of them.  A plugin that
+        has a ``configure`` method gets them, even when the user has
+        not changed anything.
+        """
+        options = dict(plugin.manifest.options or {})
+        options.update(self.settings.options.get(plugin.id, {}))
         if not options:
             return
         configure = getattr(plugin.object, "configure", None)
