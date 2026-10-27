@@ -163,12 +163,43 @@ class PluginRegistry:
                 # The user chose that this kind has no plugin.
                 return None
             for plugin in candidates:
-                if plugin.id == wanted and self.is_enabled(plugin.id):
+                if plugin.id == wanted and self._can_be_used(plugin):
                     return plugin
         for plugin in candidates:
-            if self.is_enabled(plugin.id):
+            if self._can_be_used(plugin):
                 return plugin
         return None
+
+    def chosen(self, kind: str) -> Plugin | None:
+        """The plugin the user chose for this kind.
+
+        This is the plugin even when it cannot run right now - the
+        model of the recognition is not installed yet, for example -
+        because the user has to know which one he is preparing.
+        """
+        wanted = self.settings.active.get(kind)
+        if wanted:
+            for plugin in self.by_kind(kind):
+                if plugin.id == wanted:
+                    return plugin
+        return None
+
+    def _can_be_used(self, plugin: Plugin) -> bool:
+        """Is the plugin switched on, and does it have something to give?
+
+        A plugin whose code could not be built - the worker of the
+        recognition when the model is not installed, for example - is
+        not offered, so that the user is not shown an engine that
+        cannot run.  A module of proposals that waits for a word list
+        is still the module the user chose, so it is not put aside.
+        """
+        if plugin.object is None:
+            return False
+        if not self.is_enabled(plugin.id):
+            return False
+        if plugin.kind == KIND_OCR:
+            return bool(plugin.available())
+        return True
 
     def set_active(self, kind: str, plugin_id: str) -> None:
         """Choose the plugin of a kind.  An empty name means no plugin.

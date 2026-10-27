@@ -234,7 +234,10 @@ class RegistryTests(unittest.TestCase):
         registry = PluginRegistry(root=root)
         self.assertTrue(registry.plugins)
         self.assertEqual(registry.errors, [])
-        self.assertEqual(registry.active(KIND_OCR).id, "kraken")
+        # The plugins that come with the program are there, even when
+        # the user has no folder of plugins at all.
+        self.assertIsNotNone(registry.get("kraken"))
+        self.assertIsNotNone(registry.get("spelling-hebrew"))
 
     def test_a_plugin_with_the_same_id_as_a_built_in_one_does_not_win(self) -> None:
         source = make_plugin_folder(
@@ -399,6 +402,42 @@ class IsolationTests(unittest.TestCase):
         import json as json_module
 
         self.assertEqual(json_module.dumps({"a": 1}), '{"a": 1}')
+
+
+class UnavailablePluginTests(unittest.TestCase):
+    """An engine that cannot run is not offered to the user."""
+
+    UNUSABLE = """
+class ExampleEngine:
+    name = "Engine that cannot run"
+
+    def __init__(self, options=None):
+        self.options = dict(options or {})
+
+    def available(self):
+        return False
+"""
+
+    def test_an_engine_that_cannot_run_is_not_the_active_one(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "id": "unusable"}
+            make_plugin_folder(source, manifest=manifest, code=self.UNUSABLE)
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("unusable")
+            self.assertIsNotNone(plugin)
+            self.assertFalse(plugin.available())
+            self.assertIsNone(registry.active("ocr"))
+
+    def test_a_module_that_waits_for_a_word_list_is_still_the_chosen_one(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            registry = PluginRegistry(root=root)
+            spelling = registry.active(KIND_SPELLING)
+            self.assertIsNotNone(spelling)
+            self.assertEqual(spelling.id, "spelling-hebrew")
 
 
 if __name__ == "__main__":

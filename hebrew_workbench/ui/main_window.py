@@ -741,9 +741,11 @@ class MainWindow(QMainWindow):
             )
             return
 
-        # The model belongs to the OCR plugin the user chose.
+        # The model belongs to the OCR plugin the user chose.  The
+        # plugin is used even when it cannot run yet, because the model
+        # is what is missing.
         artifact_id = "kraken-ppocrv6-small"
-        plugin = self.plugins.active("ocr")
+        plugin = self.plugins.chosen("ocr") or self.plugins.active("ocr")
         if plugin is not None:
             artifact_id = str(
                 plugin.manifest.options.get("model_id", artifact_id) or artifact_id
