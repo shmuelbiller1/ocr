@@ -155,6 +155,24 @@ class PreviewPaneTests(unittest.TestCase):
             self.assertTrue(pane.scene.items())
             pane.close_document()
 
+    def test_fitting_the_page_keeps_the_size_that_is_shown(self) -> None:
+        """The zoom buttons continue from the size the user sees."""
+        from PIL import Image
+
+        from hebrew_workbench.ui.preview_pane import PreviewPane
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "scan.png"
+            Image.new("RGB", (400, 300), (10, 10, 10)).save(path)
+            pane = PreviewPane()
+            pane.set_document(str(path))
+            pane.fit_to_window()
+            before = pane._view_scale()
+            self.assertLess(before, 1.0)
+            pane.set_zoom(pane._zoom / 1.25)
+            self.assertLess(pane._view_scale(), before)
+            pane.close_document()
+
     def test_pane_reports_a_broken_document(self) -> None:
         from hebrew_workbench.ui.preview_pane import PreviewPane
 
@@ -166,6 +184,27 @@ class PreviewPaneTests(unittest.TestCase):
             self.assertFalse(pane.scene.items())
             self.assertIn("PDF", pane.status.text())
             pane.close_document()
+
+
+class MultiFrameImageTests(unittest.TestCase):
+    """A file with several frames, like a TIFF with several pages."""
+
+    def test_the_first_frame_is_shown_again_after_another_one(self) -> None:
+        from PIL import Image
+
+        from hebrew_workbench.preview.loader import DocumentPreview
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "pages.tiff"
+            first = Image.new("RGB", (20, 20), (255, 0, 0))
+            second = Image.new("RGB", (20, 20), (0, 255, 0))
+            first.save(path, save_all=True, append_images=[second])
+
+            with DocumentPreview(path) as preview:
+                self.assertEqual(preview.page_count, 2)
+                self.assertEqual(preview.render(1).image.getpixel((0, 0)), (255, 0, 0))
+                self.assertEqual(preview.render(2).image.getpixel((0, 0)), (0, 255, 0))
+                self.assertEqual(preview.render(1).image.getpixel((0, 0)), (255, 0, 0))
 
 
 if __name__ == "__main__":

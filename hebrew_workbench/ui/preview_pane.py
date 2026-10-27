@@ -20,6 +20,8 @@ from ..preview.loader import DocumentPreview, PreviewError
 __all__ = ["PreviewPane", "pil_to_qimage"]
 
 BASE_RENDER_WIDTH = 1600
+MINIMUM_ZOOM = 0.02
+MAXIMUM_ZOOM = 8.0
 
 
 def pil_to_qimage(image) -> QImage:
@@ -168,7 +170,15 @@ class PreviewPane(QWidget):
         self._render_page()
 
     def set_zoom(self, factor: float) -> None:
-        self._zoom = max(0.1, min(8.0, factor))
+        # The smallest zoom is small enough for a page that was fitted to
+        # a small window, so that zooming out always makes the page
+        # smaller.  A long page that was fitted to the window can be
+        # smaller than that, and then the zoom may go further down, so
+        # that zooming out does not make the page bigger.
+        lowest = MINIMUM_ZOOM
+        if self._zoom < MINIMUM_ZOOM:
+            lowest = self._zoom
+        self._zoom = max(lowest, min(MAXIMUM_ZOOM, factor))
         self._apply_zoom()
 
     def _apply_zoom(self) -> None:
@@ -183,6 +193,18 @@ class PreviewPane(QWidget):
         self.view.fitInView(
             self.scene.itemsBoundingRect(), Qt.KeepAspectRatio
         )
+        # The buttons of the zoom continue from the size that is shown
+        # now, and not from the size of the original page.
+        self._zoom = self._view_scale()
+
+    def _view_scale(self) -> float:
+        """The scale of the picture that is in the window."""
+        transform = self.view.transform()
+        horizontal = abs(transform.m11())
+        vertical = abs(transform.m22())
+        if horizontal <= 0 or vertical <= 0:
+            return 1.0
+        return (horizontal + vertical) / 2.0
 
     def rotate(self, degrees: int) -> None:
         self._rotation = (self._rotation + degrees) % 360

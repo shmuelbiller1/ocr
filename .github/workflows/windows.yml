@@ -17,8 +17,19 @@ jobs:
   unit-tests:
     name: Unit tests (Linux)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      # The runner has no screen, so Qt works without one.
+      QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The head of the pull request and not the merge that the
+          # runner makes: the build writes the measured accuracy into
+          # the documentation of the branch, and the merge commit must
+          # never be pushed into the branch.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -47,8 +58,6 @@ jobs:
             exit 1
           fi
       - name: Run the self-test without a display
-        env:
-          QT_QPA_PLATFORM: offscreen
         run: |
           python app.py --selftest --selftest-report selftest-linux.json || {
             echo "::error title=Self-test failed::the self-test did not pass"
@@ -60,12 +69,31 @@ jobs:
       - name: Show the self-test report
         if: always()
         run: cat selftest-linux.json
+      - name: Publish the diagnostics
+        if: always()
+        continue-on-error: true
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-linux selftest-linux.json test-output.txt
+      - name: Upload the self-test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-report-linux
+          path: selftest-linux.json
+          if-no-files-found: warn
 
   test-and-package:
     name: Windows executable
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The head of the pull request and not the merge that the
+          # runner makes: the build writes the measured accuracy into
+          # the documentation of the branch, and the merge commit must
+          # never be pushed into the branch.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -74,48 +102,65 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
       - name: Run the test suite
+        shell: pwsh
         run: |
-          python -m unittest discover -s tests -t . -v
+          python -m unittest discover -s tests -t . -v 2>&1 |
+            Tee-Object -FilePath test-output.txt
+          if ($LASTEXITCODE -ne 0) { throw 'the test suite did not pass' }
       - name: Install packaging tool
         run: python -m pip install pyinstaller==6.16.0
       - name: Build Windows executable
-        run: >-
-          python -m PyInstaller --noconfirm --clean --onefile --windowed
-          --add-data "samples;samples"
-          --name HebrewNotesWorkbench app.py
-      - name: Verify the executable exists
         shell: pwsh
         run: |
-          if (-not (Test-Path 'dist\HebrewNotesWorkbench.exe')) {
+          python -m PyInstaller --noconfirm --clean --onedir --windowed `
+            --add-data "samples;samples" `
+            --add-data "LICENSE;." `
+            --name HebrewNotesWorkbench app.py 2>&1 | Tee-Object -FilePath build-windows.log
+          if ($LASTEXITCODE -ne 0) { throw 'the application could not be built' }
+      - name: Install the recognition engine
+        shell: pwsh
+        run: |
+          # The worker of the recognition is given to the user with the
+          # program, so that the program can read handwriting without
+          # anything else.  torch and torchvision have to be a matching
+          # pair from the same place.
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 install-engine.log
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          python tools/check_engine.py 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'torch and torchvision do not belong together' }
+      - name: Build the recognition worker
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onedir --console `
+            --collect-all kraken `
+            --collect-all torchvision `
+            --name ocr-worker ocr_worker/main.py 2>&1 | Tee-Object -FilePath build-worker.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition worker could not be built' }
+      - name: Verify the executable exists
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist\HebrewNotesWorkbench\HebrewNotesWorkbench.exe')) {
             Write-Output '::error title=Packaging::the executable was not produced'
             throw 'Missing exe'
           }
-          $size = (Get-Item 'dist\HebrewNotesWorkbench.exe').Length
+          $size = (Get-Item 'dist\HebrewNotesWorkbench\HebrewNotesWorkbench.exe').Length
           Write-Host "exe size: $size bytes"
       - name: Start the packaged executable (self-test)
         shell: pwsh
         run: |
-          $report = 'selftest-windows.json'
+          # An absolute path: the packaged program starts in the folder it
+          # was unpacked into, so a relative path would be written there.
+          $report = Join-Path (Get-Location).Path 'selftest-windows.json'
           if (Test-Path $report) { Remove-Item $report }
-          $process = Start-Process -FilePath 'dist\HebrewNotesWorkbench.exe' `
-            -ArgumentList '--selftest','--selftest-report',$report `
-            -PassThru -RedirectStandardOutput 'selftest-out.txt' -RedirectStandardError 'selftest-err.txt'
-          try {
-            Wait-Process -Id $process.Id -Timeout 180 -ErrorAction Stop
-          } catch {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            Write-Output '::error title=Self-test::the packaged executable did not finish within 180 seconds'
-            throw 'The packaged executable hung'
-          }
-          $process.Refresh()
-          $code = $process.ExitCode
-          Write-Host "exit code: $code"
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe 'dist\HebrewNotesWorkbench\HebrewNotesWorkbench.exe' `
+            -Report $report `
+            -StdOut 'selftest-out.txt' `
+            -StdErr 'selftest-err.txt'
           if (-not (Test-Path $report)) {
-            Write-Output "::error title=Self-test::no report was written (exit code $code)"
-            if (Test-Path 'selftest-err.txt') {
-              Get-Content 'selftest-err.txt' | ForEach-Object { Write-Output "::error title=Self-test::$_" }
-            }
-            throw "The packaged executable failed its self-test (exit code $code)"
+            Write-Output "::error title=Self-test::no report was written"
+            throw 'The packaged executable did not write its report'
           }
           $data = Get-Content $report -Raw | ConvertFrom-Json
           $data.results | ForEach-Object {
@@ -129,18 +174,83 @@ jobs:
         if: failure()
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --console `
-            --name HebrewNotesWorkbench-console app.py
+          python -m PyInstaller --noconfirm --onefile --console `
+            --name HebrewNotesWorkbench-console app.py 2>&1 | Tee-Object -FilePath build-console.log
       - name: Show what the console build reports
         if: failure()
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath 'dist\HebrewNotesWorkbench-console.exe' `
-            -ArgumentList '--selftest','--selftest-report','selftest-console.json' `
-            -Wait -PassThru -RedirectStandardOutput 'console-out.txt' -RedirectStandardError 'console-err.txt'
-          Write-Host "exit code: $($process.ExitCode)"
-          if (Test-Path 'console-out.txt') { Get-Content 'console-out.txt' | ForEach-Object { Write-Output "::error title=Console build::$_" } }
-          if (Test-Path 'console-err.txt') { Get-Content 'console-err.txt' | ForEach-Object { Write-Output "::error title=Console build::$_" } }
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe 'dist\HebrewNotesWorkbench-console.exe' `
+            -Report 'selftest-console.json' `
+            -StdOut 'console-out.txt' `
+            -StdErr 'console-err.txt'
+      - name: Put the program into a folder for the user
+        shell: pwsh
+        run: |
+          python tools/build_release.py --app dist/HebrewNotesWorkbench --worker dist/ocr-worker --download-licences 2>&1 | Tee-Object -FilePath build-release.log
+          if ($LASTEXITCODE -ne 0) { throw 'the release was not made' }
+      - name: Download the recognition model
+        shell: pwsh
+        run: |
+          python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download.log
+          if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
+      - name: Check the release as a user gets it
+        shell: pwsh
+        run: |
+          # The archive is unpacked as a user unpacks it, and the
+          # program and the worker are started from the unpacked
+          # folder, so that the build says whether the archive holds
+          # everything that is needed to read a page.
+          $folder = Join-Path $env:RUNNER_TEMP 'release-check'
+          if (Test-Path $folder) { Remove-Item -Recurse -Force $folder }
+          New-Item -ItemType Directory -Path $folder | Out-Null
+          $archive = (Get-ChildItem 'release' -Filter '*.zip' | Select-Object -First 1)
+          if (-not $archive) { throw 'the archive for the user was not made' }
+          Expand-Archive -Path $archive.FullName -DestinationPath $folder
+          Get-ChildItem $folder -Recurse -File |
+            ForEach-Object { "$($_.FullName) $($_.Length)" } |
+            Out-File -Encoding utf8 'release-listing.txt'
+          $program = Get-ChildItem $folder -Recurse -Filter 'HebrewNotesWorkbench.exe' | Select-Object -First 1
+          if (-not $program) { throw 'the program is not in the archive' }
+          $worker = Get-ChildItem $folder -Recurse -Filter 'ocr-worker.exe' | Select-Object -First 1
+          if (-not $worker) { throw 'the worker of the recognition is not in the archive' }
+          # The program starts from the unpacked folder.
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe $program.FullName `
+            -Report (Join-Path $folder 'selftest.json') `
+            -StdOut 'release-selftest-out.txt' `
+            -StdErr 'release-selftest-err.txt'
+          if (-not (Test-Path (Join-Path $folder 'selftest.json'))) {
+            Write-Output '::error title=Release::the unpacked program did not write its report'
+            throw 'the unpacked program did not start'
+          }
+          # The worker reads a page from the unpacked folder.
+          $job = @{ document = (Resolve-Path 'samples\scan_page_1.png').Path; model_path = (Resolve-Path '.cache\models\small.safetensors').Path } | ConvertTo-Json
+          $job | Set-Content -Encoding utf8 release-job.json
+          $process = Start-Process -FilePath $worker.FullName `
+            -ArgumentList '--job','release-job.json','--result','release-result.json' `
+            -Wait -PassThru -RedirectStandardOutput 'release-worker-out.txt' -RedirectStandardError 'release-worker-err.txt'
+          Write-Host "worker exit code: $($process.ExitCode)"
+          if (Test-Path 'release-worker-err.txt') {
+            Get-Content 'release-worker-err.txt' | Select-Object -Last 20 |
+              ForEach-Object { Write-Output "::warning title=Release worker::$_" }
+          }
+          if (-not (Test-Path 'release-result.json')) { throw 'the unpacked worker did not write a result' }
+          $result = Get-Content 'release-result.json' -Raw | ConvertFrom-Json
+          if ($result.error) {
+            Write-Output "::error title=Release worker::$($result.error)"
+            throw 'the unpacked worker reported an error'
+          }
+          Write-Output "::warning title=Release worker::recognised $($result.text.Length) characters from the unpacked folder"
+      - name: Publish the diagnostics
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
+            ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
+          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-err.txt release-worker-out.txt release-worker-err.txt release-result.json
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
@@ -148,9 +258,180 @@ jobs:
           name: selftest-report-windows
           path: selftest-windows.json
           if-no-files-found: warn
-      - name: Upload the Windows executable
+      - name: Upload the Windows application
         uses: actions/upload-artifact@v4
         with:
           name: HebrewNotesWorkbench-Windows
-          path: dist/HebrewNotesWorkbench.exe
+          path: dist/HebrewNotesWorkbench
           if-no-files-found: error
+      - name: Upload the archive for the user
+        uses: actions/upload-artifact@v4
+        with:
+          name: HebrewNotesWorkbench-release
+          path: release
+          if-no-files-found: error
+
+  ocr-engine:
+    name: Recognition engine and accuracy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The head of the pull request and not the merge that the
+          # runner makes: the build writes the measured accuracy into
+          # the documentation of the branch, and the merge commit must
+          # never be pushed into the branch.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Restore the cache of the engine
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/models
+            .cache/pinkas
+          key: engine-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ github.sha }}
+          restore-keys: engine-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the recognition engine
+        run: |
+          set -o pipefail
+          {
+            python -m pip install --upgrade pip
+            # torch and torchvision have to be a matching pair, and both
+            # have to come from the same place.  kraken asks for
+            # torch<=2.14, and the torchvision that belongs to torch
+            # 2.14.1 asks for torch 2.14.1, so pip leaves the two
+            # apart and the recognition dies with "operator
+            # torchvision::nms does not exist".  The pair is pinned.
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
+          } 2>&1 | tee install-engine.log
+      - name: Check that torch and torchvision belong together
+        run: |
+          set -o pipefail
+          python tools/check_engine.py 2>&1 | tee check-engine.log
+      - name: Download and check the recognition model
+        run: |
+          set -o pipefail
+          python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | tee model-download.log
+          if [ "$?" -ne 0 ]; then throw 'the model could not be downloaded'; fi
+      - name: Measure the accuracy on real handwritten pages
+        run: |
+          set -o pipefail
+          python tools/benchmark_ocr.py \
+            --model .cache/models/small.safetensors \
+            --download --cache .cache/pinkas --pages 10 --output ocr-accuracy.json 2>&1 | tee benchmark.log
+          if [ "$?" -ne 0 ]; then throw 'the measurement failed'; fi
+      - name: Look at the corpus
+        if: always()
+        continue-on-error: true
+        run: |
+          python tools/inspect_dataset.py --cache .cache/pinkas 2>&1 | tee corpus-structure.log || true
+      - name: Write the results into the documentation
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ -f ocr-accuracy.json ]; then
+            python tools/write_accuracy_results.py --report ocr-accuracy.json --document docs/OCR_ACCURACY.md
+          fi
+      - name: Upload the documentation with the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-accuracy-document
+          path: docs/OCR_ACCURACY.md
+          if-no-files-found: warn
+      - name: Publish the accuracy report
+        if: always()
+        run: |
+          if [ -f ocr-accuracy.json ]; then
+            cat ocr-accuracy.json
+            python tools/accuracy_notice.py --report ocr-accuracy.json
+          fi
+      - name: Upload the accuracy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-accuracy-report
+          path: ocr-accuracy.json
+          if-no-files-found: warn
+      - name: Publish the diagnostics
+        if: always()
+        continue-on-error: true
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log benchmark.log corpus-structure.log ocr-accuracy.json
+
+  ocr-worker-windows:
+    name: OCR worker (Windows)
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The head of the pull request and not the merge that the
+          # runner makes: the build writes the measured accuracy into
+          # the documentation of the branch, and the merge commit must
+          # never be pushed into the branch.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the recognition engine
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip 2>&1 | Out-File -Encoding utf8 install-engine.log
+          # torch and torchvision must be a matching pair from the same
+          # place, otherwise the recognition fails to start.  kraken asks
+          # for torch<=2.14, and the torchvision that belongs to torch
+          # 2.14.1 asks for torch 2.14.1, so pip leaves the two apart
+          # and the worker dies with "operator torchvision::nms does not
+          # exist".  The pair is pinned.
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          python -m pip install "pyinstaller==6.16.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+      - name: Check that torch and torchvision belong together
+        shell: pwsh
+        run: |
+          python tools/check_engine.py 2>&1 | Out-File -Encoding utf8 check-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'torch and torchvision do not belong together' }
+      - name: Download and check the recognition model
+        shell: pwsh
+        run: |
+          python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download.log
+          if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
+      - name: Build the OCR worker
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onedir --console `
+            --collect-all kraken `
+            --collect-all torchvision `
+            --name ocr-worker ocr_worker/main.py 2>&1 | Tee-Object -FilePath build-worker.log
+          if ($LASTEXITCODE -ne 0) { throw 'the worker could not be built' }
+      - name: Recognise a page with the packaged worker
+        shell: pwsh
+        run: |
+          $job = @{ document = (Resolve-Path 'samples\scan_page_1.png').Path; model_path = (Resolve-Path '.cache\models\small.safetensors').Path } | ConvertTo-Json
+          $job | Set-Content -Encoding utf8 job.json
+          $process = Start-Process -FilePath 'dist\ocr-worker\ocr-worker.exe' `
+            -ArgumentList '--job','job.json','--result','result.json' `
+            -Wait -PassThru -RedirectStandardOutput 'worker-out.txt' -RedirectStandardError 'worker-err.txt'
+          Write-Host "exit code: $($process.ExitCode)"
+          if (Test-Path 'worker-out.txt') { Get-Content 'worker-out.txt' | ForEach-Object { Write-Output "::warning title=Worker::$_" } }
+          if (Test-Path 'worker-err.txt') { Get-Content 'worker-err.txt' | Select-Object -Last 20 | ForEach-Object { Write-Output "::warning title=Worker::$_" } }
+          if (-not (Test-Path 'result.json')) { throw 'The worker did not write a result' }
+          $result = Get-Content 'result.json' -Raw | ConvertFrom-Json
+          if ($result.error) { Write-Output "::error title=Worker::$($result.error)"; throw 'The worker reported an error' }
+          Write-Output "::warning title=Worker::recognised $($result.text.Length) characters in $($result.duration_seconds) seconds"
+      - name: Upload the OCR worker
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-worker-Windows
+          path: dist/ocr-worker
+          if-no-files-found: error
+      - name: Publish the diagnostics
+        if: always()
+        continue-on-error: true
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log check-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json

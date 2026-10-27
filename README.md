@@ -3,10 +3,15 @@
 A Windows-first, offline desktop application for turning scanned handwritten
 Hebrew-script notes into editable, printable documents.
 
-> **Status: foundation.** The Windows executable builds and starts on the CI
-> build machine, the interface is right-to-left and Hebrew-capable, and the
-> OCR engine slot is in place but still fails closed. **No page has been
-> transcribed yet by a real engine** - see the status table below.
+> **Status: the engine works.** The Windows executable builds and starts on
+> the CI build machine, the interface is right-to-left and Hebrew-capable,
+> and the recognition engine reads real handwritten pages with kraken and
+> PP-OCRv6 (both Apache-2.0).  The measured accuracy on early modern
+> Hebrew cursive is a character error rate of 56.3%, so the result of a
+> recognition is a **starting point that has to be read by a person**, and
+> the program says so after every recognition.  The numbers and what they
+> mean are in `docs/OCR_ACCURACY.md`; the table below says what is real
+> and what is not.
 
 ## Design principles
 
@@ -38,10 +43,30 @@ Hebrew-script notes into editable, printable documents.
 | Export `.docx` | **Works** | Word document with right-to-left paragraphs |
 | Print | **Works** | Print dialog with the Windows printers, print preview, and "save as PDF" |
 | Sample pages | **Works** | `File > Open samples` loads the synthetic pages from `samples/` |
-| OCR engine slot | **Fails closed on purpose** | `Run OCR` reports that no engine is installed and changes nothing |
-| Handwriting recognition with a real model | **Not implemented** | Planned with one licensed, pretrained model |
-| Spelling / grammar / `לשון הספר` | **Not implemented** | Planned as separate, opt-in modules with a review step |
+| OCR engine slot | **Works** | The engine is found by itself: the worker of the recognition is in the folder `ocr-worker` of the program |
+| Handwriting recognition with a real model | **Works, needs the model** | kraken + PP-OCRv6 (Apache-2.0); the model is installed by the user and checked against two digests; the accuracy is measured in `docs/OCR_ACCURACY.md` and is 56.3% character error rate on early modern cursive - the result has to be read line by line |
+| Spelling proposals | **Works, needs a word list** | The word list of the user; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
+| Grammar proposals | **Works, a few rules** | Punctuation and spacing |
+| `לשון הספר` proposals | **Not implemented** | The module exists, is switched off, and says so; see `docs/SUGGESTIONS.md` |
+| Accepting and refusing proposals | **Works** | Every proposal is shown first and is accepted or refused on its own; every accepted change is logged and can be undone |
 | Text search inside the document | **Not implemented** | Planned |
+| Undoing a correction of the style guide | **Not implemented** | The style module has no rules yet |
+| Reading a page of a PDF at the resolution of the scan | **Works** | The pages of a PDF are given to the engine at 300 dots per inch |
+| Installing the engine as a plugin | **Not in this pull request** | The plugin system is in the next pull request |
+
+### What is not there yet
+
+* **A dictionary of Hebrew spelling.**  The program does not ship one:
+  the Hebrew Hunspell dictionary of LibreOffice is under the AGPL, and
+  it may not be given away inside this program.  The spelling module
+  works with a word list that the user brings.
+* **A grammar engine.**  The grammar module has a few punctuation and
+  spacing rules.  It is not a grammar checker.
+* **לשון הספר.**  The module is a frame, it is switched off, and it
+  proposes nothing.  See `docs/SUGGESTIONS.md`.
+* **Automatic correction.**  Nothing in the program changes the text of
+  a document by itself.  Every change is a proposal that is shown first
+  and that the user accepts or refuses.
 
 ## Running it from source
 
@@ -60,21 +85,38 @@ the documents you open.
 `push` or `pull_request` runs `.github/workflows/windows.yml`, which
 
 1. runs the unit tests,
-2. builds `dist/HebrewNotesWorkbench.exe` with PyInstaller,
+2. builds `dist/HebrewNotesWorkbench/` with PyInstaller,
 3. **starts the packaged executable** and runs its self-test (the test also
-   creates the real main window), and
-4. uploads the executable as the workflow artifact
-   `HebrewNotesWorkbench-Windows`.
+   creates the real main window),
+4. builds the worker of the recognition, `dist/ocr-worker/`, so that the
+   program can read handwriting without anything else,
+5. puts the program, the worker, the licence texts and a readme for the
+   user into one archive (`release/HebrewNotesWorkbench-<version>-win64.zip`), and
+6. uploads the folder and the archive as the workflow artifacts
+   `HebrewNotesWorkbench-Windows` and `HebrewNotesWorkbench-release`.
 
-A user without Python downloads the artifact, unpacks it, and starts
-`HebrewNotesWorkbench.exe`.
+A user without Python downloads the archive, unpacks the folder, and
+starts `HebrewNotesWorkbench.exe`.  The application is a folder and not a
+single file on purpose: the Qt libraries stay separate files, so that they
+can be replaced, as the LGPL requires.
 
 ## Building the executable by hand
 
 ```bash
 pip install -r requirements.txt pyinstaller==6.16.0
-pyinstaller --noconfirm --clean --onefile --windowed --name HebrewNotesWorkbench app.py
+pyinstaller --noconfirm --clean --onedir --windowed --add-data "samples;samples" --name HebrewNotesWorkbench app.py
+
+# the worker of the recognition, with the engine that it needs
+pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
+pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
+pyinstaller --noconfirm --clean --onedir --console --collect-all kraken --collect-all torchvision --name ocr-worker ocr_worker/main.py
+
+python tools/build_release.py --app dist/HebrewNotesWorkbench --worker dist/ocr-worker --download-licences
 ```
+
+The last command writes the archive for the user and prints the
+SHA-256 of the archive.  It refuses to make the archive when a licence
+text is missing.
 
 ## Repository layout
 
@@ -82,8 +124,9 @@ pyinstaller --noconfirm --clean --onefile --windowed --name HebrewNotesWorkbench
 app.py                        launcher (--selftest, --version)
 hebrew_workbench/
     engine/                   replaceable OCR adapters (base contract + registry)
+    suggestions/              the spelling, grammar and style modules (proposals only)
     preview/                  offline rendering of PDF pages and images
-    ui/                       the Qt main window and the preview pane
+    ui/                       the Qt main window, the preview pane, the proposals pane
     exporting.py              TXT, DOCX and printing helpers
     project.py                workspace model: documents + their transcriptions
     resources.py              finding the files that ship with the application

@@ -1,0 +1,449 @@
+"""Measure the accuracy of the handwriting engine on real pages.
+
+The benchmark uses the **Pinkas dataset**: 30 pages of early modern
+(1500-1800) European Jewish community records written in Hebrew and
+Yiddish, with a ground truth transcription for every line.
+
+* Authors: Irina Rabaev, Berat Kurar Barakat, Jihad El-Sana.
+* Published as: *The Pinkas Dataset*, ICDAR 2019,
+  Zenodo record 3569694, <https://doi.org/10.5281/zenodo.3569694>
+* License: **CC-BY-4.0** (attribution required, commercial use allowed).
+* Download: ``pinkas_dataset.zip``, 47.7 MB,
+  md5 ``802f14fbdb400efab9cb0808c3620be8``.
+
+The script downloads the corpus (unless a local copy is given), runs the
+engine on the requested number of pages and writes a report with the
+character error rate, the word error rate and the time per page.
+
+    python tools/benchmark_ocr.py --model small.safetensors --pages 10
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import shutil
+import sys
+import time
+import unicodedata
+import urllib.request
+import zipfile
+from pathlib import Path
+from xml.etree import ElementTree
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+DATASET_URL = "https://zenodo.org/api/records/3569694/files/pinkas_dataset.zip/content"
+DATASET_MD5 = "802f14fbdb400efab9cb0808c3620be8"
+DATASET_SIZE = 47_699_110
+DATASET_CITATION = (
+    "Irina Rabaev, Berat Kurar Barakat, Jihad El-Sana, "
+    '"The Pinkas Dataset", ICDAR 2019, https://doi.org/10.5281/zenodo.3569694'
+)
+
+# Hebrew vowel points and cantillation marks.
+POINTS = re.compile(r"[֑-ֽֿׁ-ׂׄ-ׇ]")
+SPACE = re.compile(r"\s+")
+
+
+def normalise(text: str, keep_points: bool = False) -> str:
+    """Normalise text the same way for the engine and for the ground truth."""
+    text = unicodedata.normalize("NFC", text)
+    if not keep_points:
+        text = POINTS.sub("", text)
+    text = text.replace("״", '"').replace("׳", "'")
+    return SPACE.sub(" ", text).strip()
+
+
+def levenshtein(first: list[str], second: list[str]) -> int:
+    """Edit distance between two sequences."""
+    if len(first) < len(second):
+        first, second = second, first
+    previous = list(range(len(second) + 1))
+    for index1, item1 in enumerate(first, start=1):
+        current = [index1]
+        for index2, item2 in enumerate(second, start=1):
+            insert = current[index2 - 1] + 1
+            delete = previous[index2] + 1
+            replace = previous[index2 - 1] + (item1 != item2)
+            current.append(min(insert, delete, replace))
+        previous = current
+    return previous[-1]
+
+
+def character_error_rate(reference: str, hypothesis: str) -> float:
+    if not reference:
+        return 0.0 if not hypothesis else 1.0
+    distance = levenshtein(list(reference), list(hypothesis))
+    return distance / len(reference)
+
+
+def word_error_rate(reference: str, hypothesis: str) -> float:
+    reference_words = reference.split()
+    hypothesis_words = hypothesis.split()
+    if not reference_words:
+        return 0.0 if not hypothesis_words else 1.0
+    distance = levenshtein(reference_words, hypothesis_words)
+    return distance / len(reference_words)
+
+
+def read_page_xml(path: Path) -> str:
+    """The ground truth of a page: its lines, in reading order."""
+    text, _report = ground_truth_of(path)
+    return text
+
+
+def ground_truth_of(path: Path) -> tuple[str, dict]:
+    """The ground truth of a page, and what the file really holds.
+
+    The text of a line sits in a ``Unicode`` element inside a
+    ``TextEquiv`` element inside the ``TextLine`` element.  When a
+    line has no text of its own, the words of the line are joined
+    together.
+
+    The report says how many lines and how many words the file holds,
+    how many of them have a text, and how many lines were read from
+    the words alone.  A file whose lines do not all have a text is not
+    a full ground truth, and the measurement of such a page is not a
+    measurement of the recognition.
+    """
+    tree = ElementTree.parse(path)
+    lines = []
+    report = {
+        "lines": 0,
+        "lines_with_text": 0,
+        "lines_from_words": 0,
+        "lines_incomplete": 0,
+        "words": 0,
+        "words_with_text": 0,
+        "characters": 0,
+    }
+    for line in tree.iter():
+        if _tag(line) != "TextLine":
+            continue
+        report["lines"] += 1
+        words = [
+            child for child in line if _tag(child) == "Word"
+        ]
+        words_with_text = sum(1 for word in words if _word_text(word))
+        report["words"] += len(words)
+        report["words_with_text"] += words_with_text
+        own = _own_text(line)
+        text = _line_text(line)
+        if not own and words:
+            report["lines_from_words"] += 1
+            if words_with_text != len(words):
+                # The line has no text of its own, and only some of
+                # its words have one: the line is not fully
+                # transcribed, and the words that were not transcribed
+                # would be counted as mistakes of the engine.
+                report["lines_incomplete"] += 1
+        if not text:
+            report["lines_incomplete"] += 1
+            continue
+        lines.append(text)
+        report["lines_with_text"] += 1
+        report["characters"] += len(text)
+    report["complete"] = report["lines_incomplete"] == 0
+    return "\n".join(lines), report
+
+
+def _tag(element) -> str:
+    """The name of an element, without the namespace it may have."""
+    return element.tag.rsplit("}", 1)[-1]
+
+
+def _own_text(element) -> list[str]:
+    """The texts that belong to the element itself.
+
+    The words of a line have texts of their own, and they are not the
+    text of the line, so the words are left out.
+    """
+    found = []
+    for child in element:
+        tag = _tag(child)
+        if tag == "Word":
+            continue
+        if tag == "Unicode":
+            text = (child.text or "").strip()
+            if text:
+                found.append(text)
+            continue
+        found.extend(_own_text(child))
+    return found
+
+
+def _line_text(line) -> str:
+    """The text of one line.
+
+    A line carries the text of the whole line, in a ``Unicode`` element
+    that belongs to the line itself.  When it has none, the words of the
+    line are joined together.
+    """
+    own = _own_text(line)
+    if own:
+        return max(own, key=len)
+
+    words = []
+    for child in line:
+        if _tag(child) != "Word":
+            continue
+        text = _word_text(child)
+        if text:
+            words.append(text)
+    return " ".join(words)
+
+
+def _word_text(word) -> str:
+    """The text of one word."""
+    texts = _own_text(word)
+    return max(texts, key=len) if texts else ""
+
+
+def download_dataset(target: Path) -> Path:
+    """Download and verify the Pinkas dataset."""
+    target.mkdir(parents=True, exist_ok=True)
+    archive = target / "pinkas_dataset.zip"
+    if archive.exists() and hashlib.md5(archive.read_bytes()).hexdigest() == DATASET_MD5:
+        return archive
+    print(f"downloading {DATASET_URL}")
+    with urllib.request.urlopen(DATASET_URL, timeout=600) as response:
+        data = response.read()
+    digest = hashlib.md5(data).hexdigest()
+    if digest != DATASET_MD5:
+        raise SystemExit(
+            f"the downloaded corpus does not match the published md5 ({digest}). "
+            "It was not used."
+        )
+    archive.write_bytes(data)
+    return archive
+
+
+def extract_dataset(archive: Path, target: Path) -> Path:
+    target.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive) as bundle:
+        bundle.extractall(target)
+    return target
+
+
+def find_pages(root: Path) -> list[tuple[Path, Path]]:
+    """Pair every page image with its ground truth file."""
+    pairs = []
+    for xml_path in sorted(root.rglob("*.xml")):
+        page = xml_path.with_suffix(".jpg")
+        if not page.exists():
+            page = xml_path.with_suffix(".png")
+        if page.exists():
+            pairs.append((page, xml_path))
+    return pairs
+
+
+def measure_page(
+    engine,
+    image: Path,
+    xml_path: Path,
+    dataset_root: Path,
+) -> dict | None:
+    """Recognise a page and compare the result with its ground truth.
+
+    ``None`` is returned when the page has no ground truth, because such
+    a page cannot be measured.
+    """
+    reference_raw, ground_truth = ground_truth_of(xml_path)
+    if not reference_raw.strip():
+        return None
+
+    started = time.monotonic()
+    recognised = engine.recognize(image)
+    seconds = time.monotonic() - started
+
+    reference = normalise(reference_raw)
+    hypothesis = normalise(recognised.text)
+    reference_points = normalise(reference_raw, keep_points=True)
+    hypothesis_points = normalise(recognised.text, keep_points=True)
+    reference_words = reference.split()
+    hypothesis_words = hypothesis.split()
+
+    return {
+        "page": image.name,
+        "ground_truth_file": str(xml_path.relative_to(dataset_root)),
+        # What the file of the ground truth really holds, so that the
+        # measurement can be understood and not only believed.
+        "ground_truth": ground_truth,
+        "characters_reference": len(reference),
+        "characters_hypothesis": len(hypothesis),
+        "cer": round(character_error_rate(reference, hypothesis), 4),
+        "cer_with_points": round(
+            character_error_rate(reference_points, hypothesis_points), 4
+        ),
+        "wer": round(word_error_rate(reference, hypothesis), 4),
+        # The number of the words of the ground truth and the number of
+        # the words that were not read right.  The error rate of the
+        # whole corpus is the sum of these over the whole corpus, and
+        # not the average of the rates of the pages: a page with few
+        # words would otherwise count as much as a page with many.
+        "words_reference": len(reference_words),
+        "word_errors": levenshtein(reference_words, hypothesis_words),
+        "seconds": round(seconds, 2),
+        # A short piece of both texts, so that a report that says
+        # "the error rate is 1200%" can be looked at and understood.
+        "reference_sample": reference[:200],
+        "hypothesis_sample": hypothesis[:200],
+        # The first lines of both sides, one by one, so that a
+        # difference between the two can be seen and not only counted.
+        "reference_lines_sample": [
+            line[:70] for line in reference_raw.splitlines() if line.strip()
+        ][:4],
+        "hypothesis_lines_sample": [
+            line[:70] for line in recognised.text.splitlines() if line.strip()
+        ][:4],
+        # The lines are counted before the text is normalised, because
+        # the normalisation turns every line into one long line.
+        "lines_reference": len(
+            [line for line in reference_raw.splitlines() if line.strip()]
+        ),
+        "lines_hypothesis": len(
+            [line for line in recognised.text.splitlines() if line.strip()]
+        ),
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--model", required=True, help="path to the recognition model")
+    parser.add_argument("--dataset", help="folder with an extracted Pinkas dataset")
+    parser.add_argument("--download", action="store_true", help="download the corpus first")
+    parser.add_argument("--cache", default=".cache/pinkas", help="download cache folder")
+    parser.add_argument("--pages", type=int, default=10, help="how many pages to recognise")
+    parser.add_argument("--output", default="ocr-accuracy.json", help="report file")
+    parser.add_argument("--timeout", type=float, default=1800.0)
+    args = parser.parse_args(argv)
+
+    model_path = Path(args.model)
+    if not model_path.is_file():
+        raise SystemExit(f"the model file was not found: {model_path}")
+
+    if args.dataset:
+        dataset_root = Path(args.dataset)
+    else:
+        cache = Path(args.cache)
+        archive = download_dataset(cache)
+        dataset_root = extract_dataset(archive, cache / "extracted")
+
+    pairs = find_pages(dataset_root)
+    if not pairs:
+        raise SystemExit(f"no pages with ground truth were found in {dataset_root}")
+    pairs = pairs[: max(1, args.pages)]
+
+    from hebrew_workbench.engine.kraken_local import KrakenEngine
+
+    engine = KrakenEngine(model_path, timeout_seconds=args.timeout)
+
+    results = []
+    for index, (image, xml_path) in enumerate(pairs, start=1):
+        print(f"[{index}/{len(pairs)}] recognising {image.name} ...", flush=True)
+        measured = measure_page(engine, image, xml_path, dataset_root)
+        if measured is None:
+            # A page without a ground truth cannot be measured.  It is
+            # left out, so that the numbers are not made worse by a file
+            # that was not read.
+            print("    no ground truth, the page is left out", flush=True)
+            continue
+        results.append(measured)
+        print(
+            f"    CER {measured['cer'] * 100:.1f}%  "
+            f"WER {measured['wer'] * 100:.1f}%  "
+            f"{measured['seconds']:.1f}s",
+            flush=True,
+        )
+        print(
+            f"    lines: {measured['lines_reference']} in the ground truth, "
+            f"{measured['lines_hypothesis']} in the result",
+            flush=True,
+        )
+        print(f"    ground truth: {measured['reference_sample']}", flush=True)
+        print(f"    recognised:   {measured['hypothesis_sample']}", flush=True)
+        truth = measured["ground_truth"]
+        print(
+            f"    the ground truth holds {truth['lines']} lines, "
+            f"{truth['lines_with_text']} of them have a text, "
+            f"{truth['lines_from_words']} were read from the words alone, "
+            f"and it holds {truth['words']} words",
+            flush=True,
+        )
+        for number, (want, got) in enumerate(
+            zip(
+                measured["reference_lines_sample"],
+                measured["hypothesis_lines_sample"],
+            ),
+            start=1,
+        ):
+            print(f"      line {number} of the ground truth: {want}", flush=True)
+            print(f"      line {number} of the result:      {got}", flush=True)
+
+    if not results:
+        raise SystemExit("no page with a ground truth was found in the dataset")
+    # A page whose ground truth is not complete is not a measurement of
+    # the recognition: the text that was not transcribed would be
+    # counted as a mistake of the engine.  Such a page is left out of
+    # the rate of the corpus, and it is named in the report.
+    incomplete = [
+        item["page"]
+        for item in results
+        if not item["ground_truth"]["complete"]
+    ]
+    measured = [
+        item for item in results if item["ground_truth"]["complete"]
+    ]
+    if not measured:
+        raise SystemExit(
+            "the ground truth of every page is incomplete, so there is "
+            "nothing to measure"
+        )
+    total_reference = sum(item["characters_reference"] for item in measured)
+    total_cer = sum(
+        item["cer"] * item["characters_reference"] for item in measured
+    ) / max(1, total_reference)
+    total_words = sum(item["words_reference"] for item in measured)
+    total_wer = sum(item["word_errors"] for item in measured) / max(1, total_words)
+    report = {
+        "engine": engine.name,
+        "model": str(model_path),
+        "pages": len(measured),
+        "pages_seen": len(results),
+        "corpus": {
+            "name": "The Pinkas Dataset",
+            "citation": DATASET_CITATION,
+            "license": "CC-BY-4.0",
+            "url": "https://zenodo.org/records/3569694",
+            "description": (
+                "30 pages of early modern (1500-1800) European Jewish community "
+                "records in Hebrew and Yiddish, with a line level ground truth."
+            ),
+        },
+        "summary": {
+            "cer": round(total_cer, 4),
+            "wer": round(total_wer, 4),
+            "seconds_per_page": round(
+                sum(item["seconds"] for item in measured) / max(1, len(measured)), 2
+            ),
+            "characters_reference": total_reference,
+            "words_reference": total_words,
+            "ground_truth_complete": not incomplete,
+            "pages_with_incomplete_ground_truth": incomplete,
+        },
+        "results": results,
+    }
+    Path(args.output).write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(json.dumps(report["summary"], indent=2))
+    print(f"report written to {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

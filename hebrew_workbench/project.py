@@ -26,6 +26,48 @@ def _now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _sync_directory(folder: Path) -> None:
+    """Make sure that the name of the new file is on the disk.
+
+    The file itself is written and synchronized before it replaces the
+    old one, but the name of the file is kept by the folder.  Without
+    this, a power loss right after the writing can leave the old file,
+    or no file at all.  Windows has no way to do this, and there the
+    name of the file is kept by the system itself.
+    """
+    if os.name != "posix":
+        return
+    try:
+        handle = os.open(str(folder), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(handle)
+    except OSError:
+        pass
+    finally:
+        os.close(handle)
+
+
+def _read_changes(value) -> list[dict]:
+    """The corrections of a document, as they are in the project file.
+
+    A file that was written by another program may hold something that
+    is not a list of corrections, and then the file is refused instead
+    of being opened with a mistake in it.
+    """
+    if value is None:
+        raise ValueError("the project file holds no list of corrections")
+    if not isinstance(value, list):
+        raise ValueError("the corrections of a document must be a list")
+    changes = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("a correction must be an object")
+        changes.append(dict(item))
+    return changes
+
+
 @dataclass
 class DocumentEntry:
     """One opened scan plus the transcription the user is working on."""
@@ -35,6 +77,9 @@ class DocumentEntry:
     transcription: str = ""
     engine_name: str = ""
     notes: str = ""
+    #: The corrections that the user accepted, in the order they were
+    #: accepted.  They are kept so that they can be shown and undone.
+    changes: list[dict] = field(default_factory=list)
 
     @property
     def file_path(self) -> Path:
@@ -55,6 +100,7 @@ class DocumentEntry:
             "transcription": self.transcription,
             "engine_name": self.engine_name,
             "notes": self.notes,
+            "changes": list(self.changes),
         }
 
     @classmethod
@@ -65,6 +111,7 @@ class DocumentEntry:
             transcription=str(data.get("transcription", "")),
             engine_name=str(data.get("engine_name", "")),
             notes=str(data.get("notes", "")),
+            changes=_read_changes(data.get("changes", [])),
         )
 
 
@@ -132,10 +179,15 @@ class Project:
         try:
             with os.fdopen(handle, "w", encoding="utf-8") as stream:
                 stream.write(payload)
+                # The text of the user must not be lost if the machine
+                # loses power in the middle of the writing.
+                stream.flush()
+                os.fsync(stream.fileno())
             os.replace(temp_name, target)
         except BaseException:
             Path(temp_name).unlink(missing_ok=True)
             raise
+        _sync_directory(target.parent)
         self.path = target
         return target
 

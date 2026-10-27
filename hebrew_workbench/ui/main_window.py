@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
 from PySide6.QtWidgets import (
     QApplication,
@@ -45,7 +45,10 @@ from ..engine.registry import EngineRegistry
 from ..exporting import ExportError, build_print_document, print_document, write_docx
 from ..project import PROJECT_SUFFIX, Project
 from ..resources import samples_directory
+from ..suggestions import SuggestionRegistry, SuggestionSession
 from .preview_pane import PreviewPane
+from .suggestions_pane import SuggestionsPane
+from .tasks import TaskThread
 
 __all__ = ["MainWindow", "run", "SUPPORTED_SUFFIXES"]
 
@@ -70,7 +73,15 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.project = Project()
         self.registry = EngineRegistry()
+        self.engines: list = []
+        self.suggestion_modules = SuggestionRegistry()
+        self.suggestions = SuggestionSession()
+        # Every document has its own session of proposals, so that the
+        # proposals of one document are never offered for another one.
+        self._sessions: dict[str, SuggestionSession] = {}
+        self._shown_entry = None
         self._loading = False
+        self.task: TaskThread | None = None
 
         self.setWindowTitle(f"{APP_NAME} {__version__}")
         self.resize(1280, 820)
@@ -81,8 +92,9 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._build_toolbar()
         self._build_status_bar()
+        self._build_suggestions_dock()
         self._sync_document_list()
-        self._update_engine_status()
+        self.refresh_engines()
 
     # -- construction ------------------------------------------------------
     def _build_central(self) -> None:
@@ -197,6 +209,22 @@ class MainWindow(QMainWindow):
         self.engine_status_action = QAction("מצב המנועים...", self)
         self.engine_status_action.triggered.connect(self.show_engine_status)
 
+        self.install_engine_action = QAction("התקנת מודל הזיהוי...", self)
+        self.install_engine_action.triggered.connect(self.install_model)
+
+        self.check_suggestions_action = QAction("בדיקת הצעות תיקון", self)
+        self.check_suggestions_action.triggered.connect(self.check_suggestions)
+
+        self.undo_changes_action = QAction("ביטול כל שינויי התיקון", self)
+        self.undo_changes_action.triggered.connect(self.undo_all_changes)
+
+        self.choose_dictionary_action = QAction("בחירת מילון לאיות...", self)
+        self.choose_dictionary_action.triggered.connect(self.choose_dictionary)
+
+        self.cancel_action = QAction("ביטול המשימה", self)
+        self.cancel_action.triggered.connect(self.cancel_task)
+        self.cancel_action.setEnabled(False)
+
         self.samples_action = QAction("פתיחת דוגמאות", self)
         self.samples_action.triggered.connect(self.open_samples)
 
@@ -227,8 +255,17 @@ class MainWindow(QMainWindow):
 
         tools_menu = self.menuBar().addMenu("כלים")
         tools_menu.addAction(self.run_ocr_action)
+        tools_menu.addAction(self.cancel_action)
         tools_menu.addSeparator()
+        self.engine_menu = tools_menu.addMenu("מנוע הזיהוי")
+        tools_menu.addAction(self.install_engine_action)
         tools_menu.addAction(self.engine_status_action)
+
+        suggestions_menu = self.menuBar().addMenu("הצעות תיקון")
+        suggestions_menu.addAction(self.check_suggestions_action)
+        suggestions_menu.addAction(self.undo_changes_action)
+        suggestions_menu.addSeparator()
+        suggestions_menu.addAction(self.choose_dictionary_action)
 
         help_menu = self.menuBar().addMenu("עזרה")
         about = QAction("אודות", self)
@@ -267,6 +304,23 @@ class MainWindow(QMainWindow):
         }
         for action, icon in mapping.items():
             action.setIcon(style.standardIcon(icon))
+
+    def _build_suggestions_dock(self) -> None:
+        """The pane with the proposals for corrections."""
+        from PySide6.QtWidgets import QDockWidget
+
+        self.suggestions_pane = SuggestionsPane(self)
+        self.suggestions_pane.check_requested.connect(self.check_suggestions)
+        self.suggestions_pane.undo_requested.connect(self.undo_all_changes)
+        self.suggestions_pane.accept_requested.connect(self.accept_suggestion)
+        self.suggestions_pane.refuse_requested.connect(self.refuse_suggestion)
+
+        self.suggestions_dock = QDockWidget("הצעות תיקון", self)
+        self.suggestions_dock.setObjectName("suggestions-dock")
+        self.suggestions_dock.setWidget(self.suggestions_pane)
+        self.suggestions_dock.setMinimumWidth(300)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.suggestions_dock)
+        self.suggestions_dock.hide()
 
     def _build_status_bar(self) -> None:
         status = QStatusBar()
@@ -390,9 +444,28 @@ class MainWindow(QMainWindow):
             return
         for row in rows:
             if 0 <= row < len(self.project):
-                self.project.remove(row)
+                removed = self.project.remove(row)
+                if removed is self._shown_entry:
+                    self._shown_entry = None
+                self._sessions.pop(str(removed.path), None)
         self._sync_document_list()
-        self.preview.set_document(None)
+        if self._shown_entry is not None and self._shown_entry not in self.project:
+            self._shown_entry = None
+        if self._shown_entry is not None:
+            # The document that was shown is still there, so it stays in
+            # the editor and its text is not lost.
+            self._show_entry(self._shown_entry)
+            # The list is built again, and the row of the document that
+            # is shown is chosen again, so that the list and the editor
+            # always show the same document.  The signals are held, so
+            # that the editor is not loaded a second time.
+            row = self.project.index_of(self._shown_entry.path)
+            if row is not None:
+                self.doc_list.blockSignals(True)
+                self.doc_list.setCurrentRow(row)
+                self.doc_list.blockSignals(False)
+        else:
+            self._clear_editor()
         self.statusBar().showMessage(f"הוסרו {len(rows)} מסמכים מהרשימה.", 5000)
 
     def clear_documents(self) -> None:
@@ -408,24 +481,65 @@ class MainWindow(QMainWindow):
         if answer != QMessageBox.Yes:
             return
         self.project.clear()
+        self._sessions.clear()
         self._sync_document_list()
-        self.preview.set_document(None)
-        self.editor.clear()
+        self._clear_editor()
         self.statusBar().showMessage("הרשימה נוקתה. הקבצים על הדיסק לא נגעו.", 5000)
 
     def _on_document_selected(self, row: int) -> None:
         self._store_editor_text()
         if not (0 <= row < len(self.project)):
-            self.editor.clear()
-            self.doc_path_label.setText("לא נבחר מסמך")
-            self.preview.set_document(None)
+            self._clear_editor()
             return
-        entry = self.project[row]
+        self._show_entry(self.project[row])
+
+    def _show_entry(self, entry) -> None:
+        """Show a document in the editor and in the preview.
+
+        The proposals of the document come with it, so that they are
+        never offered for a document they do not belong to.
+        """
         self._loading = True
         self.editor.setPlainText(entry.transcription)
         self._loading = False
+        self._shown_entry = entry
+        self.suggestions = self._session_for(entry)
+        self._refresh_suggestions(self.suggestions)
         self.doc_path_label.setText(entry.path)
         self.preview.set_document(entry.path)
+
+    def _clear_editor(self) -> None:
+        """Show an empty editor, with no document behind it.
+
+        The document that was shown is forgotten, so that its text is
+        not written over with the empty text of the editor.
+        """
+        self._loading = True
+        self.editor.clear()
+        self._loading = False
+        self._shown_entry = None
+        self.suggestions = SuggestionSession()
+        self._refresh_suggestions(self.suggestions)
+        self.doc_path_label.setText("לא נבחר מסמך")
+        self.preview.set_document(None)
+
+    def _session_for(self, entry) -> SuggestionSession:
+        """The session of the proposals of a document.
+
+        The session of a document that is opened for the first time is
+        built from the corrections that were saved with the project, so
+        that they can be taken back.
+        """
+        if entry is None:
+            return SuggestionSession()
+        key = str(entry.path)
+        session = self._sessions.get(key)
+        if session is None:
+            session = SuggestionSession(entry.transcription)
+            if entry.changes:
+                session.restore_accepted(entry.changes)
+            self._sessions[key] = session
+        return session
 
     def _on_editor_changed(self) -> None:
         if self._loading:
@@ -433,9 +547,16 @@ class MainWindow(QMainWindow):
         self._store_editor_text()
 
     def _store_editor_text(self) -> None:
-        row = self.doc_list.currentRow()
-        if 0 <= row < len(self.project):
-            self.project[row].transcription = self.editor.toPlainText()
+        """Save the text of the document that is in the editor.
+
+        The document is the one that is *shown*, and not the one that is
+        selected in the list: when the user moves to another document,
+        the list has already changed, and the text of the old document
+        would be written into the new one.
+        """
+        entry = self._shown_entry
+        if entry is not None:
+            entry.transcription = self.editor.toPlainText()
 
     # -- projects ----------------------------------------------------------
     def save_project(self) -> None:
@@ -467,20 +588,30 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
+        self.load_project(Path(path))
+
+    def load_project(self, path: Path) -> bool:
+        """Open a project file, and leave the old project behind.
+
+        The sessions of the proposals belong to the documents of the
+        project that is open, and they are forgotten when another
+        project is opened.
+        """
         try:
             project = Project.load(path)
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "פתיחת הפרויקט", f"לא ניתן לפתוח: {exc}")
-            return
+            return False
         self.project = project
+        self._sessions.clear()
         self._sync_document_list()
-        self.preview.set_document(None)
-        self.editor.clear()
+        self._clear_editor()
         if len(self.project):
             self.doc_list.setCurrentRow(0)
         self.statusBar().showMessage(
             f"נפתח הפרויקט {Path(path).name} עם {len(self.project)} מסמכים.", 6000
         )
+        return True
 
     # -- actions -----------------------------------------------------------
     def run_ocr(self) -> None:
@@ -488,26 +619,193 @@ class MainWindow(QMainWindow):
         if entry is None:
             QMessageBox.information(self, "הרצת OCR", "יש לבחור מסמך לפני הרצת OCR.")
             return
+        if self.task is not None and self.task.isRunning():
+            QMessageBox.information(self, "הרצת OCR", "כבר מתבצעת משימה.")
+            return
+        if not self.registry.available():
+            answer = QMessageBox.question(
+                self,
+                "OCR לא זמין",
+                "לא מותקן מנוע זיהוי עבור עברית.\n\n"
+                "האם להתקין כעת את מודל הזיהוי? "
+                "ההתקנה מורידה קובץ מודל (כ-13MB) ובודקת את שלמותו.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if answer == QMessageBox.Yes:
+                self.install_model()
+            return
+
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
-        try:
-            result = self.registry.transcribe(entry.file_path)
-        except Exception as exc:
-            self.statusBar().showMessage("לא בוצעה זיהוי. הטקסט נשאר כפי שהיה.", 8000)
-            QMessageBox.warning(self, "OCR לא זמין", str(exc))
-            return
-        finally:
-            self.progress.setVisible(False)
-            self.progress.setRange(0, 1)
-        self._loading = True
-        self.editor.setPlainText(result.text)
-        self._loading = False
-        entry.transcription = result.text
-        entry.engine_name = result.engine_name
-        self.statusBar().showMessage(
-            f"הזיהוי בוצע באמצעות {result.engine_name}. יש לבדוק כל שורה לפני הייצוא.",
-            8000,
+        self.cancel_action.setEnabled(True)
+        self.run_ocr_action.setEnabled(False)
+
+        def work(progress, cancel):
+            return self.registry.transcribe(entry.file_path, progress=progress, cancel=cancel)
+
+        self.task = TaskThread(work, self)
+        self.task.progress.connect(self._on_task_progress)
+        self.task.succeeded.connect(
+            lambda result: self._on_ocr_done(result, entry)
         )
+        self.task.failed.connect(self._on_task_failed)
+        self.task.cancelled.connect(self._on_task_cancelled)
+        self.task.finished.connect(self._on_task_finished)
+        self.task.start()
+
+    def _on_task_progress(self, message: str) -> None:
+        self.statusBar().showMessage(message)
+
+    def _on_ocr_done(self, result, entry=None) -> None:
+        if entry is None:
+            entry = self._current_entry()
+        if entry is not None:
+            entry.transcription = result.text
+            entry.engine_name = result.engine_name
+            # The text of the document is new, and the corrections that
+            # were made on the old text do not belong to it any more.
+            # Their places are of no use, and a correction that is
+            # looked for in the new text could be found in a place that
+            # was never corrected.
+            entry.changes = []
+            self._sessions.pop(str(entry.path), None)
+        if entry is not None and entry is self._shown_entry:
+            # The document that was recognised is still the one that is
+            # shown, so the editor may show the result.  When the user
+            # moved to another document in the meantime, the result
+            # stays with the document it belongs to, and the editor of
+            # the other document is left alone.
+            self._loading = True
+            self._replace_editor_text(result.text)
+            self._loading = False
+            # The session of the document is new, because the text of
+            # the document is new.
+            self.suggestions = self._session_for(entry)
+            self._refresh_suggestions(self.suggestions)
+        self.statusBar().showMessage(
+            f"הזיהוי בוצע באמצעות {result.engine_name} ב-{result.duration_seconds:.1f} שניות. "
+            "יש לבדוק כל שורה לפני הייצוא.",
+            10000,
+        )
+
+    def _replace_editor_text(self, text: str) -> None:
+        """Put a new text into the editor, in a way that can be undone.
+
+        The user has to be able to take back a recognition result with
+        the usual undo, so the text is replaced with a cursor and not
+        with ``setPlainText``.
+        """
+        cursor = self.editor.textCursor()
+        cursor.select(cursor.SelectionType.Document)
+        cursor.insertText(text)
+
+    def _on_task_cancelled(self) -> None:
+        self.statusBar().showMessage("המשימה בוטלה. הטקסט נשאר כפי שהיה.", 6000)
+
+    def _on_task_failed(self, message: str) -> None:
+        self.statusBar().showMessage("המשימה לא הושלמה. הטקסט נשאר כפי שהיה.", 8000)
+        QMessageBox.warning(self, "המשימה נכשלה", message)
+
+    def _on_task_finished(self) -> None:
+        self.progress.setVisible(False)
+        self.progress.setRange(0, 1)
+        self.cancel_action.setEnabled(False)
+        self.run_ocr_action.setEnabled(True)
+        self.task = None
+
+    def cancel_task(self) -> None:
+        if self.task is not None and self.task.isRunning():
+            self.task.cancel()
+            self.statusBar().showMessage("מבטלים את המשימה...", 4000)
+
+    def install_model(self) -> None:
+        """Download the recognition model after asking the user."""
+        from ..engine.models import MODEL_ARTIFACTS, InstallError, install_artifact
+
+        if self.task is not None and self.task.isRunning():
+            QMessageBox.information(
+                self, "התקנת מודל הזיהוי", "כבר מתבצעת משימה. אפשר לנסות שוב אחרי שהיא תסתיים."
+            )
+            return
+
+        artifact = MODEL_ARTIFACTS["kraken-ppocrv6-small"]
+        answer = QMessageBox.question(
+            self,
+            "התקנת מודל הזיהוי",
+            f"{artifact.summary()}\n\n"
+            "האם להוריד את המודל עכשיו?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if answer != QMessageBox.Yes:
+            return
+
+        self.progress.setVisible(True)
+        self.progress.setRange(0, 0)
+        self.cancel_action.setEnabled(False)
+
+        def work(progress, cancel):
+            def report(done, total):
+                if total:
+                    progress(f"מוריד את המודל: {done * 100 // total}%")
+                else:
+                    progress(f"מוריד את המודל: {done // (1024 * 1024)}MB")
+
+            return install_artifact(artifact, progress=report)
+
+        self.task = TaskThread(work, self)
+        self.task.progress.connect(self._on_task_progress)
+        self.task.succeeded.connect(self._on_model_installed)
+        self.task.failed.connect(self._on_task_failed)
+        self.task.finished.connect(self._on_task_finished)
+        self.task.start()
+
+    def _on_model_installed(self, path) -> None:
+        self.refresh_engines()
+        self.statusBar().showMessage(f"המודל הותקן: {path}", 8000)
+        QMessageBox.information(
+            self,
+            "המודל הותקן",
+            f"המודל הותקן בהצלחה:\n{path}\n\n"
+            "אפשר להריץ זיהוי עכשיו. יש לבדוק את התוצאה שורה שורה - "
+            "הזיהוי אינו מושלם ואינו מחליף את בדיקת המורה.",
+        )
+
+    def refresh_engines(self) -> None:
+        """Look for engines that can run and update the registry."""
+        from ..engine.factory import detect_engines
+
+        self.engines = detect_engines()
+        if self.engines:
+            self.registry = EngineRegistry(self.engines[0])
+        self._update_engine_status()
+        self._rebuild_engine_menu()
+
+    def _rebuild_engine_menu(self) -> None:
+        menu = getattr(self, "engine_menu", None)
+        if menu is None:
+            return
+        menu.clear()
+        if not self.engines:
+            action = QAction("לא מותקן מנוע זיהוי", self)
+            action.setEnabled(False)
+            menu.addAction(action)
+            return
+        group = QActionGroup(self)
+        for index, engine in enumerate(self.engines):
+            action = QAction(getattr(engine, "name", f"מנוע {index + 1}"), self)
+            action.setCheckable(True)
+            action.setChecked(engine is self.registry.engine)
+            action.triggered.connect(lambda _checked=False, e=engine: self.select_engine(e))
+            group.addAction(action)
+            menu.addAction(action)
+
+    def select_engine(self, engine) -> None:
+        self.registry = EngineRegistry(engine)
+        self._update_engine_status()
+        self._rebuild_engine_menu()
+        self.statusBar().showMessage(f"נבחר מנוע הזיהוי: {getattr(engine, 'name', '')}", 5000)
 
     def save_text(self) -> None:
         content = self.editor.toPlainText()
@@ -619,6 +917,159 @@ class MainWindow(QMainWindow):
     def show_engine_status(self) -> None:
         QMessageBox.information(self, "מצב המנועים", self.registry.status())
 
+    # -- the proposals for corrections -------------------------------------
+    def _refresh_suggestions(self, session: SuggestionSession) -> None:
+        """Show the proposals of a session and what can be taken back."""
+        self.suggestions_pane.show_suggestions(session.pending())
+        self.suggestions_pane.set_undo_available(bool(session.accepted))
+
+    def check_suggestions(self) -> None:
+        """Ask the modules what they would change, and show the proposals."""
+        entry = self._shown_entry
+        if entry is None:
+            QMessageBox.information(
+                self, "הצעות תיקון", "יש לבחור מסמך לפני בדיקת הצעות."
+            )
+            return
+        session = self._session_for(entry)
+        self.suggestions = session
+        text = self.editor.toPlainText()
+        if not text.strip():
+            session.set_suggestions([], text)
+            self._refresh_suggestions(session)
+            self.statusBar().showMessage("אין טקסט לבדיקה.", 5000)
+            return
+        proposals = self.suggestion_modules.check(text)
+        session.set_suggestions(proposals, text)
+        self._refresh_suggestions(session)
+        self.suggestions_dock.show()
+        if proposals:
+            self.statusBar().showMessage(
+                f"נמצאו {len(proposals)} הצעות. כל הצעה מתקבלת או נדחית בנפרד.",
+                8000,
+            )
+        else:
+            self.statusBar().showMessage("לא נמצאו הצעות לתיקון.", 5000)
+
+    def accept_suggestion(self, suggestion) -> None:
+        """Apply one proposal that the user accepted."""
+        session = self.suggestions
+        if session is not self._session_for(self._shown_entry):
+            # The proposals belong to another document, and they are not
+            # applied to this one.
+            self.statusBar().showMessage(
+                "ההצעות שייכות למסמך אחר, ולכן לא הוחלו.", 6000
+            )
+            return
+        if self.editor.toPlainText() != session.current_text:
+            # The user wrote something after the proposals were made, so
+            # they no longer fit the text and applying them would throw
+            # away what was written.
+            self.statusBar().showMessage(
+                "הטקסט השתנה אחרי הבדיקה, ולכן ההצעה לא הוחלה. יש לבדוק את ההצעות שוב.",
+                8000,
+            )
+            self._refresh_suggestions(session)
+            return
+        outcome = session.accept(suggestion)
+        if outcome is None:
+            self.statusBar().showMessage(
+                "ההצעה כבר אינה מתאימה לטקסט, ולכן לא הוחלה.", 6000
+            )
+            self._refresh_suggestions(session)
+            return
+        text, position = outcome
+        self._loading = True
+        self.editor.setPlainText(text)
+        self._loading = False
+        self._store_editor_text()
+        self._refresh_suggestions(session)
+        self._store_changes()
+        self.statusBar().showMessage(
+            f"ההצעה התקבלה. נשארו {len(session.pending())} הצעות.", 5000
+        )
+
+    def refuse_suggestion(self, suggestion) -> None:
+        """The user does not want this proposal."""
+        session = self.suggestions
+        if session is not self._session_for(self._shown_entry):
+            self.statusBar().showMessage(
+                "ההצעות שייכות למסמך אחר, ולכן לא נדחו.", 6000
+            )
+            return
+        session.refuse(suggestion)
+        self._refresh_suggestions(session)
+        self.statusBar().showMessage("ההצעה נדחתה. הטקסט לא השתנה.", 5000)
+
+    def undo_all_changes(self) -> None:
+        """Take back every correction that was accepted."""
+        session = self.suggestions
+        if session is not self._session_for(self._shown_entry):
+            self.statusBar().showMessage(
+                "ההצעות שייכות למסמך אחר, ולכן לא בוטלו.", 6000
+            )
+            return
+        if not session.accepted:
+            self.statusBar().showMessage("אין שינויים לביטול.", 5000)
+            return
+        # The corrections are taken back in the text that is in the
+        # editor now, so that what the user wrote after them is kept.
+        text = session.undo_all(self.editor.toPlainText())
+        self._loading = True
+        # The text is put in with the cursor and not with
+        # `setPlainText`, so that the undo of the editor keeps working
+        # and the user can take back a change that was wrong.
+        self._replace_editor_text(text)
+        self._loading = False
+        self._store_editor_text()
+        self._refresh_suggestions(session)
+        self._store_changes()
+        skipped = len(session.last_undo_skipped)
+        if skipped:
+            # A correction whose place could not be found is not taken
+            # back, so that a text that was never corrected is not
+            # changed.  The user is told about it.
+            self.statusBar().showMessage(
+                f"{skipped} שינויי תיקון לא ניתן לבטל, "
+                "מפני שהטקסט שסביבם שונה.",
+                8000,
+            )
+        else:
+            self.statusBar().showMessage(
+                "כל שינויי התיקון בוטלו. יש לבדוק את ההצעות שוב.",
+                8000,
+            )
+
+    def _store_changes(self) -> None:
+        """Keep the changes of the document that is open."""
+        entry = self._shown_entry
+        if entry is not None:
+            entry.changes = self.suggestions.change_log()
+
+    def choose_dictionary(self) -> None:
+        """Let the user point at a word list for the spelling module."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "בחירת מילון לבדיקת איות",
+            "",
+            "מילונים (*.dic *.txt *.lst);;כל הקבצים (*)",
+        )
+        if not path:
+            return
+        module = self.suggestion_modules.module("spelling")
+        if module is None:
+            return
+        try:
+            module.set_dictionary(path)
+        except OSError as exc:
+            QMessageBox.warning(self, "בחירת מילון", f"לא ניתן לקרוא את המילון: {exc}")
+            return
+        self._refresh_suggestions(self.suggestions)
+        self.statusBar().showMessage(
+            f"המילון של מודל האיות הוא עכשיו: {path} ({module.word_count} מילים)",
+            8000,
+        )
+
     def show_about(self) -> None:
         QMessageBox.about(
             self,
@@ -629,6 +1080,16 @@ class MainWindow(QMainWindow):
         )
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        if self.task is not None and self.task.isRunning():
+            self.task.cancel()
+            if not self.task.wait(3000):
+                # The work did not stop.  The window stays open, so that
+                # the user does not lose the text they wrote.
+                self.statusBar().showMessage(
+                    "המשימה עוד לא נעצרה. החלון נשאר פתוח.", 8000
+                )
+                event.ignore()
+                return
         self._store_editor_text()
         self.preview.close_document()
         event.accept()
