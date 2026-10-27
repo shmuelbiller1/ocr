@@ -53,9 +53,12 @@ cursive.
 
 ## Measured results
 
-The numbers in this section are filled in from the report of the
-`ocr-engine` job.  They are reproduced in `ocr-accuracy.json`, which the
-job uploads as an artefact.
+The numbers in this section are filled in by the `ocr-engine` job of the
+build itself: the job measures the accuracy, writes the result of the
+measurement into this file and sends it back to the branch.  The numbers
+are therefore always the ones that were measured, and never numbers that
+somebody wrote by hand.  The report they come from is also uploaded as
+the artefact `ocr-accuracy-report`.
 
 <!-- RESULTS -->
 

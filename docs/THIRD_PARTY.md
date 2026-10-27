@@ -29,10 +29,20 @@ These have **not** been legally reviewed by a lawyer and are tracked as
 open work:
 
 1. The LGPL requires that the user can replace the Qt shared libraries.
-   The release job must ship the Qt licence texts and a short note
-   explaining where the DLLs live inside the unpacked application.
+   The build therefore produces a **folder** and not a single file, so
+   that the DLLs of Qt stay separate files that can be replaced.  The
+   release job must ship the Qt licence texts and a short note
+   explaining that the DLLs are in the folder of the application, next
+   to `HebrewNotesWorkbench.exe`.
 2. The release package must include the licence texts of CPython,
-   PySide6/Qt and shiboken6 in a `LICENSES/` folder.
+   PySide6/Qt, shiboken6, Pillow, PDFium and python-docx in a `LICENCES/`
+   folder.  `tools/build_release.py` does this: it copies the licence
+   texts that are inside the installed packages, fetches the texts of
+   the LGPL, the GPL and the PSF licence from the address of the project
+   that wrote them, and writes a notice that says what every component
+   is and where its licence is.  A text that does not arrive, or that
+   does not look like the licence it claims to be, is not kept, and the
+   build says so.
 3. The PyInstaller exception only covers the bundling of the executable;
    the licences of the bundled libraries keep applying.
 
