@@ -49,6 +49,7 @@ Hebrew-script notes into editable, printable documents.
 | Grammar proposals | **Works, a few rules** | Punctuation and spacing |
 | `לשון הספר` proposals | **Not implemented** | The module exists, is switched off, and says so; see `docs/SUGGESTIONS.md` |
 | Accepting and refusing proposals | **Works** | Every proposal is shown first and is accepted or refused on its own; every accepted change is logged and can be undone |
+| Plugins (engines and word lists) | **Works** | The engines and the modules of proposals are plugins; they are installed, removed, switched on and off, and chosen in `Settings > Plugins and engines`; see `docs/PLUGINS.md` |
 | Text search inside the document | **Not implemented** | Planned |
 | Undoing a correction of the style guide | **Not implemented** | The style module has no rules yet |
 | Reading a page of a PDF at the resolution of the scan | **Works** | The pages of a PDF are given to the engine at 300 dots per inch |
@@ -124,9 +125,11 @@ text is missing.
 app.py                        launcher (--selftest, --version)
 hebrew_workbench/
     engine/                   replaceable OCR adapters (base contract + registry)
+    plugins/                  the plugin system: manifests, installer, registry
     suggestions/              the spelling, grammar and style modules (proposals only)
     preview/                  offline rendering of PDF pages and images
-    ui/                       the Qt main window, the preview pane, the proposals pane
+    ui/                       the Qt main window, the preview pane, the proposals pane,
+                              the settings screen of the plugins
     exporting.py              TXT, DOCX and printing helpers
     project.py                workspace model: documents + their transcriptions
     resources.py              finding the files that ship with the application
@@ -144,3 +147,7 @@ docs/                         build plan, licenses, accuracy reports
   obligations that are still open.
 - `docs/OCR_ACCURACY.md` - measured accuracy of the handwriting engine
   (filled in when the engine lands).
+- `docs/SUGGESTIONS.md` - the modules that propose corrections, and how a
+  proposal is accepted, refused and undone.
+- `docs/PLUGINS.md` - how to add another engine or another word list, and
+  what the program does with a plugin that does not work.

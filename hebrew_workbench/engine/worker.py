@@ -29,7 +29,50 @@ from .base import (
     PageResult,
 )
 
-__all__ = ["WorkerEngine"]
+__all__ = ["WorkerEngine", "worker_path", "make_worker_engine"]
+
+
+def worker_path() -> Path | None:
+    """The optional OCR worker executable, if it has been installed."""
+    import sys
+
+    candidates = []
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle:
+        candidates.append(Path(bundle) / "ocr-worker.exe")
+        candidates.append(Path(bundle) / "ocr-worker")
+    from .models import models_directory
+
+    candidates.append(models_directory().parent / "ocr-worker.exe")
+    candidates.append(models_directory().parent / "ocr-worker")
+    program_folder = Path(sys.executable).resolve().parent
+    candidates.append(program_folder / "ocr-worker.exe")
+    candidates.append(program_folder / "ocr-worker")
+    # The worker that comes with the program is a folder of its own,
+    # with its own libraries beside it.
+    candidates.append(program_folder / "ocr-worker" / "ocr-worker.exe")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def make_worker_engine(options: dict | None = None) -> "WorkerEngine":
+    """Build the worker engine for the plugin system."""
+    from .models import MODEL_ARTIFACTS, models_directory
+
+    settings = dict(options or {})
+    artifact_id = str(settings.get("model_id", "kraken-ppocrv6-small"))
+    artifact = MODEL_ARTIFACTS.get(artifact_id)
+    model_path = None
+    if artifact is not None:
+        candidate = models_directory() / artifact.filename
+        if candidate.is_file():
+            model_path = candidate
+    worker = worker_path()
+    if worker is None or model_path is None:
+        return None
+    return WorkerEngine(worker, model_path)
 
 
 class WorkerEngine:

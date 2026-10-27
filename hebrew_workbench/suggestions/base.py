@@ -73,6 +73,14 @@ class SuggestionModule:
         """Why the module cannot work, for the user."""
         return ""
 
+    def configure(self, options: dict) -> None:
+        """Receive the settings of the plugin.
+
+        A module that needs something from the user - a word list, for
+        example - reads it here.  A module that needs nothing does not
+        have to do anything.
+        """
+
     def check(self, text: str) -> list[Suggestion]:
         """Look at the text and return the proposals."""
         raise NotImplementedError

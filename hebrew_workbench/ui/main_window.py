@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
 from .. import APP_NAME, __version__
 from ..engine.registry import EngineRegistry
 from ..exporting import ExportError, build_print_document, print_document, write_docx
+from ..plugins import PluginRegistry
 from ..project import PROJECT_SUFFIX, Project
 from ..resources import samples_directory
 from ..suggestions import SuggestionRegistry, SuggestionSession
@@ -74,6 +75,7 @@ class MainWindow(QMainWindow):
         self.project = Project()
         self.registry = EngineRegistry()
         self.engines: list = []
+        self.plugins = PluginRegistry()
         self.suggestion_modules = SuggestionRegistry()
         self.suggestions = SuggestionSession()
         # Every document has its own session of proposals, so that the
@@ -212,6 +214,9 @@ class MainWindow(QMainWindow):
         self.install_engine_action = QAction("התקנת מודל הזיהוי...", self)
         self.install_engine_action.triggered.connect(self.install_model)
 
+        self.plugin_settings_action = QAction("תוספים ומנועים...", self)
+        self.plugin_settings_action.triggered.connect(self.open_plugin_settings)
+
         self.check_suggestions_action = QAction("בדיקת הצעות תיקון", self)
         self.check_suggestions_action.triggered.connect(self.check_suggestions)
 
@@ -260,6 +265,9 @@ class MainWindow(QMainWindow):
         self.engine_menu = tools_menu.addMenu("מנוע הזיהוי")
         tools_menu.addAction(self.install_engine_action)
         tools_menu.addAction(self.engine_status_action)
+
+        settings_menu = self.menuBar().addMenu("הגדרות")
+        settings_menu.addAction(self.plugin_settings_action)
 
         suggestions_menu = self.menuBar().addMenu("הצעות תיקון")
         suggestions_menu.addAction(self.check_suggestions_action)
@@ -729,7 +737,23 @@ class MainWindow(QMainWindow):
             )
             return
 
-        artifact = MODEL_ARTIFACTS["kraken-ppocrv6-small"]
+        # The model belongs to the OCR plugin the user chose.
+        artifact_id = "kraken-ppocrv6-small"
+        plugin = self.plugins.active("ocr")
+        if plugin is not None:
+            artifact_id = str(
+                plugin.manifest.options.get("model_id", artifact_id) or artifact_id
+            )
+        artifact = MODEL_ARTIFACTS.get(artifact_id)
+        if artifact is None:
+            QMessageBox.information(
+                self,
+                "התקנת מודל הזיהוי",
+                f"התוסף {plugin.name if plugin else ''} אינו משתמש באחד "
+                "מהמודלים שהתוכנית יודעת. יש להתקין את המודל לפי הוראות "
+                "של יצרן התוסף.",
+            )
+            return
         answer = QMessageBox.question(
             self,
             "התקנת מודל הזיהוי",
@@ -773,12 +797,24 @@ class MainWindow(QMainWindow):
         )
 
     def refresh_engines(self) -> None:
-        """Look for engines that can run and update the registry."""
-        from ..engine.factory import detect_engines
+        """Look for engines that can run and update the registry.
 
-        self.engines = detect_engines()
+        The engines are the OCR plugins the user has.  A plugin that is
+        switched off, or whose model is not installed, is not offered.
+        """
+        self.plugins.load()
+        self.engines = []
+        for plugin in self.plugins.ocr_engines():
+            engine = plugin.object
+            if engine is None:
+                continue
+            self.engines.append(engine)
         if self.engines:
-            self.registry = EngineRegistry(self.engines[0])
+            active = self.plugins.active_engine()
+            chosen = active if active in self.engines else self.engines[0]
+            self.registry = EngineRegistry(chosen)
+        else:
+            self.registry = EngineRegistry()
         self._update_engine_status()
         self._rebuild_engine_menu()
 
@@ -803,9 +839,47 @@ class MainWindow(QMainWindow):
 
     def select_engine(self, engine) -> None:
         self.registry = EngineRegistry(engine)
+        for plugin in self.plugins.by_kind("ocr"):
+            if plugin.object is engine:
+                self.plugins.set_active("ocr", plugin.id)
+                break
         self._update_engine_status()
         self._rebuild_engine_menu()
         self.statusBar().showMessage(f"נבחר מנוע הזיהוי: {getattr(engine, 'name', '')}", 5000)
+
+    # -- the plugins ---------------------------------------------------------
+    def open_plugin_settings(self) -> None:
+        """Open the screen where the plugins are chosen."""
+        from .settings_dialog import SettingsDialog
+
+        dialog = SettingsDialog(self.plugins, self)
+        dialog.changed.connect(self._on_plugins_changed)
+        dialog.exec()
+
+    def _on_plugins_changed(self) -> None:
+        """The user changed the plugins: look at them again."""
+        self.refresh_engines()
+        self._refresh_suggestion_modules()
+
+    def _refresh_suggestion_modules(self) -> None:
+        """The modules of proposals come from the plugins as well."""
+        modules = self.plugins.suggestion_modules()
+        if not modules:
+            return
+        registry = SuggestionRegistry(modules)
+        for kind in ("spelling", "grammar", "style"):
+            registry.set_enabled(kind, self.plugins.kind_enabled(kind))
+        self.suggestion_modules = registry
+        dictionary = self.plugins.settings.option(
+            self._spelling_plugin_id(), "dictionary"
+        )
+        if dictionary:
+            module = self.suggestion_modules.module("spelling")
+            if module is not None:
+                try:
+                    module.set_dictionary(dictionary)
+                except OSError:
+                    pass
 
     def save_text(self) -> None:
         content = self.editor.toPlainText()
@@ -1046,6 +1120,13 @@ class MainWindow(QMainWindow):
         if entry is not None:
             entry.changes = self.suggestions.change_log()
 
+    def _spelling_plugin_id(self) -> str:
+        """The plugin that does the spelling, as the user chose it."""
+        plugin = self.plugins.active("spelling")
+        if plugin is not None:
+            return plugin.id
+        return "spelling-hebrew"
+
     def choose_dictionary(self) -> None:
         """Let the user point at a word list for the spelling module."""
         path, _ = QFileDialog.getOpenFileName(
@@ -1064,6 +1145,10 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             QMessageBox.warning(self, "בחירת מילון", f"לא ניתן לקרוא את המילון: {exc}")
             return
+        # The word list belongs to the spelling plugin, so that it is
+        # remembered with it, and the proposals of the text that is
+        # shown are looked for again.
+        self.plugins.set_option(self._spelling_plugin_id(), "dictionary", path)
         self._refresh_suggestions(self.suggestions)
         self.statusBar().showMessage(
             f"המילון של מודל האיות הוא עכשיו: {path} ({module.word_count} מילים)",
