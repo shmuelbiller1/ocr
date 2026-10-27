@@ -46,6 +46,18 @@ function Write-ExitFile([string]$code, [string]$note) {
         Out-File -Encoding utf8 $exitPath
 }
 
+function Stop-ProcessTree($process) {
+    # The program may have started processes of its own.  They have to
+    # be stopped as well, or they keep the files of the build open after
+    # this script has ended.
+    if ($null -eq $process) { return }
+    try {
+        # taskkill with /T stops the children of the program as well.
+        & taskkill.exe /PID $process.Id /T /F 2>&1 | Out-Null
+    } catch { }
+    try { $process.Kill() } catch { }
+}
+
 $code = $null
 try {
     # The path of the report is given in quotes, because Start-Process
@@ -60,7 +72,7 @@ try {
     # The wait has a limit: a program that does not stop in time is
     # stopped, and the build says that it did not stop.
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-        try { $process.Kill() } catch { }
+        Stop-ProcessTree $process
         Write-ExitFile 'timeout' "the program did not stop within $TimeoutSeconds seconds"
         Write-Output "::error title=Self-test::the packaged executable did not finish within $TimeoutSeconds seconds"
         exit 1
@@ -68,8 +80,31 @@ try {
     $code = $process.ExitCode
 } catch {
     Write-Output "::error title=Self-test::Start-Process failed: $_"
-    cmd /c "`"$exePath`" --selftest --selftest-report `"$reportPath`" > `"$outPath`" 2> `"$errPath`""
-    $code = $LASTEXITCODE
+    # The program is started through cmd, which waits for it and gives
+    # back its exit code.  It is started with Start-Process as well, so
+    # that its process can be stopped when it does not finish in time.
+    $fallback = $null
+    try {
+        $fallback = Start-Process -FilePath 'cmd.exe' `
+            -ArgumentList @('/c', ('"' + $exePath + '" --selftest --selftest-report "' + $reportPath + '"')) `
+            -RedirectStandardOutput $outPath `
+            -RedirectStandardError $errPath `
+            -NoNewWindow `
+            -PassThru `
+            -ErrorAction Stop
+    } catch {
+        cmd /c "`"$exePath`" --selftest --selftest-report `"$reportPath`" > `"$outPath`" 2> `"$errPath`""
+        $code = $LASTEXITCODE
+    }
+    if ($null -ne $fallback) {
+        if (-not $fallback.WaitForExit($TimeoutSeconds * 1000)) {
+            Stop-ProcessTree $fallback
+            Write-ExitFile 'timeout' "the program did not stop within $TimeoutSeconds seconds"
+            Write-Output "::error title=Self-test::the packaged executable did not finish within $TimeoutSeconds seconds"
+            exit 1
+        }
+        $code = $fallback.ExitCode
+    }
 }
 
 if ($null -eq $code) {

@@ -169,6 +169,42 @@ class AccuracyTests(unittest.TestCase):
             self.assertEqual(len(pairs), 1)
             self.assertEqual(pairs[0][0].name, "page.jpg")
 
+    def test_the_number_of_the_words_is_recorded(self) -> None:
+        """The rate of the corpus needs the number of the words."""
+
+        class Result:
+            text = "שלום עולם"
+
+        class Engine:
+            def recognize(self, image):  # noqa: N802 - the name of the engine
+                return Result()
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            image = root / "page.jpg"
+            image.write_bytes(b"jpg")
+            xml = root / "page.xml"
+            xml.write_text(
+                "<PcGts><Page><TextRegion><TextLine>"
+                "<TextEquiv><Unicode>שלום עולם</Unicode></TextEquiv>"
+                "</TextLine></TextRegion></Page></PcGts>",
+                encoding="utf-8",
+            )
+            measured = benchmark.measure_page(Engine(), image, xml, root)
+            self.assertIsNotNone(measured)
+            self.assertEqual(measured["words_reference"], 2)
+            self.assertEqual(measured["word_errors"], 0)
+
+    def test_the_rate_of_the_words_of_the_corpus_weighs_the_pages(self) -> None:
+        """A page with few words does not count as much as a page with many."""
+        results = [
+            {"wer": 1.0, "words_reference": 1, "word_errors": 1},
+            {"wer": 0.0, "words_reference": 100, "word_errors": 0},
+        ]
+        total_words = sum(item["words_reference"] for item in results)
+        total_wer = sum(item["word_errors"] for item in results) / total_words
+        self.assertAlmostEqual(total_wer, 0.0099, places=4)
+
 
 if __name__ == "__main__":
     unittest.main()

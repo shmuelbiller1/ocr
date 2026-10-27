@@ -221,6 +221,8 @@ def measure_page(
     hypothesis = normalise(recognised.text)
     reference_points = normalise(reference_raw, keep_points=True)
     hypothesis_points = normalise(recognised.text, keep_points=True)
+    reference_words = reference.split()
+    hypothesis_words = hypothesis.split()
 
     return {
         "page": image.name,
@@ -232,6 +234,13 @@ def measure_page(
             character_error_rate(reference_points, hypothesis_points), 4
         ),
         "wer": round(word_error_rate(reference, hypothesis), 4),
+        # The number of the words of the ground truth and the number of
+        # the words that were not read right.  The error rate of the
+        # whole corpus is the sum of these over the whole corpus, and
+        # not the average of the rates of the pages: a page with few
+        # words would otherwise count as much as a page with many.
+        "words_reference": len(reference_words),
+        "word_errors": levenshtein(reference_words, hypothesis_words),
         "seconds": round(seconds, 2),
         # A short piece of both texts, so that a report that says
         # "the error rate is 1200%" can be looked at and understood.
@@ -310,7 +319,8 @@ def main(argv: list[str] | None = None) -> int:
     total_cer = sum(
         item["cer"] * item["characters_reference"] for item in results
     ) / max(1, total_reference)
-    total_wer = sum(item["wer"] for item in results) / max(1, len(results))
+    total_words = sum(item["words_reference"] for item in results)
+    total_wer = sum(item["word_errors"] for item in results) / max(1, total_words)
     report = {
         "engine": engine.name,
         "model": str(model_path),

@@ -66,12 +66,18 @@ the artefact `ocr-accuracy-report`.
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate
-pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<2.14"
-pip install "kraken==7.1.1" "pillow==11.3.0"
-python tools/download_model.py --model kraken-ppocrv6-small
-python tools/benchmark_ocr.py --model small.safetensors --pages 10
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
+pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
+python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models
+python tools/benchmark_ocr.py --model .cache/models/small.safetensors --download --cache .cache/pinkas --pages 10
 ```
+
+The pair of `torch` and `torchvision` has to be a matching pair from the
+same place: `kraken` asks for `torch<=2.14`, and the `torchvision` that
+belongs to `torch` 2.14.1 asks for `torch` 2.14.1, so the two do not fit
+together and the recognition dies with `operator torchvision::nms does
+not exist`.  `python tools/check_engine.py` says whether the pair works.
 
 ## How the numbers are computed
 
@@ -83,5 +89,9 @@ python tools/benchmark_ocr.py --model small.safetensors --pages 10
 * The character error rate is the Levenshtein distance between the two
   strings, divided by the length of the ground truth.
 * The word error rate is the same measure on whitespace separated words.
+  The rate of the whole corpus is the number of the words that were not
+  read right over the number of the words of the ground truth, and not
+  the average of the rates of the pages, so that a page with few words
+  does not count as much as a page with many.
 * Nothing is post-processed: the text the engine produced is compared as
   it is.
