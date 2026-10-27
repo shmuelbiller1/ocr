@@ -90,7 +90,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
       - name: Run the test suite
-        run: python -m unittest discover -s tests -t . -v
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -t . -v 2>&1 |
+            Tee-Object -FilePath test-output.txt
+          if ($LASTEXITCODE -ne 0) { throw 'the test suite did not pass' }
       - name: Install packaging tool
         run: python -m pip install pyinstaller==6.16.0
       - name: Build Windows executable
@@ -160,7 +164,7 @@ jobs:
         run: |
           Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py --branch=ci/diagnostics build-windows.log build-console.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt
+          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-console.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
