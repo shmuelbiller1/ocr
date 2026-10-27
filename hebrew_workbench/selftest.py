@@ -74,6 +74,8 @@ def _check_imports(report: _Report) -> None:
 
 
 def _check_engine_contract(report: _Report) -> None:
+    import tempfile
+
     from .engine.base import EngineUnavailable, OCRResult
     from .engine.registry import EngineRegistry
 
@@ -87,31 +89,39 @@ def _check_engine_contract(report: _Report) -> None:
         pass
     except Exception as exc:
         problems.append(f"missing files must raise FileNotFoundError, got {exc!r}")
-    try:
-        registry.transcribe(__file__)
-    except EngineUnavailable:
-        pass
-    except Exception as exc:
-        problems.append(f"an unavailable engine must raise EngineUnavailable, got {exc!r}")
-    else:
-        problems.append("an unavailable engine must raise EngineUnavailable")
 
-    class _Fake:
-        name = "self-test adapter"
+    # A real file on disk is needed: inside a packaged build ``__file__``
+    # points into the archive and does not exist as a path.
+    with tempfile.TemporaryDirectory() as folder:
+        sample = Path(folder) / "sample.png"
+        sample.write_bytes(b"not really a png")
+        try:
+            registry.transcribe(sample)
+        except EngineUnavailable:
+            pass
+        except Exception as exc:
+            problems.append(
+                f"an unavailable engine must raise EngineUnavailable, got {exc!r}"
+            )
+        else:
+            problems.append("an unavailable engine must raise EngineUnavailable")
 
-        def available(self) -> bool:
-            return True
+        class _Fake:
+            name = "self-test adapter"
 
-        def recognize(self, file_path: Path) -> OCRResult:
-            return OCRResult("שלום", self.name)
+            def available(self) -> bool:
+                return True
 
-    try:
-        result = EngineRegistry(_Fake()).transcribe(__file__)
-    except Exception as exc:
-        problems.append(f"a working adapter must produce a result, got {exc!r}")
-    else:
-        if result.text != "שלום" or result.engine_name != "self-test adapter":
-            problems.append("a working adapter must return its own result untouched")
+            def recognize(self, file_path: Path) -> OCRResult:
+                return OCRResult("שלום", self.name)
+
+        try:
+            result = EngineRegistry(_Fake()).transcribe(sample)
+        except Exception as exc:
+            problems.append(f"a working adapter must produce a result, got {exc!r}")
+        else:
+            if result.text != "שלום" or result.engine_name != "self-test adapter":
+                problems.append("a working adapter must return its own result untouched")
     report.add(
         "engine-contract",
         not problems,
