@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
 from PySide6.QtWidgets import (
     QApplication,
@@ -46,6 +46,7 @@ from ..exporting import ExportError, build_print_document, print_document, write
 from ..project import PROJECT_SUFFIX, Project
 from ..resources import samples_directory
 from .preview_pane import PreviewPane
+from .tasks import TaskThread
 
 __all__ = ["MainWindow", "run", "SUPPORTED_SUFFIXES"]
 
@@ -70,7 +71,9 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.project = Project()
         self.registry = EngineRegistry()
+        self.engines: list = []
         self._loading = False
+        self.task: TaskThread | None = None
 
         self.setWindowTitle(f"{APP_NAME} {__version__}")
         self.resize(1280, 820)
@@ -82,7 +85,7 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self._build_status_bar()
         self._sync_document_list()
-        self._update_engine_status()
+        self.refresh_engines()
 
     # -- construction ------------------------------------------------------
     def _build_central(self) -> None:
@@ -197,6 +200,13 @@ class MainWindow(QMainWindow):
         self.engine_status_action = QAction("מצב המנועים...", self)
         self.engine_status_action.triggered.connect(self.show_engine_status)
 
+        self.install_engine_action = QAction("התקנת מודל הזיהוי...", self)
+        self.install_engine_action.triggered.connect(self.install_model)
+
+        self.cancel_action = QAction("ביטול המשימה", self)
+        self.cancel_action.triggered.connect(self.cancel_task)
+        self.cancel_action.setEnabled(False)
+
         self.samples_action = QAction("פתיחת דוגמאות", self)
         self.samples_action.triggered.connect(self.open_samples)
 
@@ -227,7 +237,10 @@ class MainWindow(QMainWindow):
 
         tools_menu = self.menuBar().addMenu("כלים")
         tools_menu.addAction(self.run_ocr_action)
+        tools_menu.addAction(self.cancel_action)
         tools_menu.addSeparator()
+        self.engine_menu = tools_menu.addMenu("מנוע הזיהוי")
+        tools_menu.addAction(self.install_engine_action)
         tools_menu.addAction(self.engine_status_action)
 
         help_menu = self.menuBar().addMenu("עזרה")
@@ -488,26 +501,152 @@ class MainWindow(QMainWindow):
         if entry is None:
             QMessageBox.information(self, "הרצת OCR", "יש לבחור מסמך לפני הרצת OCR.")
             return
+        if self.task is not None and self.task.isRunning():
+            QMessageBox.information(self, "הרצת OCR", "כבר מתבצעת משימה.")
+            return
+        if not self.registry.available():
+            answer = QMessageBox.question(
+                self,
+                "OCR לא זמין",
+                "לא מותקן מנוע זיהוי עבור עברית.\n\n"
+                "האם להתקין כעת את מודל הזיהוי? "
+                "ההתקנה מורידה קובץ מודל (כ-13MB) ובודקת את שלמותו.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if answer == QMessageBox.Yes:
+                self.install_model()
+            return
+
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
-        try:
-            result = self.registry.transcribe(entry.file_path)
-        except Exception as exc:
-            self.statusBar().showMessage("לא בוצעה זיהוי. הטקסט נשאר כפי שהיה.", 8000)
-            QMessageBox.warning(self, "OCR לא זמין", str(exc))
-            return
-        finally:
-            self.progress.setVisible(False)
-            self.progress.setRange(0, 1)
+        self.cancel_action.setEnabled(True)
+        self.run_ocr_action.setEnabled(False)
+
+        def work(progress, cancel):
+            return self.registry.transcribe(entry.file_path, progress=progress, cancel=cancel)
+
+        self.task = TaskThread(work, self)
+        self.task.progress.connect(self._on_task_progress)
+        self.task.succeeded.connect(self._on_ocr_done)
+        self.task.failed.connect(self._on_task_failed)
+        self.task.finished.connect(self._on_task_finished)
+        self.task.start()
+
+    def _on_task_progress(self, message: str) -> None:
+        self.statusBar().showMessage(message)
+
+    def _on_ocr_done(self, result) -> None:
+        entry = self._current_entry()
         self._loading = True
         self.editor.setPlainText(result.text)
         self._loading = False
-        entry.transcription = result.text
-        entry.engine_name = result.engine_name
+        if entry is not None:
+            entry.transcription = result.text
+            entry.engine_name = result.engine_name
         self.statusBar().showMessage(
-            f"הזיהוי בוצע באמצעות {result.engine_name}. יש לבדוק כל שורה לפני הייצוא.",
-            8000,
+            f"הזיהוי בוצע באמצעות {result.engine_name} ב-{result.duration_seconds:.1f} שניות. "
+            "יש לבדוק כל שורה לפני הייצוא.",
+            10000,
         )
+
+    def _on_task_failed(self, message: str) -> None:
+        self.statusBar().showMessage("המשימה לא הושלמה. הטקסט נשאר כפי שהיה.", 8000)
+        QMessageBox.warning(self, "המשימה נכשלה", message)
+
+    def _on_task_finished(self) -> None:
+        self.progress.setVisible(False)
+        self.progress.setRange(0, 1)
+        self.cancel_action.setEnabled(False)
+        self.run_ocr_action.setEnabled(True)
+        self.task = None
+
+    def cancel_task(self) -> None:
+        if self.task is not None and self.task.isRunning():
+            self.task.cancel()
+            self.statusBar().showMessage("מבטלים את המשימה...", 4000)
+
+    def install_model(self) -> None:
+        """Download the recognition model after asking the user."""
+        from ..engine.models import MODEL_ARTIFACTS, InstallError, install_artifact
+
+        artifact = MODEL_ARTIFACTS["kraken-ppocrv6-small"]
+        answer = QMessageBox.question(
+            self,
+            "התקנת מודל הזיהוי",
+            f"{artifact.summary()}\n\n"
+            "האם להוריד את המודל עכשיו?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if answer != QMessageBox.Yes:
+            return
+
+        self.progress.setVisible(True)
+        self.progress.setRange(0, 0)
+        self.cancel_action.setEnabled(False)
+
+        def work(progress, cancel):
+            def report(done, total):
+                if total:
+                    progress(f"מוריד את המודל: {done * 100 // total}%")
+                else:
+                    progress(f"מוריד את המודל: {done // (1024 * 1024)}MB")
+
+            return install_artifact(artifact, progress=report)
+
+        self.task = TaskThread(work, self)
+        self.task.progress.connect(self._on_task_progress)
+        self.task.succeeded.connect(self._on_model_installed)
+        self.task.failed.connect(self._on_task_failed)
+        self.task.finished.connect(self._on_task_finished)
+        self.task.start()
+
+    def _on_model_installed(self, path) -> None:
+        self.refresh_engines()
+        self.statusBar().showMessage(f"המודל הותקן: {path}", 8000)
+        QMessageBox.information(
+            self,
+            "המודל הותקן",
+            f"המודל הותקן בהצלחה:\n{path}\n\n"
+            "אפשר להריץ זיהוי עכשיו. יש לבדוק את התוצאה שורה שורה - "
+            "הזיהוי אינו מושלם ואינו מחליף את בדיקת המורה.",
+        )
+
+    def refresh_engines(self) -> None:
+        """Look for engines that can run and update the registry."""
+        from ..engine.factory import detect_engines
+
+        self.engines = detect_engines()
+        if self.engines:
+            self.registry = EngineRegistry(self.engines[0])
+        self._update_engine_status()
+        self._rebuild_engine_menu()
+
+    def _rebuild_engine_menu(self) -> None:
+        menu = getattr(self, "engine_menu", None)
+        if menu is None:
+            return
+        menu.clear()
+        if not self.engines:
+            action = QAction("לא מותקן מנוע זיהוי", self)
+            action.setEnabled(False)
+            menu.addAction(action)
+            return
+        group = QActionGroup(self)
+        for index, engine in enumerate(self.engines):
+            action = QAction(getattr(engine, "name", f"מנוע {index + 1}"), self)
+            action.setCheckable(True)
+            action.setChecked(engine is self.registry.engine)
+            action.triggered.connect(lambda _checked=False, e=engine: self.select_engine(e))
+            group.addAction(action)
+            menu.addAction(action)
+
+    def select_engine(self, engine) -> None:
+        self.registry = EngineRegistry(engine)
+        self._update_engine_status()
+        self._rebuild_engine_menu()
+        self.statusBar().showMessage(f"נבחר מנוע הזיהוי: {getattr(engine, 'name', '')}", 5000)
 
     def save_text(self) -> None:
         content = self.editor.toPlainText()
@@ -629,6 +768,9 @@ class MainWindow(QMainWindow):
         )
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        if self.task is not None and self.task.isRunning():
+            self.task.cancel()
+            self.task.wait(3000)
         self._store_editor_text()
         self.preview.close_document()
         event.accept()
