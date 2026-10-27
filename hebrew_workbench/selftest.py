@@ -165,6 +165,76 @@ def _check_gui(report: _Report) -> None:
     )
 
 
+def _check_preview(report: _Report) -> None:
+    """Make sure the document preview really works in this build.
+
+    This is the check that catches a packaging mistake: when PDFium or
+    Pillow is missing from the executable, the preview fails while
+    everything else still looks fine.
+    """
+    import base64
+    import tempfile
+
+    try:
+        from .preview.loader import DocumentPreview, PreviewError
+    except Exception as exc:  # pragma: no cover - defensive
+        report.add("preview", False, f"the preview module could not be imported: {exc}")
+        return
+
+    problems = []
+    # A 1x1 PNG, so that the check does not depend on Pillow being able to
+    # write a file.
+    tiny_png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmM"
+        "IQAAAABJRU5ErkJggg=="
+    )
+    with tempfile.TemporaryDirectory() as folder:
+        sample = Path(folder) / "tiny.png"
+        sample.write_bytes(tiny_png)
+        try:
+            with DocumentPreview(sample) as preview:
+                page = preview.render(1)
+                if page.image.width < 1:
+                    problems.append("the rendered page is empty")
+        except PreviewError as exc:
+            problems.append(f"an image could not be previewed: {exc}")
+        except Exception as exc:
+            problems.append(f"the image preview crashed: {exc!r}")
+
+    from .resources import samples_directory
+
+    samples = samples_directory()
+    if samples is None:
+        report.add(
+            "preview",
+            not problems,
+            "; ".join(problems)
+            if problems
+            else "images preview correctly (the sample folder is not bundled here)",
+        )
+        return
+
+    pdf = samples / "two_pages.pdf"
+    if pdf.exists():
+        try:
+            with DocumentPreview(pdf) as preview:
+                if preview.page_count != 2:
+                    problems.append(
+                        f"the sample PDF should have two pages, it has {preview.page_count}"
+                    )
+                preview.render(2)
+        except Exception as exc:
+            problems.append(f"the sample PDF could not be previewed: {exc!r}")
+    else:
+        problems.append("the sample PDF is missing from the bundle")
+
+    report.add(
+        "preview",
+        not problems,
+        "; ".join(problems) if problems else "images and PDF pages preview correctly",
+    )
+
+
 def run_checks() -> list[CheckResult]:
     """Run every staged check and return the individual results."""
     report = _Report()
@@ -176,6 +246,7 @@ def run_checks() -> list[CheckResult]:
     for name, check in (
         ("core-imports", _check_imports),
         ("engine-contract", _check_engine_contract),
+        ("preview", _check_preview),
         ("gui-startup", _check_gui),
     ):
         try:

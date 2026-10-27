@@ -81,6 +81,7 @@ jobs:
       - name: Build Windows executable
         run: >-
           python -m PyInstaller --noconfirm --clean --onefile --windowed
+          --add-data "samples;samples"
           --name HebrewNotesWorkbench app.py
       - name: Verify the executable exists
         shell: pwsh

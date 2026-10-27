@@ -32,13 +32,16 @@ Hebrew-script notes into editable, printable documents.
 | Import scanned documents | **Works** | Files and folders; PDF, PNG, JPEG, BMP, TIFF, WebP; original files are opened read-only |
 | Document list management | **Works** | Add, remove, clear; the files on disk are never touched |
 | Editable transcription pane | **Works** | Per-document text, undo/redo, kept separately for every document |
-| Save text as `.txt` | **Works** | UTF-8 with BOM so Windows editors show Hebrew correctly |
+| Page preview | **Works** | PDF and images, zoom, rotate, first/previous/next/last page, fit to window |
+| Keep the work (project file) | **Works** | `File > Save project` writes a `.hwproj` file; `File > Open project` loads it again |
+| Export `.txt` | **Works** | UTF-8 with BOM so Windows editors show Hebrew correctly |
+| Export `.docx` | **Works** | Word document with right-to-left paragraphs |
+| Print | **Works** | Print dialog with the Windows printers, print preview, and "save as PDF" |
+| Sample pages | **Works** | `File > Open samples` loads the synthetic pages from `samples/` |
 | OCR engine slot | **Fails closed on purpose** | `Run OCR` reports that no engine is installed and changes nothing |
-| PDF/image preview | **Not implemented** | Planned as the next step |
-| Spelling / grammar / `לשון הספר` | **Not implemented** | Planned as separate, opt-in modules with a review step |
-| Project save/load (keep the work) | **Not implemented** | The data model exists (`hebrew_workbench/project.py`), the menu entry does not |
-| Print | **Not implemented** | Planned together with the preview |
 | Handwriting recognition with a real model | **Not implemented** | Planned with one licensed, pretrained model |
+| Spelling / grammar / `לשון הספר` | **Not implemented** | Planned as separate, opt-in modules with a review step |
+| Text search inside the document | **Not implemented** | Planned |
 
 ## Running it from source
 
@@ -79,10 +82,15 @@ pyinstaller --noconfirm --clean --onefile --windowed --name HebrewNotesWorkbench
 app.py                        launcher (--selftest, --version)
 hebrew_workbench/
     engine/                   replaceable OCR adapters (base contract + registry)
-    ui/                       the Qt main window
+    preview/                  offline rendering of PDF pages and images
+    ui/                       the Qt main window and the preview pane
+    exporting.py              TXT, DOCX and printing helpers
     project.py                workspace model: documents + their transcriptions
+    resources.py              finding the files that ship with the application
     selftest.py               staged checks used by the packaging job
+samples/                      synthetic test pages (no real documents)
 tests/                        unit tests (standard library unittest)
+tools/make_samples.py         regenerates the sample pages
 docs/                         build plan, licenses, accuracy reports
 ```
 

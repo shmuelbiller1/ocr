@@ -14,10 +14,12 @@ The window deliberately keeps every action reversible:
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QAction, QKeySequence, QTextOption
+from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -40,7 +42,10 @@ from PySide6.QtWidgets import (
 
 from .. import APP_NAME, __version__
 from ..engine.registry import EngineRegistry
-from ..project import Project
+from ..exporting import ExportError, build_print_document, print_document, write_docx
+from ..project import PROJECT_SUFFIX, Project
+from ..resources import samples_directory
+from .preview_pane import PreviewPane
 
 __all__ = ["MainWindow", "run", "SUPPORTED_SUFFIXES"]
 
@@ -68,7 +73,7 @@ class MainWindow(QMainWindow):
         self._loading = False
 
         self.setWindowTitle(f"{APP_NAME} {__version__}")
-        self.resize(1180, 780)
+        self.resize(1280, 820)
         self.setLayoutDirection(Qt.RightToLeft)
 
         self._build_central()
@@ -107,13 +112,16 @@ class MainWindow(QMainWindow):
         buttons.addWidget(remove_button)
         buttons.addWidget(clear_button)
 
-        left = QWidget()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(8, 8, 8, 8)
-        left_layout.addWidget(QLabel("<b>מסמכים</b>"))
-        left_layout.addWidget(self.doc_list, 1)
-        left_layout.addWidget(self.doc_path_label)
-        left_layout.addLayout(buttons)
+        documents = QWidget()
+        documents_layout = QVBoxLayout(documents)
+        documents_layout.setContentsMargins(8, 8, 8, 8)
+        documents_layout.addWidget(QLabel("<b>מסמכים</b>"))
+        documents_layout.addWidget(self.doc_list, 1)
+        documents_layout.addWidget(self.doc_path_label)
+        documents_layout.addLayout(buttons)
+
+        self.preview = PreviewPane()
+        self.preview.setToolTip("תצוגה מקדימה של הדף הנבחר")
 
         self.editor = QPlainTextEdit()
         self.editor.setPlaceholderText(
@@ -129,16 +137,17 @@ class MainWindow(QMainWindow):
             "הטקסט המוקלד. המקור נשמר בנפרד ולא נדרס על ידי הצעות תיקון."
         )
 
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(8, 8, 8, 8)
-        right_layout.addWidget(QLabel("<b>תמלול</b>"))
-        right_layout.addWidget(self.editor, 1)
+        work = QSplitter(Qt.Vertical)
+        work.setChildrenCollapsible(False)
+        work.addWidget(self.preview)
+        work.addWidget(self.editor)
+        work.setStretchFactor(0, 3)
+        work.setStretchFactor(1, 2)
 
-        splitter.addWidget(left)
-        splitter.addWidget(right)
+        splitter.addWidget(documents)
+        splitter.addWidget(work)
         splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 3)
+        splitter.setStretchFactor(1, 4)
         self.setCentralWidget(splitter)
 
     def _build_actions(self) -> None:
@@ -161,11 +170,35 @@ class MainWindow(QMainWindow):
         self.run_ocr_action.triggered.connect(self.run_ocr)
 
         self.save_text_action = QAction("שמירת הטקסט...", self)
-        self.save_text_action.setShortcut(QKeySequence.Save)
+        self.save_text_action.setShortcut(QKeySequence("Ctrl+S"))
         self.save_text_action.triggered.connect(self.save_text)
+
+        self.save_project_action = QAction("שמירת פרויקט...", self)
+        self.save_project_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
+        self.save_project_action.triggered.connect(self.save_project)
+
+        self.open_project_action = QAction("פתיחת פרויקט...", self)
+        self.open_project_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        self.open_project_action.triggered.connect(self.open_project)
+
+        self.export_docx_action = QAction("ייצוא ל-Word (DOCX)...", self)
+        self.export_docx_action.triggered.connect(self.export_docx)
+
+        self.print_action = QAction("הדפסה...", self)
+        self.print_action.setShortcut(QKeySequence("Ctrl+P"))
+        self.print_action.triggered.connect(self.print_document)
+
+        self.print_preview_action = QAction("תצוגה מקדימה להדפסה...", self)
+        self.print_preview_action.triggered.connect(self.print_preview)
+
+        self.print_pdf_action = QAction("שמירה כ-PDF להדפסה...", self)
+        self.print_pdf_action.triggered.connect(self.print_to_pdf)
 
         self.engine_status_action = QAction("מצב המנועים...", self)
         self.engine_status_action.triggered.connect(self.show_engine_status)
+
+        self.samples_action = QAction("פתיחת דוגמאות", self)
+        self.samples_action.triggered.connect(self.open_samples)
 
         self.quit_action = QAction("יציאה", self)
         self.quit_action.setShortcut(QKeySequence.Quit)
@@ -175,11 +208,20 @@ class MainWindow(QMainWindow):
         file_menu = self.menuBar().addMenu("קובץ")
         file_menu.addAction(self.add_files_action)
         file_menu.addAction(self.add_folder_action)
+        file_menu.addAction(self.samples_action)
         file_menu.addSeparator()
         file_menu.addAction(self.remove_action)
         file_menu.addAction(self.clear_action)
         file_menu.addSeparator()
+        file_menu.addAction(self.open_project_action)
+        file_menu.addAction(self.save_project_action)
+        file_menu.addSeparator()
         file_menu.addAction(self.save_text_action)
+        file_menu.addAction(self.export_docx_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.print_action)
+        file_menu.addAction(self.print_preview_action)
+        file_menu.addAction(self.print_pdf_action)
         file_menu.addSeparator()
         file_menu.addAction(self.quit_action)
 
@@ -206,6 +248,9 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.run_ocr_action)
         toolbar.addSeparator()
         toolbar.addAction(self.save_text_action)
+        toolbar.addAction(self.save_project_action)
+        toolbar.addSeparator()
+        toolbar.addAction(self.print_action)
         toolbar.addSeparator()
         toolbar.addAction(self.engine_status_action)
         self._refresh_toolbar_icons(style)
@@ -216,6 +261,8 @@ class MainWindow(QMainWindow):
             self.add_folder_action: QStyle.SP_DirOpenIcon,
             self.run_ocr_action: QStyle.SP_MediaPlay,
             self.save_text_action: QStyle.SP_DialogSaveButton,
+            self.save_project_action: QStyle.SP_DriveHDIcon,
+            self.print_action: QStyle.SP_DialogApplyButton,
             self.engine_status_action: QStyle.SP_FileDialogDetailedView,
         }
         for action, icon in mapping.items():
@@ -259,7 +306,18 @@ class MainWindow(QMainWindow):
             f"מנוע OCR: {self.registry.engine.name}"
             + ("" if available else " — אין מנוע מותקן, לא בוצעה זיהוי")
         )
-        self.run_ocr_action.setEnabled(True)
+
+    def _current_entry(self):
+        row = self.doc_list.currentRow()
+        if 0 <= row < len(self.project):
+            return self.project[row]
+        return None
+
+    def _current_text(self) -> str:
+        entry = self._current_entry()
+        if entry is not None:
+            return entry.transcription
+        return self.editor.toPlainText()
 
     # -- document handling -------------------------------------------------
     def add_documents(self) -> None:
@@ -276,6 +334,30 @@ class MainWindow(QMainWindow):
         folder_path = Path(folder)
         files = sorted(p for p in folder_path.iterdir() if p.is_file())
         self.add_paths([str(p) for p in files])
+
+    @staticmethod
+    def samples_directory() -> Path | None:
+        """Find the folder with the sample pages, if it is available."""
+        return samples_directory()
+
+    def open_samples(self) -> None:
+        folder = self.samples_directory()
+        if folder is None:
+            QMessageBox.information(
+                self,
+                "דוגמאות",
+                "תיקיית הדוגמאות לא נמצאה. היא נמצאת בתיקיית samples שבמקור היישום.",
+            )
+            return
+        files = sorted(
+            str(path)
+            for path in folder.iterdir()
+            if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES
+        )
+        if not files:
+            QMessageBox.information(self, "דוגמאות", "בתיקיית הדוגמאות אין קבצים.")
+            return
+        self.add_paths(files)
 
     def add_paths(self, paths) -> None:
         added = 0
@@ -310,6 +392,7 @@ class MainWindow(QMainWindow):
             if 0 <= row < len(self.project):
                 self.project.remove(row)
         self._sync_document_list()
+        self.preview.set_document(None)
         self.statusBar().showMessage(f"הוסרו {len(rows)} מסמכים מהרשימה.", 5000)
 
     def clear_documents(self) -> None:
@@ -326,6 +409,7 @@ class MainWindow(QMainWindow):
             return
         self.project.clear()
         self._sync_document_list()
+        self.preview.set_document(None)
         self.editor.clear()
         self.statusBar().showMessage("הרשימה נוקתה. הקבצים על הדיסק לא נגעו.", 5000)
 
@@ -334,12 +418,14 @@ class MainWindow(QMainWindow):
         if not (0 <= row < len(self.project)):
             self.editor.clear()
             self.doc_path_label.setText("לא נבחר מסמך")
+            self.preview.set_document(None)
             return
         entry = self.project[row]
         self._loading = True
         self.editor.setPlainText(entry.transcription)
         self._loading = False
         self.doc_path_label.setText(entry.path)
+        self.preview.set_document(entry.path)
 
     def _on_editor_changed(self) -> None:
         if self._loading:
@@ -351,13 +437,57 @@ class MainWindow(QMainWindow):
         if 0 <= row < len(self.project):
             self.project[row].transcription = self.editor.toPlainText()
 
+    # -- projects ----------------------------------------------------------
+    def save_project(self) -> None:
+        self._store_editor_text()
+        suggested = "פרויקט" + PROJECT_SUFFIX
+        if self.project.path:
+            suggested = str(self.project.path)
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "שמירת פרויקט",
+            suggested,
+            f"פרויקט העבודה (*{PROJECT_SUFFIX});;כל הקבצים (*.*)",
+        )
+        if not path:
+            return
+        try:
+            saved = self.project.save(path)
+        except OSError as exc:
+            QMessageBox.warning(self, "שמירת הפרויקט", f"לא ניתן לשמור: {exc}")
+            return
+        self.statusBar().showMessage(f"הפרויקט נשמר: {saved}", 6000)
+
+    def open_project(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "פתיחת פרויקט",
+            "",
+            f"פרויקט העבודה (*{PROJECT_SUFFIX});;כל הקבצים (*.*)",
+        )
+        if not path:
+            return
+        try:
+            project = Project.load(path)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "פתיחת הפרויקט", f"לא ניתן לפתוח: {exc}")
+            return
+        self.project = project
+        self._sync_document_list()
+        self.preview.set_document(None)
+        self.editor.clear()
+        if len(self.project):
+            self.doc_list.setCurrentRow(0)
+        self.statusBar().showMessage(
+            f"נפתח הפרויקט {Path(path).name} עם {len(self.project)} מסמכים.", 6000
+        )
+
     # -- actions -----------------------------------------------------------
     def run_ocr(self) -> None:
-        row = self.doc_list.currentRow()
-        if not (0 <= row < len(self.project)):
+        entry = self._current_entry()
+        if entry is None:
             QMessageBox.information(self, "הרצת OCR", "יש לבחור מסמך לפני הרצת OCR.")
             return
-        entry = self.project[row]
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
         try:
@@ -372,8 +502,8 @@ class MainWindow(QMainWindow):
         self._loading = True
         self.editor.setPlainText(result.text)
         self._loading = False
-        self.project[row].transcription = result.text
-        self.project[row].engine_name = result.engine_name
+        entry.transcription = result.text
+        entry.engine_name = result.engine_name
         self.statusBar().showMessage(
             f"הזיהוי בוצע באמצעות {result.engine_name}. יש לבדוק כל שורה לפני הייצוא.",
             8000,
@@ -396,8 +526,95 @@ class MainWindow(QMainWindow):
         target = Path(path)
         if target.suffix.lower() != ".txt":
             target = target.with_suffix(".txt")
-        target.write_text(content, encoding="utf-8-sig")
+        try:
+            write_txt(target, content)
+        except ExportError as exc:
+            QMessageBox.warning(self, "שמירת הטקסט", str(exc))
+            return
         self.statusBar().showMessage(f"נשמר: {target}", 6000)
+
+    def export_docx(self) -> None:
+        content = self.editor.toPlainText()
+        if not content.strip():
+            QMessageBox.information(
+                self, "ייצוא ל-Word", "אין טקסט לייצוא."
+            )
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "ייצוא ל-Word", "תמלול.docx", "מסמך Word (*.docx);;כל הקבצים (*.*)"
+        )
+        if not path:
+            return
+        target = Path(path)
+        if target.suffix.lower() != ".docx":
+            target = target.with_suffix(".docx")
+        try:
+            write_docx(target, content)
+        except ExportError as exc:
+            QMessageBox.warning(self, "ייצוא ל-Word", str(exc))
+            return
+        self.statusBar().showMessage(f"נוצר קובץ: {target}", 6000)
+
+    # -- printing ----------------------------------------------------------
+    def _printer(self) -> QPrinter:
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setDocName(APP_NAME)
+        printer.setPageSize(QPrinter.A4)
+        printer.setPageMargins(15, 15, 15, 15, QPrinter.Millimeter)
+        printer.setFullPage(False)
+        return printer
+
+    def print_document(self) -> None:
+        content = self.editor.toPlainText()
+        if not content.strip():
+            QMessageBox.information(self, "הדפסה", "אין טקסט להדפסה.")
+            return
+        printer = self._printer()
+        dialog = QPrintDialog(printer, self)
+        dialog.setWindowTitle("הדפסת התמלול")
+        if dialog.exec() != QPrintDialog.Accepted:
+            return
+        try:
+            print_document(build_print_document(content), printer)
+        except ExportError as exc:
+            QMessageBox.warning(self, "הדפסה", str(exc))
+            return
+        self.statusBar().showMessage("המסמך נשלח למדפסת.", 6000)
+
+    def print_preview(self) -> None:
+        content = self.editor.toPlainText()
+        if not content.strip():
+            QMessageBox.information(self, "תצוגה מקדימה", "אין טקסט להציג.")
+            return
+        printer = self._printer()
+        dialog = QPrintPreviewDialog(printer, self)
+        dialog.setWindowTitle("תצוגה מקדימה להדפסה")
+        dialog.resize(900, 700)
+        document = build_print_document(content)
+        dialog.paintRequested.connect(lambda target: document.print_(target))
+        dialog.exec()
+
+    def print_to_pdf(self) -> None:
+        content = self.editor.toPlainText()
+        if not content.strip():
+            QMessageBox.information(self, "שמירה כ-PDF", "אין טקסט לשמור.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "שמירה כ-PDF", "תמלול.pdf", "מסמך PDF (*.pdf);;כל הקבצים (*.*)"
+        )
+        if not path:
+            return
+        target = Path(path)
+        if target.suffix.lower() != ".pdf":
+            target = target.with_suffix(".pdf")
+        printer = self._printer()
+        printer.setOutputFileName(str(target))
+        try:
+            print_document(build_print_document(content), printer)
+        except ExportError as exc:
+            QMessageBox.warning(self, "שמירה כ-PDF", str(exc))
+            return
+        self.statusBar().showMessage(f"נוצר קובץ: {target}", 6000)
 
     def show_engine_status(self) -> None:
         QMessageBox.information(self, "מצב המנועים", self.registry.status())
@@ -413,6 +630,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt naming
         self._store_editor_text()
+        self.preview.close_document()
         event.accept()
 
 
