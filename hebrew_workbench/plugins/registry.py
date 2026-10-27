@@ -221,6 +221,9 @@ class PluginRegistry:
             plugin = self.active(kind)
             if plugin is None:
                 continue
+            if plugin.object is None:
+                # A plugin that could not be built has no module.
+                continue
             modules.append(plugin.object)
         return modules
 

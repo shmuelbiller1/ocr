@@ -6,7 +6,9 @@ needs one asks for it here.
 
 from __future__ import annotations
 
+import atexit
 import os
+import shutil
 import sys
 import tempfile
 
@@ -15,10 +17,13 @@ if sys.platform.startswith("linux"):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 # The tests must not read or write the data of the user, so the
-# plugins and their settings go into a temporary folder.
-os.environ.setdefault(
-    "HEBREW_WORKBENCH_HOME", tempfile.mkdtemp(prefix="hebrew-workbench-tests-")
-)
+# plugins and their settings go into a temporary folder.  The folder is
+# made only when it is needed, and it is thrown away when the tests are
+# over.
+if "HEBREW_WORKBENCH_HOME" not in os.environ:
+    _TEST_HOME = tempfile.mkdtemp(prefix="hebrew-workbench-tests-")
+    os.environ["HEBREW_WORKBENCH_HOME"] = _TEST_HOME
+    atexit.register(shutil.rmtree, _TEST_HOME, True)
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 

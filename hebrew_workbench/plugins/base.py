@@ -142,7 +142,7 @@ class PluginManifest:
     # -- the rules ---------------------------------------------------------
     def validate(self) -> None:
         """Check the manifest, and say what is wrong with it."""
-        if not self.id or any(
+        if not self.id or self.id in {".", ".."} or any(
             character not in "abcdefghijklmnopqrstuvwxyz"
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
             for character in self.id

@@ -332,5 +332,74 @@ class SuggestionModuleIdTests(unittest.TestCase):
         self.assertFalse(registry.is_enabled("grammar"))
 
 
+class DangerousIdentifierTests(unittest.TestCase):
+    """An identifier may never lead outside of the folder of the plugins."""
+
+    def test_the_identifier_of_a_folder_is_refused(self) -> None:
+        for name in (".", ".."):
+            with self.assertRaises(PluginError):
+                PluginManifest.from_dict({**MANIFEST, "id": name})
+
+    def test_the_installer_refuses_to_leave_its_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            installer = PluginInstaller(Path(folder) / "plugins")
+            for name in (".", ".."):
+                with self.assertRaises(PluginError):
+                    installer.plugin_folder(name)
+                with self.assertRaises(PluginError):
+                    installer.remove(name)
+
+
+class IsolationTests(unittest.TestCase):
+    """The code of a plugin does not take the place of anything else."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name) / "plugins"
+        self.source = Path(self.temporary.name) / "source"
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _install(self, name: str, code: str) -> None:
+        manifest = {**MANIFEST, "id": name, "entry": "example_engine:ExampleEngine"}
+        folder = self.source / name
+        make_plugin_folder(folder, manifest=manifest, code=code)
+        PluginInstaller(self.root).install_folder(folder)
+
+    def test_two_plugins_with_the_same_module_name_do_not_mix(self) -> None:
+        self._install("first", PLUGIN_CODE.replace("Example engine", "The first one"))
+        self._install("second", PLUGIN_CODE.replace("Example engine", "The second one"))
+        registry = PluginRegistry(root=self.root)
+        first = registry.get("first")
+        second = registry.get("second")
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertEqual(first.object.name, "The first one")
+        self.assertEqual(second.object.name, "The second one")
+
+    def test_a_file_of_a_plugin_does_not_hide_a_module_of_the_program(self) -> None:
+        manifest = {**MANIFEST, "id": "shadow", "entry": "json:ExampleEngine"}
+        folder = self.source / "shadow"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "plugin.json").write_text(
+            json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+        )
+        (folder / "json.py").write_text(
+            'raise RuntimeError("this file must not be imported")', encoding="utf-8"
+        )
+        PluginInstaller(self.root).install_folder(folder)
+        registry = PluginRegistry(root=self.root)
+        plugin = registry.get("shadow")
+        self.assertIsNotNone(plugin)
+        # The plugin could not be started, and the reason is clear; the
+        # module `json` of the program still works.
+        self.assertIsNone(plugin.object)
+        self.assertTrue(plugin.error)
+        import json as json_module
+
+        self.assertEqual(json_module.dumps({"a": 1}), '{"a": 1}')
+
+
 if __name__ == "__main__":
     unittest.main()

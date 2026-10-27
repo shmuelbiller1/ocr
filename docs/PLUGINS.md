@@ -63,8 +63,20 @@ A plugin is a folder with a file `plugin.json` in it:
 | `enabled_by_default` | Whether the plugin starts switched on (`true` by default). |
 | `options` | The settings of the plugin. They are given to the plugin when it starts. |
 
-The folder of the plugin is added to the search path of Python, so the
-module of the plugin is imported by its own name.
+The folder of the plugin is added to the end of the search path of
+Python, and the module of the plugin is read from that folder under a
+name of its own.  A file of a plugin therefore cannot take the place of
+a module of the program, and two plugins cannot take each other's place.
+
+### The trust of the user
+
+Installing a plugin means **running its code inside the program**.  The
+program does not check signatures, and it does not run a plugin in a
+sandbox.  A plugin can do whatever its code does.
+
+Therefore a plugin may only be installed from a source the user trusts,
+and the licence of the plugin is shown in the settings screen before it
+is used.  The program itself never downloads a plugin.
 
 ### An engine plugin
 
@@ -74,9 +86,9 @@ The object of an engine plugin has to implement the contract of
 * `available() -> bool` - whether the engine can work right now;
 * `recognize(path, progress=None, cancel=None) -> OCRResult` - the
   recognition of a document;
-* `manifest() -> EngineManifest` - what the user needs to know: the
-  name, the version, the script, the licence, the model and its
-  digests.
+* `manifest() -> EngineManifest` (optional) - what the user needs to
+  know: the name, the version, the script, the licence, the model and
+  its digests.  An engine without it is allowed.
 
 `progress` and `cancel` are optional: an engine that does not take them
 keeps working.
@@ -108,3 +120,7 @@ The program does not check the licence of a plugin, and it does not
 download plugins.  The user brings the plugin, and the licence of the
 plugin is shown in the settings screen, so that the user can see what
 it is before using it.
+
+The licences of the parts that come with the program are in
+`LICENCES/` in the folder of the program, and in `docs/THIRD_PARTY.md`
+in the sources.

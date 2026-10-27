@@ -6,19 +6,27 @@ plugin has to implement the contract of :mod:`hebrew_workbench.engine`,
 and the object of a module of proposals has to implement the contract
 of :mod:`hebrew_workbench.suggestions`.
 
-A plugin that cannot be loaded is reported with the reason, and the
-program carries on without it.
+The code of a plugin is read from the folder of the plugin, under a name
+of its own, so that two plugins cannot take each other's place, and so
+that a file of a plugin cannot take the place of a module of the
+program.  A plugin that cannot be loaded is reported with the reason,
+and the program carries on without it.
 """
 
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import sys
 from pathlib import Path
 
 from .base import PluginError, PluginManifest
 
 __all__ = ["load_object", "load_plugin", "forget_modules"]
+
+#: The name a plugin module is given, so that it does not share the
+#: name space of the program with the other plugins.
+PRIVATE_PREFIX = "_hebrew_workbench_plugin_"
 
 
 def _belongs_to(paths: list[Path], file_name: str | None) -> bool:
@@ -39,22 +47,94 @@ def _belongs_to(paths: list[Path], file_name: str | None) -> bool:
     return False
 
 
+def forget_modules(folders: list[Path]) -> list[str]:
+    """Drop the modules of these folders from the import cache.
+
+    When the user removes a plugin and installs another one with the
+    same name, Python would hand back the old code from its cache.  The
+    modules of the folder are therefore forgotten, and the next load
+    reads the code that is on the disk now.
+    """
+    forgotten: list[str] = []
+    for name in list(sys.modules):
+        module = sys.modules.get(name)
+        file_name = getattr(module, "__file__", None)
+        if not file_name:
+            continue
+        if _belongs_to(folders, file_name):
+            del sys.modules[name]
+            forgotten.append(name)
+    return forgotten
+
+
+def _module_file(folder: Path, module_name: str) -> tuple[Path, bool] | None:
+    """Where the module of the plugin is: a file, or a package."""
+    parts = [part for part in module_name.split(".") if part]
+    if not parts:
+        return None
+    base = folder.joinpath(*parts)
+    file_path = base.with_name(base.name + ".py")
+    if file_path.is_file():
+        return file_path, False
+    package = base / "__init__.py"
+    if package.is_file():
+        return package, True
+    return None
+
+
+def _import_from_folder(module_name: str, folder: Path):
+    """Read the module of the plugin from its own folder.
+
+    The module is given a name of its own, so that it does not take the
+    place of another plugin, and so that a file of a plugin cannot take
+    the place of a module of the program.
+    """
+    found = _module_file(folder, module_name)
+    if found is None:
+        raise PluginError(
+            f"the module {module_name} is not in the folder of the plugin"
+        )
+    file_path, is_package = found
+    name = PRIVATE_PREFIX + module_name.replace(".", "_")
+    try:
+        spec = importlib.util.spec_from_file_location(
+            name,
+            file_path,
+            submodule_search_locations=[str(file_path.parent)] if is_package else None,
+        )
+    except (ImportError, ValueError) as exc:
+        raise PluginError(f"the module {module_name} could not be prepared: {exc}") from exc
+    if spec is None or spec.loader is None:
+        raise PluginError(f"the module {module_name} could not be prepared")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:  # the plugin may raise anything
+        sys.modules.pop(name, None)
+        raise PluginError(f"the module {module_name} could not be imported: {exc}") from exc
+    return module
+
+
 def _import(module_name: str, search_paths: list[Path]):
+    """Import the module of the plugin."""
+    if not search_paths:
+        # A plugin that comes with the program: the usual import.
+        try:
+            return importlib.import_module(module_name)
+        except Exception as exc:  # the plugin may raise anything
+            raise PluginError(
+                f"the module {module_name} could not be imported: {exc}"
+            ) from exc
+
+    # The folder of the plugin is added at the end of the path, so that
+    # a file of a plugin cannot take the place of a module of the
+    # program.
     for path in search_paths:
         text = str(path)
         if text not in sys.path:
-            sys.path.insert(0, text)
-    # A module of the same name may already be in the cache of Python:
-    # from another plugin, or from an earlier version of this one.  The
-    # code of a plugin has to come from its own folder, so the cached
-    # module is dropped when it comes from somewhere else.
-    existing = sys.modules.get(module_name)
-    if existing is not None and not _belongs_to(search_paths, getattr(existing, "__file__", None)):
-        del sys.modules[module_name]
-    try:
-        return importlib.import_module(module_name)
-    except Exception as exc:  # the plugin may raise anything
-        raise PluginError(f"the module {module_name} could not be imported: {exc}") from exc
+            sys.path.append(text)
+    return _import_from_folder(module_name, search_paths[0])
 
 
 def _build(attribute, manifest: PluginManifest):
@@ -73,36 +153,6 @@ def _build(attribute, manifest: PluginManifest):
             except TypeError:
                 return attribute()
     return attribute
-
-
-def forget_modules(folders: list[Path]) -> list[str]:
-    """Drop the modules of these folders from the import cache.
-
-    When the user removes a plugin and installs another one with the
-    same name, Python would hand back the old code from its cache.  The
-    modules of the folder are therefore forgotten, and the next load
-    reads the code that is on the disk now.
-    """
-    roots = []
-    for folder in folders:
-        try:
-            roots.append(str(Path(folder).resolve()))
-        except OSError:
-            continue
-    forgotten: list[str] = []
-    for name in list(sys.modules):
-        module = sys.modules.get(name)
-        file_name = getattr(module, "__file__", None)
-        if not file_name:
-            continue
-        try:
-            path = str(Path(file_name).resolve())
-        except OSError:
-            continue
-        if any(path.startswith(root) for root in roots):
-            del sys.modules[name]
-            forgotten.append(name)
-    return forgotten
 
 
 def load_object(

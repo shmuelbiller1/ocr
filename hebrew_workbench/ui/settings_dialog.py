@@ -226,8 +226,21 @@ class SettingsDialog(QDialog):
         )
         if answer != QMessageBox.Yes:
             return
-        self.installer.remove(plugin.id)
-        self.registry.settings.set_enabled(plugin.id, False)
+        try:
+            self.installer.remove(plugin.id)
+        except PluginError as exc:
+            QMessageBox.warning(self, "הסרת התוסף", str(exc))
+            return
+        except OSError as exc:
+            QMessageBox.warning(
+                self, "הסרת התוסף", f"לא ניתן להסיר את התוסף: {exc}"
+            )
+            return
+        # The plugin is gone: the choices that were about it are gone
+        # too, so that a plugin with the same name that is installed
+        # later starts switched on.
+        self.registry.settings.enabled.discard(plugin.id)
+        self.registry.settings.disabled.discard(plugin.id)
         self.registry.settings.active = {
             key: value
             for key, value in self.registry.settings.active.items()

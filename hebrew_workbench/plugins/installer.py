@@ -43,7 +43,24 @@ class PluginInstaller:
 
     # -- the folder of a plugin --------------------------------------------
     def plugin_folder(self, plugin_id: str) -> Path:
-        return self.root / plugin_id
+        """Where the plugin of this identifier lives.
+
+        The folder has to be inside the folder of the plugins: an
+        identifier such as ``..`` must never lead outside of it.
+        """
+        folder = self.root / plugin_id
+        try:
+            root = self.root.resolve()
+            resolved = folder.resolve()
+        except OSError:
+            resolved = folder
+            root = self.root
+        if resolved == root or root not in resolved.parents:
+            raise PluginError(
+                f"the identifier {plugin_id!r} leads outside of the folder "
+                "of the plugins"
+            )
+        return folder
 
     def installed_folders(self) -> list[Path]:
         """Every folder in the plugins directory that holds a manifest."""
@@ -136,5 +153,10 @@ class PluginInstaller:
         target = self.plugin_folder(plugin_id)
         if not target.is_dir():
             return False
-        shutil.rmtree(target)
+        try:
+            shutil.rmtree(target)
+        except OSError as exc:
+            raise PluginError(
+                f"the plugin {plugin_id} could not be removed: {exc}"
+            ) from exc
         return True
