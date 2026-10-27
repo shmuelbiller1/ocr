@@ -249,6 +249,8 @@ jobs:
   ocr-engine:
     name: OCR engine on real handwriting
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -309,13 +311,13 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        permissions:
-          contents: write
         run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log model-download.log model-digest.txt benchmark.log ocr-accuracy.json
 
   ocr-worker-windows:
     name: OCR worker (Windows)
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -363,7 +365,5 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        permissions:
-          contents: write
         shell: pwsh
         run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json
