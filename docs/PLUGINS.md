@@ -61,7 +61,7 @@ A plugin is a folder with a file `plugin.json` in it:
 | `entry` | `package.module:Name` - where the code is. |
 | `license`, `license_url` | The licence of the plugin. The program shows it to the user. |
 | `enabled_by_default` | Whether the plugin starts switched on (`true` by default). |
-| `options` | The settings of the plugin. They are given to the plugin when it starts. |
+| `options` | The settings of the plugin. They are given to the plugin when it starts, and the choices of the user in the settings screen are put on top of them. |
 
 The folder of the plugin is added at the end of the search path of
 Python, and the module of the plugin is read from that folder under a
@@ -104,6 +104,29 @@ The object of an engine plugin has to implement the contract of
 `progress` and `cancel` are optional: an engine that does not take them
 keeps working.
 
+### How the settings reach the plugin
+
+The settings of the plugin are the `options` of the manifest, with the
+choices of the user in the settings screen put on top of them.  They
+are given to the plugin **twice**, in the two ways a plugin can read
+them:
+
+* the constructor of the object, when it takes an `options` argument:
+  `MyEngine(options=...)`;
+* the method `configure(options)`, when the object has one.
+
+A plugin that reads its settings in its constructor therefore gets them
+when it starts and after every change, and a plugin that has a
+`configure` method gets them in the same way.  A plugin that refuses a
+setting - by raising an exception in `configure` - does not keep it: the
+old setting stays, and the program tells the user that the new one was
+refused.
+
+The program knows the models of the plugins that come with it (the
+option `model_id`), and offers to download them.  The model of a plugin
+of another maker is the business of its own maker, and the program does
+not offer it the model of another engine.
+
 ### A plugin of proposals
 
 The object has to implement the contract of
@@ -112,6 +135,10 @@ The object has to implement the contract of
 * `available() -> bool` and `unavailable_reason() -> str`;
 * `check(text) -> list[Suggestion]` - the proposals for a text;
 * `configure(options)` - the settings of the plugin (optional).
+
+The kind of the module - `spelling`, `grammar` or `style` - is the kind
+of the plugin in the manifest.  A module that does not choose one of
+its own is taken to have the kind of its manifest.
 
 A module of proposals **never changes the text**.  It returns
 proposals, and the user accepts or refuses every one of them.
