@@ -864,6 +864,23 @@ class OverlappingChangesTests(unittest.TestCase):
         # The place of "dog" in the round was 4.
         self.assertEqual(session.unshift(12), 4)
 
+    def test_two_proposals_whose_text_is_one_inside_the_other(self) -> None:
+        """Two proposals of the same text, one of them inside the other,
+        are two proposals about the same text."""
+        session = self.make_session("aaaa")
+        session.set_suggestions(
+            [
+                self.a_suggestion("aa", "a", 0),
+                self.a_suggestion("aa", "b", 1),
+            ]
+        )
+        outcome = session.accept_many(session.pending())
+        self.assertIsNotNone(outcome)
+        text, _ = outcome
+        # Only the first proposal was applied: the text of the second
+        # one is inside the text of the first one.
+        self.assertEqual(text, "aaa")
+
     def test_a_word_is_changed_after_two_changes_in_the_same_round(self) -> None:
         session = self.make_session("cat dog fox")
         session.set_suggestions(
@@ -880,6 +897,53 @@ class OverlappingChangesTests(unittest.TestCase):
         self.assertIsNotNone(outcome)
         text, _ = outcome
         self.assertEqual(text, "caterpillar dogs foxy")
+
+    def test_a_change_to_the_right_does_not_move_a_place(self) -> None:
+        """A change that was accepted after a change that is to its
+        right does not move the place that is looked for."""
+        session = self.make_session("a bb z")
+        session.set_suggestions(
+            [
+                self.a_suggestion("z", "zzzzzzzzz", 5),
+                self.a_suggestion("a", "aa", 0),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "aa bb zzzzzzzzz")
+        # The place of "bb" in the round was 2.
+        self.assertEqual(session.unshift(3), 2)
+
+    def test_a_word_is_changed_after_a_change_to_the_right(self) -> None:
+        session = self.make_session("a bb z")
+        session.set_suggestions(
+            [
+                self.a_suggestion("z", "zzzzzzzzz", 5),
+                self.a_suggestion("a", "aa", 0),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        outcome = session.accept_every_occurrence(
+            self.a_suggestion("bb", "bbs", 2)
+        )
+        self.assertIsNotNone(outcome)
+        text, _ = outcome
+        self.assertEqual(text, "aa bbs zzzzzzzzz")
+
+    def test_a_change_that_is_covered_is_taken_back(self) -> None:
+        """A correction that was made on the text of another correction
+        does not take the other one with it."""
+        session = self.make_session("red cat")
+        session.set_suggestions([self.a_suggestion("cat", "dog", 4)])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "red dog")
+        # A new round: the text as it is now.
+        session.set_suggestions([self.a_suggestion("red dog", "fox", 0)])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "fox")
+        # Both corrections are taken back.
+        self.assertEqual(session.undo_all(), "red cat")
 
     def test_two_proposals_of_the_same_word_are_not_applied_together(self) -> None:
         """Two proposals of the same word would make a word that nobody

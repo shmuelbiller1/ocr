@@ -14,6 +14,7 @@ if sys.platform.startswith("linux"):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from hebrew_workbench.suggestions import KIND_GRAMMAR, Suggestion
+from hebrew_workbench.suggestions.session import SuggestionSession
 from hebrew_workbench.ui.suggestions_pane import SuggestionsPane
 from tests.qt_app import application, temporary_home  # noqa: E402
 
@@ -345,6 +346,54 @@ class ChosenWordingTests(unittest.TestCase):
         row.checkbox.setChecked(True)
         chosen = self.pane.checked_suggestions()
         self.assertEqual(chosen[0].replacement, "word2")
+
+
+class RefusedChosenWordingTests(unittest.TestCase):
+    """The refusal of a proposal is about the proposal itself."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        self.pane = SuggestionsPane()
+
+    def tearDown(self) -> None:
+        self.pane.deleteLater()
+        self.app.processEvents()
+
+    def make_suggestion(self) -> Suggestion:
+        return Suggestion(
+            module=KIND_GRAMMAR,
+            original="word",
+            replacement="word2",
+            message="",
+            start=0,
+            end=4,
+            alternatives=("word3",),
+        )
+
+    def test_the_proposal_itself_is_refused(self) -> None:
+        """The proposal has to leave the list of the proposals that are
+        waiting for an answer, and a copy of it would not."""
+        self.pane.show_suggestions([self.make_suggestion()])
+        row = self.pane._rows[0]
+        row.checkbox.setChecked(True)
+        row.alternatives.setCurrentText("word3")
+        refused: list = []
+        self.pane.refuse_selected_requested.connect(refused.extend)
+        self.pane.refuse_selected_button.click()
+        self.assertEqual(len(refused), 1)
+        self.assertEqual(refused[0].replacement, "word2")
+
+    def test_the_proposal_leaves_the_list_of_the_session(self) -> None:
+        session = SuggestionSession("the word here")
+        suggestion = self.make_suggestion()
+        session.set_suggestions([suggestion])
+        self.pane.show_suggestions([suggestion])
+        row = self.pane._rows[0]
+        row.checkbox.setChecked(True)
+        row.alternatives.setCurrentText("word3")
+        for refused in self.pane.checked_proposals():
+            session.refuse(refused)
+        self.assertEqual(session.pending(), [])
 
 
 class BulkActionsTests(unittest.TestCase):

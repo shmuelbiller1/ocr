@@ -197,6 +197,21 @@ class ReleaseTests(unittest.TestCase):
             # An extra of a package is not installed with it.
             self.assertNotIn("mypy-1.0.dist-info", found)
 
+    def test_the_name_of_a_package_is_the_name_of_pep_503(self) -> None:
+        """A run of dashes, underscores and dots is one dash."""
+        self.assertEqual(
+            release.distribution_name("zope.interface-7.0.dist-info"),
+            "zope-interface",
+        )
+        self.assertEqual(
+            release.distribution_name("scikit_image-0.25.0.dist-info"),
+            "scikit-image",
+        )
+        self.assertEqual(
+            release.distribution_name("torchvision-0.29.0.dist-info"),
+            "torchvision",
+        )
+
     def test_the_release_without_the_worker_does_not_need_its_licences(self) -> None:
         """The worker is not in the release, and the licences of the
         worker are not needed."""

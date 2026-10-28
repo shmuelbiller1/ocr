@@ -240,7 +240,8 @@ def distribution_name(name: str) -> str:
     parts = name.rsplit("-", 1)
     if len(parts) == 2 and parts[1][:1].isdigit():
         name = parts[0]
-    return name.replace("_", "-")
+    # PEP 503: a run of dashes, underscores and dots is one dash.
+    return re.sub(r"[-_.]+", "-", name)
 
 
 def installed_distributions(site_packages: Path) -> dict[str, Path]:

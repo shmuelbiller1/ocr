@@ -48,7 +48,13 @@ def relative_to_the_corpus(corpus, path) -> str:
         # The path is written with slashes and not with the separator
         # of the system, so that the manifest of a corpus is the same
         # everywhere.
-        return Path(path).resolve().relative_to(Path(folder).resolve()).as_posix()
+        # The links of the file are not followed: a page that is
+        # linked from outside of the corpus keeps the place it has in
+        # the corpus, and two pages that are linked from two folders
+        # are two pages.
+        return (
+            Path(path).absolute().relative_to(Path(folder).absolute()).as_posix()
+        )
     except ValueError:
         return Path(path).name
 

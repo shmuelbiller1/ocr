@@ -305,6 +305,28 @@ class PageNamesTests(unittest.TestCase):
             self.assertEqual(len(names), 2)
             self.assertEqual(sorted(names), ["class_a/page.jpg", "class_b/page.jpg"])
 
+    def test_a_page_that_is_linked_keeps_its_place_in_the_corpus(self) -> None:
+        """A page that is linked from outside of the corpus is still a
+        page of the corpus, and it keeps the place it has in it."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            outside = root / "outside"
+            outside.mkdir()
+            (outside / "page.jpg").write_bytes(b"image")
+            linked = root / "class_a"
+            linked.mkdir()
+            try:
+                (linked / "page.jpg").symlink_to(outside / "page.jpg")
+            except (OSError, NotImplementedError):
+                self.skipTest("the machine cannot make a link")
+            page = self.make_page(linked, "page.jpg", "שלום")
+            report = benchmark.run_engine(
+                self.Engine(), [page], corpus_folder=root
+            )
+            self.assertEqual(
+                [item["page"] for item in report["results"]], ["class_a/page.jpg"]
+            )
+
     def test_the_comparison_of_two_engines_is_of_the_same_pages(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

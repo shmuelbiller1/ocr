@@ -705,6 +705,8 @@ class MainWindow(QMainWindow):
         if entry is None:
             entry = self._current_entry()
         if entry is not None:
+            # The text of the recognition is not in a project file yet.
+            self.project.dirty = True
             entry.transcription = result.text
             # The text as the recognition gave it is kept, so that the
             # user can go back to it.
@@ -1194,6 +1196,8 @@ class MainWindow(QMainWindow):
 
     def _apply_the_changes(self, text: str, session: SuggestionSession) -> None:
         """Put a new text in the editor and remember what was changed."""
+        # The text of the document is not in a project file yet.
+        self.project.dirty = True
         self._loading = True
         # The text is put in with a cursor and not with
         # `setPlainText`, so that the undo of the editor keeps working

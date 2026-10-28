@@ -194,7 +194,7 @@ class SuggestionsPane(QWidget):
         self.refuse_selected_button = QPushButton("דחה מסומנות")
         self.refuse_selected_button.setToolTip("לדחות את ההצעות שסומנו")
         self.refuse_selected_button.clicked.connect(
-            lambda: self.refuse_selected_requested.emit(self.checked_suggestions())
+            lambda: self.refuse_selected_requested.emit(self.checked_proposals())
         )
         bulk.addWidget(self.accept_all_button)
         bulk.addWidget(self.refuse_all_button)
@@ -274,6 +274,16 @@ class SuggestionsPane(QWidget):
         be the change that is shown.
         """
         return [row.chosen_suggestion() for row in self._rows if row.checked]
+
+    def checked_proposals(self) -> list[Suggestion]:
+        """The proposals that the user marked, as they are in the list.
+
+        The refusal of a proposal is about the proposal itself and not
+        about a wording of it: the proposal has to leave the list of
+        the proposals that are waiting for an answer, and a copy of it
+        would not be found there.
+        """
+        return [row.suggestion for row in self._rows if row.checked]
 
     def visible_suggestions(self) -> list[Suggestion]:
         """The proposals that are shown now."""

@@ -243,6 +243,24 @@ class UnsavedWorkTests(unittest.TestCase):
         self.window.close()
         self.assertTrue(self.window.isVisible())
 
+    def test_the_result_of_the_recognition_is_work_that_was_not_saved(self) -> None:
+        """The program puts the text of the recognition in the editor,
+        and it is not in a project file."""
+
+        class Result:
+            text = "תוצאת הזיהוי"
+            engine_name = "מנוע הבדיקה"
+            duration_seconds = 1.5
+
+        self.window.project.add(Path(__file__))
+        self.window._sync_document_list()
+        self.window.doc_list.setCurrentRow(0)
+        self.window._on_ocr_done(Result(), self.window.project[0])
+        self.assertTrue(self.window.project.dirty)
+        asked = self.answer_the_question(self.no())
+        self.window.close()
+        self.assertTrue(asked)
+
     def test_nothing_is_asked_when_the_work_was_saved(self) -> None:
         """The text is in a project file, and there is nothing to lose."""
         with tempfile.TemporaryDirectory() as folder:

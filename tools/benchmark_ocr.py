@@ -392,7 +392,11 @@ def _name_in_the_corpus(corpus_folder: Path, image: Path) -> str:
         # The path is written with slashes and not with the separator
         # of the system, so that the manifest of a corpus is the same
         # everywhere.
-        return Path(image).resolve().relative_to(folder.resolve()).as_posix()
+        # The links of the file are not followed: a page that is
+        # linked from outside of the corpus keeps the place it has in
+        # the corpus, and two pages that are linked from two folders
+        # are two pages.
+        return Path(image).absolute().relative_to(folder.absolute()).as_posix()
     except ValueError:
         return Path(image).name
 
