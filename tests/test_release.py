@@ -25,11 +25,16 @@ class ReleaseTests(unittest.TestCase):
         (app / "_internal" / "Qt6Core.dll").write_bytes(b"the library")
         return app
 
-    def make_packages(self, root: Path) -> Path:
+    def make_packages(
+        self, root: Path, with_worker: bool = True
+    ) -> Path:
         """A folder with the licence texts of the packages of the program."""
         packages = root / "packages"
-        for name in release.REQUIRED_LICENCE_PACKAGES:
-            info = packages / f"{name}-1.0.dist-info"
+        names = list(release.REQUIRED_LICENCE_PACKAGES)
+        if with_worker:
+            names += list(release.REQUIRED_LICENCE_PACKAGES_OF_THE_WORKER)
+        for name in names:
+            info = packages / f"{release.distribution_name(name)}-1.0.dist-info"
             info.mkdir(parents=True, exist_ok=True)
             (info / "LICENSE").write_text(f"the licence of {name}", encoding="utf-8")
         return packages
@@ -165,6 +170,58 @@ class ReleaseTests(unittest.TestCase):
                 names = archive.namelist()
             self.assertIn("HebrewNotesWorkbench/ocr-worker/ocr-worker.exe", names)
             self.assertIn("HebrewNotesWorkbench/ocr-worker/_internal/torch.dll", names)
+
+    def test_the_packages_that_the_worker_needs_are_in_the_release(self) -> None:
+        """The worker collects kraken, and kraken needs other packages.
+        Their licences go into the release as well."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            packages = root / "packages"
+            kraken = packages / "kraken-1.0.dist-info"
+            kraken.mkdir(parents=True)
+            (kraken / "LICENSE").write_text("the licence of kraken", encoding="utf-8")
+            (kraken / "METADATA").write_text(
+                "Name: kraken\nRequires-Dist: numpy\n"
+                "Requires-Dist: mypy ; extra == 'dev'\n",
+                encoding="utf-8",
+            )
+            numpy = packages / "numpy-1.0.dist-info"
+            numpy.mkdir(parents=True)
+            (numpy / "LICENSE").write_text("the licence of numpy", encoding="utf-8")
+            (packages / "mypy-1.0.dist-info").mkdir()
+            (packages / "mypy-1.0.dist-info" / "LICENSE").write_text(
+                "the licence of mypy", encoding="utf-8"
+            )
+            found = {name for name, _ in release.licence_files(packages)}
+            self.assertIn("numpy-1.0.dist-info", found)
+            # An extra of a package is not installed with it.
+            self.assertNotIn("mypy-1.0.dist-info", found)
+
+    def test_the_name_of_a_package_is_the_name_of_pep_503(self) -> None:
+        """A run of dashes, underscores and dots is one dash."""
+        self.assertEqual(
+            release.distribution_name("zope.interface-7.0.dist-info"),
+            "zope-interface",
+        )
+        self.assertEqual(
+            release.distribution_name("scikit_image-0.25.0.dist-info"),
+            "scikit-image",
+        )
+        self.assertEqual(
+            release.distribution_name("torchvision-0.29.0.dist-info"),
+            "torchvision",
+        )
+
+    def test_the_release_without_the_worker_does_not_need_its_licences(self) -> None:
+        """The worker is not in the release, and the licences of the
+        worker are not needed."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            app = self.make_application(root)
+            output = root / "release.zip"
+            packages = self.make_packages(root, with_worker=False)
+            archive = self.build(app, output, packages)
+            self.assertTrue(archive.exists())
 
     def test_the_release_is_not_made_when_a_licence_text_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
@@ -319,7 +376,45 @@ class PublishTheReleaseTests(unittest.TestCase):
         leave a release without an archive, and the build must fill it."""
         self.assertIn('select(.tag_name == ', self.script)
         self.assertIn("gh release upload", self.script)
-        self.assertIn("--clobber", self.script)
+
+    def test_the_draft_flag_is_sent_as_a_boolean(self) -> None:
+        """The release API wants a boolean and not a text, and it refuses
+        a text with an error.  The step would stop before the files are
+        put there, and the release would stay without them."""
+        self.assertIn("-F draft=false", self.script)
+        self.assertNotIn("-f draft=false", self.script)
+
+    @unittest.skipIf(
+        os.name == "nt",
+        "the release is made by the runner of Linux, and the shell of the "
+        "Windows runner is not the shell of that runner",
+    )
+    def test_the_file_of_the_user_is_not_replaced_with_a_clobber(self) -> None:
+        """`gh release upload --clobber` deletes the file that was
+        published before it puts the new one, and a failure in between
+        leaves the user with nothing.  The new file goes up under a
+        temporary name, and the old one is taken away afterwards."""
+        calls, _ = self._run_the_script(a_release_is_already_there=True)
+        lines = [line for line in calls.splitlines() if line]
+        uploads = [
+            index for index, line in enumerate(lines) if "release upload" in line
+        ]
+        self.assertTrue(uploads, "nothing was uploaded")
+        for index in uploads:
+            self.assertIn(".new", lines[index])
+        delete = next(
+            index for index, line in enumerate(lines) if "-X DELETE" in line
+        )
+        rename = next(
+            index
+            for index, line in enumerate(lines)
+            if "-X PATCH" in line and "/assets/" in line
+        )
+        # The new file is uploaded before the file that was published
+        # is taken away, and the new file gets the name of the old one
+        # afterwards.
+        self.assertLess(min(uploads), delete)
+        self.assertLess(delete, rename)
 
     def test_the_release_is_made_only_when_there_is_none(self) -> None:
         self.assertIn("gh release create", self.script)

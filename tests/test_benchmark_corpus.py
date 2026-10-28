@@ -124,6 +124,38 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual(corpus.pages, [])
 
 
+class BuildBenchmarkTests(unittest.TestCase):
+    """The tool that writes the manifest of a corpus."""
+
+    def run_the_tool(self, *arguments: str) -> int:
+        import importlib.util
+
+        module_path = REPO_ROOT / "tools" / "build_benchmark.py"
+        spec = importlib.util.spec_from_file_location("build_benchmark", module_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        return module.main(list(arguments))
+
+    def test_a_corpus_with_an_error_stops_the_build(self) -> None:
+        """A corpus that lost a page is a corpus that is broken, and the
+        build that measures it must not say that it is fine."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = write_corpus(
+                Path(folder) / "corpus", [{"image": "pages/nothing.jpg"}]
+            )
+            output = Path(folder) / "manifest.json"
+            status = self.run_the_tool("--corpus", str(root), "--output", str(output))
+        self.assertEqual(status, 1)
+
+    def test_a_corpus_without_an_error_is_built(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = write_corpus(Path(folder) / "corpus", [])
+            output = Path(folder) / "manifest.json"
+            status = self.run_the_tool("--corpus", str(root), "--output", str(output))
+        self.assertEqual(status, 0)
+
+
 class ModernSchoolCorpusTests(unittest.TestCase):
     """The corpus of the modern school handwriting is honest about itself."""
 

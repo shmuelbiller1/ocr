@@ -12,6 +12,8 @@ one action.  Nothing is applied without the user pressing something.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -124,6 +126,18 @@ class SuggestionRow(QFrame):
         """Did the user mark this proposal?"""
         return self.checkbox.isChecked()
 
+    def chosen_suggestion(self) -> Suggestion:
+        """The proposal with the wording that the user chose in the box.
+
+        The wording that is in the box is the one that the user wants
+        for this proposal, and a group of proposals that the user
+        marked has to use it.
+        """
+        text = self.alternatives.currentText() if self.alternatives else ""
+        if not text or text == self.suggestion.replacement:
+            return self.suggestion
+        return replace(self.suggestion, replacement=text)
+
 
 class SuggestionsPane(QWidget):
     """The proposals of the document that is open."""
@@ -180,7 +194,7 @@ class SuggestionsPane(QWidget):
         self.refuse_selected_button = QPushButton("דחה מסומנות")
         self.refuse_selected_button.setToolTip("לדחות את ההצעות שסומנו")
         self.refuse_selected_button.clicked.connect(
-            lambda: self.refuse_selected_requested.emit(self.checked_suggestions())
+            lambda: self.refuse_selected_requested.emit(self.checked_proposals())
         )
         bulk.addWidget(self.accept_all_button)
         bulk.addWidget(self.refuse_all_button)
@@ -253,7 +267,22 @@ class SuggestionsPane(QWidget):
         self.refuse_selected_button.setEnabled(enabled)
 
     def checked_suggestions(self) -> list[Suggestion]:
-        """The proposals that the user marked."""
+        """The proposals that the user marked.
+
+        A proposal that the user marked after choosing another wording
+        in its box keeps that wording: the change that is made has to
+        be the change that is shown.
+        """
+        return [row.chosen_suggestion() for row in self._rows if row.checked]
+
+    def checked_proposals(self) -> list[Suggestion]:
+        """The proposals that the user marked, as they are in the list.
+
+        The refusal of a proposal is about the proposal itself and not
+        about a wording of it: the proposal has to leave the list of
+        the proposals that are waiting for an answer, and a copy of it
+        would not be found there.
+        """
         return [row.suggestion for row in self._rows if row.checked]
 
     def visible_suggestions(self) -> list[Suggestion]:

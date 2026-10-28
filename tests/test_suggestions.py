@@ -827,3 +827,281 @@ class UndoBatchContextTests(unittest.TestCase):
         self.assertEqual(session.undo_last_batch(), "a B")
         # The change that was not taken back can still be taken back.
         self.assertEqual(session.undo_all(), "a b")
+
+
+class OverlappingChangesTests(unittest.TestCase):
+    """Changes that cover the same word, and the places of a round."""
+
+    def make_session(self, text: str) -> SuggestionSession:
+        return SuggestionSession(text)
+
+    def a_suggestion(
+        self, original: str, replacement: str, start: int
+    ) -> Suggestion:
+        return Suggestion(
+            module=KIND_GRAMMAR,
+            original=original,
+            replacement=replacement,
+            message="",
+            start=start,
+            end=start + len(original),
+        )
+
+    def test_the_place_of_a_word_is_found_after_two_changes(self) -> None:
+        """Two changes that changed the length of the text move the place
+        of a word in two ways, and the place of the round has to be
+        found through both of them."""
+        session = self.make_session("cat dog fox")
+        session.set_suggestions(
+            [
+                self.a_suggestion("cat", "caterpillar", 0),
+                self.a_suggestion("fox", "foxy", 8),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "caterpillar dog foxy")
+        # The place of "dog" in the round was 4.
+        self.assertEqual(session.unshift(12), 4)
+
+    def test_a_word_between_two_changes_that_grow(self) -> None:
+        """Two changes, one on each side of a word, move it in two ways,
+        and the place of the word in the round has to be found through
+        both of them."""
+        session = self.make_session("cat dog fox")
+        session.set_suggestions(
+            [
+                self.a_suggestion("cat", "caterpillar", 0),
+                self.a_suggestion("fox", "foxesandfoxes", 8),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "caterpillar dog foxesandfoxes")
+        # The place of "dog" in the round was 4.
+        self.assertEqual(session.unshift(12), 4)
+
+    def test_a_change_that_is_covered_and_a_change_before_it(self) -> None:
+        """A change that was covered by a later change keeps its place,
+        and a change that is before it and that is not related to it
+        does not break it."""
+        session = self.make_session("a red cat")
+        session.set_suggestions([self.a_suggestion("cat", "dog", 6)])
+        session.accept(session.pending()[0])
+        session.set_suggestions([self.a_suggestion("red dog", "fox", 2)])
+        session.accept(session.pending()[0])
+        session.set_suggestions([self.a_suggestion("a", "longlong", 0)])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "longlong fox")
+        self.assertEqual(session.undo_all(), "a red cat")
+
+    def test_a_change_that_shrinks_and_a_change_that_follows_it(self) -> None:
+        """A change that makes the text shorter moves the place of the
+        words that follow it, and the place has to be found through it.
+        """
+        session = self.make_session("elephant cat dog")
+        session.set_suggestions(
+            [
+                self.a_suggestion("elephant", "x", 0),
+                self.a_suggestion("cat", "cats", 9),
+                self.a_suggestion("dog", "dogs", 13),
+            ]
+        )
+        session.accept(session.pending()[0])
+        outcome = session.accept_every_occurrence(session.pending()[1])
+        self.assertIsNotNone(outcome)
+        self.assertEqual(session.current_text, "x cat dogs")
+        # The proposal of "cat" is still good: its place did not move.
+        self.assertEqual(len(session.pending()), 1)
+
+    def test_a_change_that_covers_a_change_that_covers_another(self) -> None:
+        """A change that covers a change that covers another one keeps
+        the first covering, so that every correction can be taken back.
+        """
+        session = self.make_session("a red cat end")
+        session.set_suggestions([self.a_suggestion("cat", "dog", 6)])
+        session.accept(session.pending()[0])
+        session.set_suggestions([self.a_suggestion("red dog", "fox", 2)])
+        session.accept(session.pending()[0])
+        session.set_suggestions([self.a_suggestion("a fox end", "newtext", 0)])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.undo_all(), "a red cat end")
+
+    def test_a_covered_change_and_a_group_that_is_taken_back(self) -> None:
+        """A change that covers another one is still covering it when
+        another group is taken back."""
+        session = self.make_session("a red cat")
+        session.set_suggestions([self.a_suggestion("cat", "dog", 6)])
+        session.accept(session.pending()[0], batch=1)
+        session.set_suggestions([self.a_suggestion("red dog", "fox", 2)])
+        session.accept(session.pending()[0], batch=2)
+        session.set_suggestions([self.a_suggestion("a", "longlong", 0)])
+        session.accept(session.pending()[0], batch=3)
+        # The last group is taken back, and then everything.
+        session.undo_last_batch()
+        self.assertEqual(session.undo_all(), "a red cat")
+
+    def test_two_proposals_whose_text_is_one_inside_the_other(self) -> None:
+        """Two proposals of the same text, one of them inside the other,
+        are two proposals about the same text."""
+        session = self.make_session("aaaa")
+        session.set_suggestions(
+            [
+                self.a_suggestion("aa", "a", 0),
+                self.a_suggestion("aa", "b", 1),
+            ]
+        )
+        outcome = session.accept_many(session.pending())
+        self.assertIsNotNone(outcome)
+        text, _ = outcome
+        # Only the first proposal was applied: the text of the second
+        # one is inside the text of the first one.
+        self.assertEqual(text, "aaa")
+
+    def test_a_word_is_changed_after_two_changes_in_the_same_round(self) -> None:
+        session = self.make_session("cat dog fox")
+        session.set_suggestions(
+            [
+                self.a_suggestion("cat", "caterpillar", 0),
+                self.a_suggestion("fox", "foxy", 8),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        outcome = session.accept_every_occurrence(
+            self.a_suggestion("dog", "dogs", 4)
+        )
+        self.assertIsNotNone(outcome)
+        text, _ = outcome
+        self.assertEqual(text, "caterpillar dogs foxy")
+
+    def test_a_change_to_the_right_does_not_move_a_place(self) -> None:
+        """A change that was accepted after a change that is to its
+        right does not move the place that is looked for."""
+        session = self.make_session("a bb z")
+        session.set_suggestions(
+            [
+                self.a_suggestion("z", "zzzzzzzzz", 5),
+                self.a_suggestion("a", "aa", 0),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "aa bb zzzzzzzzz")
+        # The place of "bb" in the round was 2.
+        self.assertEqual(session.unshift(3), 2)
+
+    def test_a_word_is_changed_after_a_change_to_the_right(self) -> None:
+        session = self.make_session("a bb z")
+        session.set_suggestions(
+            [
+                self.a_suggestion("z", "zzzzzzzzz", 5),
+                self.a_suggestion("a", "aa", 0),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        outcome = session.accept_every_occurrence(
+            self.a_suggestion("bb", "bbs", 2)
+        )
+        self.assertIsNotNone(outcome)
+        text, _ = outcome
+        self.assertEqual(text, "aa bbs zzzzzzzzz")
+
+    def test_a_word_is_changed_after_two_changes_to_the_left(self) -> None:
+        """Two changes to the left of a word move it twice, and the place
+        of the word in the round has to be found through both of them."""
+        session = self.make_session("cat dog fox")
+        session.set_suggestions(
+            [
+                self.a_suggestion("cat", "caterpillar", 0),
+                self.a_suggestion("dog", "dogs", 4),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "caterpillar dogs fox")
+        # The place of "fox" in the round was 8.
+        self.assertEqual(session.unshift(17), 8)
+
+    def test_a_change_that_is_covered_is_taken_back(self) -> None:
+        """A correction that was made on the text of another correction
+        does not take the other one with it."""
+        session = self.make_session("red cat")
+        session.set_suggestions([self.a_suggestion("cat", "dog", 4)])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "red dog")
+        # A new round: the text as it is now.
+        session.set_suggestions([self.a_suggestion("red dog", "fox", 0)])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "fox")
+        # Both corrections are taken back.
+        self.assertEqual(session.undo_all(), "red cat")
+
+    def test_two_proposals_of_the_same_word_are_not_applied_together(self) -> None:
+        """Two proposals of the same word would make a word that nobody
+        proposed."""
+        session = self.make_session("the cats sat")
+        session.set_suggestions(
+            [
+                self.a_suggestion("cats", "catsup", 4),
+                self.a_suggestion("cats", "catfish", 4),
+            ]
+        )
+        outcome = session.accept_many(session.pending())
+        self.assertIsNotNone(outcome)
+        text, changes = outcome
+        self.assertEqual(len(changes), 1)
+        self.assertIn(text, ("the catsup sat", "the catfish sat"))
+
+    def test_a_change_that_was_touched_can_be_taken_back(self) -> None:
+        """Two changes that cover the same place: when the second one is
+        taken back, the first one is found again."""
+        session = self.make_session("a  ,b")
+        session.set_suggestions(
+            [self.a_suggestion("  ", " ", 1)],
+        )
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "a ,b")
+        # The suggestions are looked at again, and a new change is
+        # accepted on the text that is now.
+        session.set_suggestions(
+            [self.a_suggestion(" ,", ",", 1)],
+        )
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "a,b")
+        text = session.undo_all()
+        self.assertEqual(text, "a  ,b")
+        self.assertEqual(session.last_undo_skipped, [])
+
+
+class ContextOfTheChangesTests(unittest.TestCase):
+    """The text that was kept around a change."""
+
+    def a_suggestion(
+        self, original: str, replacement: str, start: int
+    ) -> Suggestion:
+        return Suggestion(
+            module=KIND_GRAMMAR,
+            original=original,
+            replacement=replacement,
+            message="",
+            start=start,
+            end=start + len(original),
+        )
+
+    def test_a_change_that_is_not_at_the_start_is_not_made_stale(self) -> None:
+        """The text that was kept begins before the place of the change,
+        and the comparison has to begin there too."""
+        session = SuggestionSession("the cat sat")
+        session.set_suggestions([self.a_suggestion("cat", "dog", 4)])
+        session.accept(session.pending()[0])
+        change = session.accepted[0]
+        self.assertTrue(change.before)
+        # A group of changes that is taken back, and the change that
+        # was not in it is left.
+        session.set_suggestions([self.a_suggestion("sat", "stood", 8)])
+        session.accept_many(session.pending())
+        session.undo_last_batch()
+        self.assertEqual(len(session.accepted), 1)
+        self.assertFalse(session.accepted[0].context_stale)

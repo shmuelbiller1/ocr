@@ -25,7 +25,15 @@ if "HEBREW_WORKBENCH_HOME" not in os.environ:
     os.environ["HEBREW_WORKBENCH_HOME"] = _TEST_HOME
     atexit.register(shutil.rmtree, _TEST_HOME, True)
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
+
+# The tests must never wait for a person to answer a question of the
+# program.  A question opens a window that cannot be seen, and the test
+# would wait for it for ever.  The tests that check a question change
+# the answer themselves, and their answer is the one that is used.
+QMessageBox.question = staticmethod(  # type: ignore[method-assign]
+    lambda *arguments, **keywords: QMessageBox.Yes
+)
 
 
 def application() -> QApplication:

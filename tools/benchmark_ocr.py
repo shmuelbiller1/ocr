@@ -146,12 +146,18 @@ def find_pages(root: Path) -> list[tuple[Path, Path]]:
     return pairs
 
 
-def measure(engine, page: Page) -> dict | None:
+def measure(engine, page: Page, name: str = "") -> dict | None:
     """Recognise one page and compare the result with its ground truth.
 
     ``None`` is returned when the page has no ground truth, because such
     a page cannot be measured.
+
+    The name of the page is the path of the image in the corpus and not
+    only its name: two pages of the corpus may have the same name in
+    two different folders, and the measurement has to tell them apart.
     """
+    if not name:
+        name = page.image.name
     reference_raw = page.text
     if not reference_raw.strip():
         return None
@@ -168,7 +174,7 @@ def measure(engine, page: Page) -> dict | None:
     hypothesis_words = hypothesis.split()
 
     return {
-        "page": page.image.name,
+        "page": name,
         "ground_truth_file": str(page.transcript or ""),
         "writer": page.writer,
         "verified_by": list(page.verified_by),
@@ -368,6 +374,13 @@ def compare_on_the_same_pages(reports: list[dict]) -> dict:
     }
 
 
+def _name_of_the_page(corpus_folder: Path | None, image: Path) -> str:
+    """The name of a page in a measurement: the path in the corpus."""
+    if corpus_folder is None:
+        return Path(image).name
+    return _name_in_the_corpus(corpus_folder, image)
+
+
 def _name_in_the_corpus(corpus_folder: Path, image: Path) -> str:
     """The name of a page in the corpus: the path and not only the name.
 
@@ -375,13 +388,20 @@ def _name_in_the_corpus(corpus_folder: Path, image: Path) -> str:
     folders, and the manifest tells them apart by their path.
     """
     folder = Path(corpus_folder)
-    try:
-        # The path is written with slashes and not with the separator
-        # of the system, so that the manifest of a corpus is the same
-        # everywhere.
-        return Path(image).resolve().relative_to(folder.resolve()).as_posix()
-    except ValueError:
-        return Path(image).name
+    # The path is written with slashes and not with the separator of
+    # the system, so that the manifest of a corpus is the same
+    # everywhere.
+    # The links of the file are not followed: a page that is linked
+    # from outside of the corpus keeps the place it has in the corpus,
+    # and two pages that are linked from two folders are two pages.
+    # The folder of the corpus may itself be a link, and then the page
+    # is found under the folder that the link points at.
+    for root in (folder.absolute(), folder.resolve()):
+        try:
+            return Path(image).absolute().relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return Path(image).name
 
 
 def check_against_the_manifest(corpus_folder: Path, pages: list[Page]) -> list[str]:
@@ -448,20 +468,29 @@ def check_against_the_manifest(corpus_folder: Path, pages: list[Page]) -> list[s
     return changed
 
 
-def run_engine(engine, pages: list[Page], label: str = "") -> dict:
+def run_engine(
+    engine,
+    pages: list[Page],
+    label: str = "",
+    corpus_folder: Path | None = None,
+) -> dict:
     """Measure one engine on the given pages.
 
     The pages that are not verified, or whose ground truth is not
     complete, are left out of the rate of the corpus and are named in
     the report.
+
+    Every page is named by its path in the corpus, so that two pages
+    with the same name in two folders are two different pages.
     """
     results = []
     failures = []
     left_out = []
     for index, page in enumerate(pages, start=1):
-        print(f"[{index}/{len(pages)}] recognising {page.image.name} ...", flush=True)
+        name = _name_of_the_page(corpus_folder, page.image)
+        print(f"[{index}/{len(pages)}] recognising {name} ...", flush=True)
         try:
-            measured = measure(engine, page)
+            measured = measure(engine, page, name=name)
         except Exception as exc:
             # A failure of the engine on one page does not stop the
             # measurement of the other pages, and it does not stop the
@@ -470,7 +499,7 @@ def run_engine(engine, pages: list[Page], label: str = "") -> dict:
             # engine and not about the others.
             message = f"{type(exc).__name__}: {exc}"
             print(f"    the engine failed on this page: {message}", flush=True)
-            failures.append({"page": page.image.name, "error": message})
+            failures.append({"page": name, "error": message})
             continue
         if measured is None:
             # The page was read, but there is nothing to compare it
@@ -479,7 +508,7 @@ def run_engine(engine, pages: list[Page], label: str = "") -> dict:
             # smaller corpus.
             print("    no ground truth, the page is left out", flush=True)
             left_out.append(
-                {"page": page.image.name, "reason": "there is no ground truth"}
+                {"page": name, "reason": "there is no ground truth"}
             )
             continue
         results.append(measured)
@@ -745,9 +774,14 @@ def main(argv: list[str] | None = None) -> int:
         "measured_corpus_pages": pages_measured,
         "engines": [],
     }
+    # The folder of the corpus: the pages are named by their path in
+    # it, so that two pages with the same name are two pages.
+    folder = Path(args.corpus) if args.corpus else None
     for engine, label in engines:
         print(f"=== the engine {label} ===", flush=True)
-        report["engines"].append(run_engine(engine, pages, label=label))
+        report["engines"].append(
+            run_engine(engine, pages, label=label, corpus_folder=folder)
+        )
 
     # The engines are compared on the pages that every engine measured.
     report["comparison"] = compare_on_the_same_pages(report["engines"])

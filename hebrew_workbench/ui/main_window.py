@@ -459,6 +459,9 @@ class MainWindow(QMainWindow):
                 continue
             if self.project.index_of(path) is None:
                 self.project.add(path)
+                # The list of the documents is not in a project file
+                # yet.
+                self.project.dirty = True
                 if first_added_row is None:
                     first_added_row = len(self.project) - 1
                 added += 1
@@ -480,6 +483,9 @@ class MainWindow(QMainWindow):
         for row in rows:
             if 0 <= row < len(self.project):
                 removed = self.project.remove(row)
+                # The list of the documents is not in a project file
+                # yet.
+                self.project.dirty = True
                 if removed is self._shown_entry:
                     self._shown_entry = None
                 self._sessions.pop(str(removed.path), None)
@@ -587,6 +593,8 @@ class MainWindow(QMainWindow):
         entry = self._shown_entry
         if entry is not None:
             entry.edited = True
+        # The text is not in a project file yet.
+        self.project.dirty = True
 
     def _store_editor_text(self) -> None:
         """Save the text of the document that is in the editor.
@@ -619,6 +627,11 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             QMessageBox.warning(self, "שמירת הפרויקט", f"לא ניתן לשמור: {exc}")
             return
+        # The text of the editor that does not belong to a document is
+        # not in the file of the project, and the program asks about it
+        # before the window is closed.
+        if self._there_is_text_that_is_not_in_the_project():
+            self.project.dirty = True
         self.statusBar().showMessage(f"הפרויקט נשמר: {saved}", 6000)
 
     def open_project(self) -> None:
@@ -703,6 +716,8 @@ class MainWindow(QMainWindow):
         if entry is None:
             entry = self._current_entry()
         if entry is not None:
+            # The text of the recognition is not in a project file yet.
+            self.project.dirty = True
             entry.transcription = result.text
             # The text as the recognition gave it is kept, so that the
             # user can go back to it.
@@ -957,9 +972,12 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        target = Path(path)
+        chosen = Path(path)
+        target = chosen
         if target.suffix.lower() != ".txt":
             target = target.with_suffix(".txt")
+        if not self._ask_before_replacing(target, chosen, "שמירת הטקסט"):
+            return
         try:
             write_txt(target, content)
         except ExportError as exc:
@@ -979,15 +997,39 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        target = Path(path)
+        chosen = Path(path)
+        target = chosen
         if target.suffix.lower() != ".docx":
             target = target.with_suffix(".docx")
+        if not self._ask_before_replacing(target, chosen, "ייצוא ל-Word"):
+            return
         try:
             write_docx(target, content)
         except ExportError as exc:
             QMessageBox.warning(self, "ייצוא ל-Word", str(exc))
             return
         self.statusBar().showMessage(f"נוצר קובץ: {target}", 6000)
+
+    def _ask_before_replacing(self, target: Path, chosen: Path, title: str) -> bool:
+        """Ask the user before a file that is there is replaced.
+
+        The dialog of the save knows about the file that was chosen,
+        and not about the file that is really written: the name of the
+        file may be changed after the dialog was closed, and the
+        question of the dialog was asked about the old name.  The
+        question is therefore asked here, about the file that is
+        really written.
+        """
+        if target == chosen or not target.exists():
+            return True
+        answer = QMessageBox.question(
+            self,
+            title,
+            f"הקובץ {target.name} כבר קיים. להחליף אותו?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return answer == QMessageBox.Yes
 
     # -- printing ----------------------------------------------------------
     def _printer(self) -> QPrinter:
@@ -1038,9 +1080,12 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        target = Path(path)
+        chosen = Path(path)
+        target = chosen
         if target.suffix.lower() != ".pdf":
             target = target.with_suffix(".pdf")
+        if not self._ask_before_replacing(target, chosen, "שמירה כ-PDF"):
+            return
         printer = self._printer()
         printer.setOutputFileName(str(target))
         try:
@@ -1165,6 +1210,8 @@ class MainWindow(QMainWindow):
 
     def _apply_the_changes(self, text: str, session: SuggestionSession) -> None:
         """Put a new text in the editor and remember what was changed."""
+        # The text of the document is not in a project file yet.
+        self.project.dirty = True
         self._loading = True
         # The text is put in with a cursor and not with
         # `setPlainText`, so that the undo of the editor keeps working
@@ -1319,6 +1366,11 @@ class MainWindow(QMainWindow):
                 f"המילה {suggestion.original} נשמרה להפעלה הזאת בלבד, כי אי אפשר לכתוב למילון.",
                 8000,
             )
+        # The word is in the word list of the user, and the proposals
+        # of the other documents about it are not good any more: they
+        # are taken away as well, and not only the ones of this
+        # document.
+        self._clear_the_proposals()
         # The proposals are made again, so that the word is not proposed
         # any more.
         self.check_suggestions()
@@ -1377,11 +1429,16 @@ class MainWindow(QMainWindow):
             )
             if answer != QMessageBox.Yes:
                 return
+        # The text of the document is not in a project file yet.
+        self.project.dirty = True
         self._loading = True
         # The text is put in with a cursor and not with `setPlainText`,
         # so that the undo of the editor keeps working.
         self._replace_editor_text(original)
         self._loading = False
+        # The text of the user is gone, and the document is not marked
+        # as written by hand any more.
+        entry.edited = False
         self._store_editor_text()
         session.undo_all(self.editor.toPlainText())
         self.suggestions = session
@@ -1527,6 +1584,21 @@ class MainWindow(QMainWindow):
         )
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        # The question comes before the work is cancelled: the user may
+        # refuse to close the window, and the work that was running
+        # should not be stopped for nothing.
+        self._store_editor_text()
+        if self._there_is_work_that_was_not_saved():
+            answer = QMessageBox.question(
+                self,
+                "סגירת התוכנה",
+                "יש עבודה שלא נשמרה לקובץ של פרויקט. לצאת בכל זאת?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                event.ignore()
+                return
         if self.task is not None and self.task.isRunning():
             self.task.cancel()
             if not self.task.wait(3000):
@@ -1537,9 +1609,37 @@ class MainWindow(QMainWindow):
                 )
                 event.ignore()
                 return
-        self._store_editor_text()
         self.preview.close_document()
         event.accept()
+
+    def _there_is_text_that_is_not_in_the_project(self) -> bool:
+        """Is there text in the editor that is not in the project?
+
+        The text of the editor belongs to the document that is shown.
+        When there is no document that is shown - the user typed
+        without choosing a document - the text is not in the project,
+        and the file of the project does not hold it.
+        """
+        text = self.editor.toPlainText().strip()
+        if not text:
+            return False
+        entry = self._shown_entry
+        if entry is None:
+            return True
+        return entry.transcription.strip() != text
+
+    def _there_is_work_that_was_not_saved(self) -> bool:
+        """Is there text of the user that is not in a project file?
+
+        The text of the documents is kept in the project file.  A
+        project that was never saved, and a text that was changed after
+        the project was saved, are work that would be lost.
+        """
+        if self.project.dirty:
+            return True
+        if self.project.path is not None:
+            return False
+        return any(entry.transcription.strip() for entry in self.project)
 
 
 def run(argv: list[str] | None = None) -> int:

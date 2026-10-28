@@ -542,12 +542,40 @@ jobs:
           existing="$(gh api "repos/${{ github.repository }}/releases" --paginate \
             --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n 1)"
           if [ -n "$existing" ]; then
+            # The file is put there under a temporary name first, and
+            # the file that was published before is taken away only
+            # when the new one is there.  `gh release upload --clobber`
+            # deletes the old file before it puts the new one, and a
+            # failure in between leaves the user with nothing.
+            publish() {
+              file="$1"
+              name="$(basename "$file")"
+              temporary="${name}.new"
+              cp "$file" "$temporary"
+              # The temporary name is not the name of the file of the
+              # user, and it may be replaced without any harm.
+              gh release upload "$TAG" "$temporary" --clobber
+              old="$(gh api "repos/${{ github.repository }}/releases/$existing/assets" \
+                --paginate --jq ".[] | select(.name == \"$name\") | .id" | head -n 1)"
+              if [ -n "$old" ]; then
+                gh api "repos/${{ github.repository }}/releases/assets/$old" -X DELETE
+              fi
+              new="$(gh api "repos/${{ github.repository }}/releases/$existing/assets" \
+                --paginate --jq ".[] | select(.name == \"$temporary\") | .id" | head -n 1)"
+              gh api "repos/${{ github.repository }}/releases/assets/$new" -X PATCH \
+                -F name="$name"
+            }
+            publish ./*.sha256
+            publish ./*.zip
+            # The notes are written at the end, when the files of the
+            # release are there.
+            # -F draft=false: the release API wants a boolean and not
+            # a text, and it refuses a text with an error.
             gh api "repos/${{ github.repository }}/releases/$existing" -X PATCH \
               -f tag_name="$TAG" \
               -f name="Hebrew Notes Workbench $TAG" \
-              -f draft=false \
+              -F draft=false \
               -F body=@../release-notes.md
-            gh release upload "$TAG" ./*.zip ./*.sha256 --clobber
           else
             # --verify-tag: the release is made for the tag that was
             # pushed, and not for a new tag that the tool would make.

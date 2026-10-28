@@ -43,6 +43,10 @@ class Suggestion:
     def describe(self) -> str:
         """A line for the user, in words."""
         if self.original == self.replacement:
+            if self.message and self.original:
+                # The module has nothing to propose, and the user still
+                # has to know which word the line is about.
+                return f"{self.original} — {self.message}"
             return self.message or self.original
         return f"{self.original} → {self.replacement}"
 

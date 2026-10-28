@@ -44,13 +44,20 @@ def relative_to_the_corpus(corpus, path) -> str:
     folder = getattr(corpus, "folder", None)
     if folder is None:
         return Path(path).name
-    try:
-        # The path is written with slashes and not with the separator
-        # of the system, so that the manifest of a corpus is the same
-        # everywhere.
-        return Path(path).resolve().relative_to(Path(folder).resolve()).as_posix()
-    except ValueError:
-        return Path(path).name
+    # The path is written with slashes and not with the separator of
+    # the system, so that the manifest of a corpus is the same
+    # everywhere.
+    # The links of the file are not followed: a page that is linked
+    # from outside of the corpus keeps the place it has in the corpus,
+    # and two pages that are linked from two folders are two pages.
+    # The folder of the corpus may itself be a link, and then the page
+    # is found under the folder that the link points at.
+    for root in (Path(folder).absolute(), Path(folder).resolve()):
+        try:
+            return Path(path).absolute().relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return Path(path).name
 
 
 def build_manifest(corpus) -> dict:
@@ -112,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="fail when the corpus has an error or no verified page",
+        help="fail when the corpus has no verified page",
     )
     args = parser.parse_args(argv)
 
@@ -143,7 +150,11 @@ def main(argv: list[str] | None = None) -> int:
     print(manifest["note"])
     print(f"manifest written to {target}")
 
-    if args.strict and (corpus.errors or not manifest["verified"]):
+    if corpus.errors:
+        # A corpus with an error is a corpus that is broken, and the
+        # build that measures it would measure less than it thinks.
+        return 1
+    if args.strict and not manifest["verified"]:
         return 1
     return 0
 

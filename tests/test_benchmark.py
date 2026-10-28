@@ -253,6 +253,125 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class PageNamesTests(unittest.TestCase):
+    """Two pages of the corpus may have the same name."""
+
+    class Engine:
+        """An engine that reads every page the same way."""
+
+        name = "the engine"
+
+        def __init__(self, text: str = "שלום") -> None:
+            self.text = text
+
+        def recognize(self, image):  # noqa: N802 - the name of the engine
+            class Result:
+                text = ""
+
+            result = Result()
+            result.text = self.text
+            return result
+
+    def make_page(self, folder: Path, name: str, text: str) -> object:
+        from hebrew_workbench.benchmark.corpus import Page
+
+        image = folder / name
+        image.parent.mkdir(parents=True, exist_ok=True)
+        image.write_bytes(b"image")
+        transcript = image.with_suffix(".txt")
+        transcript.write_text(text, encoding="utf-8")
+        return Page(
+            image=image,
+            transcript=transcript,
+            text=text,
+            report={"complete": True},
+            writer="the writer",
+            verified_by=["the reader"],
+        )
+
+    def test_two_pages_with_the_same_name_are_two_pages(self) -> None:
+        """The pages of two folders may have the same name, and the
+        measurement has to tell them apart."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            first = self.make_page(root / "class_a", "page.jpg", "שלום")
+            second = self.make_page(root / "class_b", "page.jpg", "עולם")
+            report = benchmark.run_engine(
+                self.Engine(),
+                [first, second],
+                corpus_folder=root,
+            )
+            names = [item["page"] for item in report["results"]]
+            self.assertEqual(len(names), 2)
+            self.assertEqual(sorted(names), ["class_a/page.jpg", "class_b/page.jpg"])
+
+    def test_a_page_that_is_linked_keeps_its_place_in_the_corpus(self) -> None:
+        """A page that is linked from outside of the corpus is still a
+        page of the corpus, and it keeps the place it has in it."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            outside = root / "outside"
+            outside.mkdir()
+            (outside / "page.jpg").write_bytes(b"image")
+            linked = root / "class_a"
+            linked.mkdir()
+            try:
+                (linked / "page.jpg").symlink_to(outside / "page.jpg")
+            except (OSError, NotImplementedError):
+                self.skipTest("the machine cannot make a link")
+            page = self.make_page(linked, "page.jpg", "שלום")
+            report = benchmark.run_engine(
+                self.Engine(), [page], corpus_folder=root
+            )
+            self.assertEqual(
+                [item["page"] for item in report["results"]], ["class_a/page.jpg"]
+            )
+
+    def test_a_corpus_that_is_a_link_keeps_the_names_of_its_pages(self) -> None:
+        """The folder of the corpus may be a link, and the pages of the
+        corpus keep their names."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            real = root / "the-real-corpus"
+            real.mkdir()
+            link = root / "the-corpus"
+            try:
+                link.symlink_to(real)
+            except (OSError, NotImplementedError):
+                self.skipTest("the machine cannot make a link")
+            page = self.make_page(real, "page.jpg", "שלום")
+            report = benchmark.run_engine(
+                self.Engine(), [page], corpus_folder=link
+            )
+            self.assertEqual(
+                [item["page"] for item in report["results"]], ["page.jpg"]
+            )
+
+    def test_the_comparison_of_two_engines_is_of_the_same_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            first = self.make_page(root / "class_a", "page.jpg", "שלום")
+            second = self.make_page(root / "class_b", "page.jpg", "עולם")
+            one = benchmark.run_engine(
+                self.Engine("שלום"),
+                [first, second],
+                label="the first engine",
+                corpus_folder=root,
+            )
+            two = benchmark.run_engine(
+                self.Engine("עולם"),
+                [second],
+                label="the second engine",
+                corpus_folder=root,
+            )
+            comparison = benchmark.compare_on_the_same_pages([one, two])
+            self.assertEqual(comparison["pages"], ["class_b/page.jpg"])
+            self.assertEqual(
+                comparison["pages_outside_the_comparison"]["the first engine"],
+                ["class_a/page.jpg"],
+            )
+
+
 class MeasuredPagesTests(unittest.TestCase):
     """The number of the pages that may be measured is not the number of
     the pages of the corpus."""

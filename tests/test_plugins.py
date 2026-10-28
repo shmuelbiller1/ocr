@@ -488,6 +488,55 @@ class PackagePluginTests(unittest.TestCase):
             self.assertEqual(plugin.object.name, "Engine of the package")
 
 
+class ParentPackageInitTests(unittest.TestCase):
+    """The code of the package above the entry point has to run.
+
+    A plugin whose entry point is ``my_plugin.engine:Engine`` may use
+    a value that the ``__init__.py`` of ``my_plugin`` defines.  The
+    package has to be read and not only made.
+    """
+
+    def test_a_value_of_the_package_of_the_plugin_is_imported(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source" / "my_plugin"
+            source.mkdir(parents=True)
+            (source / "__init__.py").write_text(
+                'NAME = "the name of the package"\n', encoding="utf-8"
+            )
+            (source / "engine.py").write_text(
+                "from . import NAME\n"
+                "\n"
+                "class Engine:\n"
+                '    name = "Engine of the package"\n'
+                "\n"
+                "    def __init__(self, options=None):\n"
+                "        self.options = dict(options or {})\n"
+                "        self.name_of_the_package = NAME\n"
+                "\n"
+                "    def available(self):\n"
+                "        return True\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                **MANIFEST,
+                "id": "package-engine",
+                "entry": "my_plugin.engine:Engine",
+            }
+            (Path(folder) / "source" / "plugin.json").write_text(
+                json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+            )
+            PluginInstaller(root).install_folder(Path(folder) / "source")
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("package-engine")
+            self.assertIsNotNone(plugin)
+            self.assertEqual(plugin.error, "")
+            self.assertIsNotNone(plugin.object)
+            self.assertEqual(
+                plugin.object.name_of_the_package, "the name of the package"
+            )
+
+
 class ManifestOptionTests(unittest.TestCase):
     """The options of the manifest reach the plugin."""
 
