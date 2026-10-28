@@ -18,9 +18,12 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from hebrew_workbench.console import use_utf8  # noqa: E402
 
-from tools.benchmark_ocr import (  # noqa: E402
+from hebrew_workbench.benchmark.corpus import (  # noqa: E402
     _line_text,
     _word_text,
+)
+
+from tools.benchmark_ocr import (  # noqa: E402
     download_dataset,
     extract_dataset,
     find_pages,

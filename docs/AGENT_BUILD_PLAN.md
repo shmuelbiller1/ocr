@@ -71,6 +71,7 @@ The rules that follow from this:
 | Plugins: install, remove, switch on and off, choose | **Works** | `hebrew_workbench/plugins/`, `hebrew_workbench/ui/settings_dialog.py`, `docs/PLUGINS.md` |
 | Text search inside the document | **Not implemented** | Planned |
 | Real school pages | **Not verified** | the corpus of the modern school handwriting is empty; the tools that build it and that measure the engines on it are ready (`tools/build_benchmark.py`, `tools/benchmark_ocr.py`); the pages with a verified transcript have to be added by the school - see `benchmark/modern_school/README.md` and `docs/MODERN_SCHOOL_BENCHMARK.md` |
+| The same pages are measured every time | **Works** | the manifest of the corpus is in the repository, and the build checks the images against it before it measures anything: a page that was changed, added or removed stops the measurement |
 | Comparing several engines on the same pages | **Works** | `tools/benchmark_ocr.py --engines ...` measures every engine on the same pages and writes the rate of each of them |
 | Diagnostic measurement on the old handwriting | **Works** | the Pinkas pages are measured on every build; the numbers are in `docs/OCR_ACCURACY.md` |
 | A release that a user can download | **Works** | a tag that starts with `v` makes the build publish the archive that was built and checked, with its digest and with the notes of the release |
