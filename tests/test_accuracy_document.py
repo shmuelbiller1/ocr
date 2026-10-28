@@ -409,3 +409,52 @@ class CorpusSizeTests(unittest.TestCase):
         report["measured_corpus_pages"] = 30
         text = writer.build_section(report)
         self.assertNotIn("it is not a rate of the whole corpus", text)
+
+
+class LeftOutPagesTests(unittest.TestCase):
+    """A page that was left out of the measurement is named in the
+    report."""
+
+    def _report(self) -> dict:
+        return {
+            "corpus": {
+                "name": "The Pinkas Dataset",
+                "target": "historical",
+                "pages": 30,
+                "pages_measured": 4,
+            },
+            "pages_read": 5,
+            "measured_corpus_pages": 4,
+            "engines": [
+                {
+                    "engine": "kraken PP-OCRv6 (Apache-2.0)",
+                    "model": "kraken-ppocrv6-small",
+                    "pages": 4,
+                    "pages_seen": 4,
+                    "summary": {
+                        "cer": 0.576,
+                        "wer": 0.9375,
+                        "seconds_per_page": 22.4,
+                        "characters_reference": 10798,
+                        "words_reference": 2176,
+                        "pages_measured": 4,
+                        "measured": True,
+                    },
+                    "failures": [],
+                    "left_out": [
+                        {"page": "Page 113_1.jpg", "reason": "there is no ground truth"}
+                    ],
+                }
+            ],
+        }
+
+    def test_the_page_that_was_left_out_is_named(self) -> None:
+        text = writer.build_section(self._report())
+        self.assertIn("Page 113_1.jpg", text)
+        self.assertIn("left out of the measurement", text)
+
+    def test_a_report_without_a_page_that_was_left_out_says_nothing(self) -> None:
+        report = self._report()
+        report["engines"][0]["left_out"] = []
+        text = writer.build_section(report)
+        self.assertNotIn("left out of the measurement", text)

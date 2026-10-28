@@ -56,6 +56,12 @@ engines are therefore **not** chosen by the numbers of the old pages.
 4. Only a verified page is measured.  A corpus in which no page was
    verified is not a measurement of the recognition, and the report of
    the build says so.
+5. The same rules hold when the transcript is given in the XML form
+   (the form of the Pinkas dataset): a line that could not be read is
+   marked `[?]` there as well, and a file without a single line of text
+   is not a ground truth at all.  A page that is left out of the
+   measurement is named in the report, so that a report of four pages is
+   not taken for a report of a corpus of four pages.
 
 The rules of the transcripts are in `benchmark/modern_school/README.md`,
 so that a teacher who writes a transcript does not have to read the

@@ -398,6 +398,7 @@ def run_engine(engine, pages: list[Page], label: str = "") -> dict:
     """
     results = []
     failures = []
+    left_out = []
     for index, page in enumerate(pages, start=1):
         print(f"[{index}/{len(pages)}] recognising {page.image.name} ...", flush=True)
         try:
@@ -413,7 +414,14 @@ def run_engine(engine, pages: list[Page], label: str = "") -> dict:
             failures.append({"page": page.image.name, "error": message})
             continue
         if measured is None:
+            # The page was read, but there is nothing to compare it
+            # with.  It is named, so that a report with fewer pages
+            # than the corpus has is not taken for a report of a
+            # smaller corpus.
             print("    no ground truth, the page is left out", flush=True)
+            left_out.append(
+                {"page": page.image.name, "reason": "there is no ground truth"}
+            )
             continue
         results.append(measured)
         print(
@@ -446,6 +454,9 @@ def run_engine(engine, pages: list[Page], label: str = "") -> dict:
         # that a report with fewer pages than the corpus has is not
         # taken for a report of a smaller corpus.
         "failures": failures,
+        # The pages that were left out because there was no ground
+        # truth to compare them with.
+        "left_out": left_out,
     }
 
 

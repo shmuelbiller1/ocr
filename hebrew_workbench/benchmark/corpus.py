@@ -252,7 +252,10 @@ def read_page_xml_report(path: Path) -> tuple[str, dict]:
         lines.append(text)
         report["lines_with_text"] += 1
         report["characters"] += len(text)
-    report["complete"] = report["lines_incomplete"] == 0
+    # The rule is the same as in the plain text form: a file without
+    # a single line of text is not a ground truth, and a page without
+    # a ground truth is not measured.
+    report["complete"] = report["lines_incomplete"] == 0 and bool(lines)
     return "\n".join(lines), report
 
 

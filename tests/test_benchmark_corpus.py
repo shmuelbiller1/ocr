@@ -12,6 +12,7 @@ from hebrew_workbench.benchmark.corpus import (
     Page,
     load_corpus,
     pinkas_pages,
+    read_page_xml_report,
     read_transcript,
 )
 
@@ -531,3 +532,93 @@ class ManifestTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as caught:
                 check_against_the_manifest(root, corpus.pages)
             self.assertIn("p1.png", str(caught.exception))
+
+
+class EmptyXmlTests(unittest.TestCase):
+    """A file of the XML form without a line of text is not a ground
+    truth, in the same way as a plain text file without a line."""
+
+    def _write(self, folder: Path, body: str) -> Path:
+        path = folder / "page.xml"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def test_a_file_without_any_line_is_not_complete(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = self._write(
+                Path(folder),
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15">'
+                "<Page><TextRegion></TextRegion></Page></PcGts>",
+            )
+            text, report = read_page_xml_report(path)
+            self.assertEqual(text, "")
+            self.assertFalse(report["complete"])
+
+    def test_a_line_without_text_is_not_complete(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = self._write(
+                Path(folder),
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15">'
+                "<Page><TextRegion>"
+                '<TextLine id="l1"></TextLine>'
+                "</TextRegion></Page></PcGts>",
+            )
+            text, report = read_page_xml_report(path)
+            self.assertEqual(text, "")
+            self.assertFalse(report["complete"])
+
+    def test_a_file_with_text_is_complete(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = self._write(
+                Path(folder),
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15">'
+                "<Page><TextRegion>"
+                '<TextLine id="l1"><Unicode>שלום</Unicode></TextLine>'
+                "</TextRegion></Page></PcGts>",
+            )
+            text, report = read_page_xml_report(path)
+            self.assertEqual(text, "שלום")
+            self.assertTrue(report["complete"])
+
+
+class LeftOutPageTests(unittest.TestCase):
+    """A page without a ground truth is left out of the measurement and
+    it is named."""
+
+    def test_a_page_without_a_ground_truth_is_named(self) -> None:
+        from tools.benchmark_ocr import run_engine
+
+        class Engine:
+            name = "the engine"
+
+            def recognize(self, image):
+                class Result:
+                    text = "שלום עולם"
+
+                return Result()
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            good = Page(
+                image=root / "good.png",
+                transcript=root / "good.txt",
+                text="שלום עולם",
+                report={"complete": True},
+                verified_by=["the teacher"],
+            )
+            empty = Page(
+                image=root / "empty.png",
+                transcript=root / "empty.txt",
+                text="",
+                report={"complete": False},
+                verified_by=["the teacher"],
+            )
+            report = run_engine(Engine(), [good, empty], label="the model")
+        self.assertEqual(len(report["results"]), 1)
+        self.assertEqual(len(report["left_out"]), 1)
+        self.assertEqual(report["left_out"][0]["page"], "empty.png")
+        self.assertIn("ground truth", report["left_out"][0]["reason"])
+        self.assertEqual(report["failures"], [])

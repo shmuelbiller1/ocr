@@ -178,6 +178,18 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
             "",
         ]
 
+    # The pages that were left out are named: a report with fewer pages
+    # than the corpus has is not a report of a smaller corpus.
+    left_out = first.get("left_out") or []
+    if left_out:
+        names = ", ".join(str(item.get("page", "?")) for item in left_out)
+        lines += [
+            f"> **{len(left_out)} of the pages were left out of the"
+            f" measurement:** {names}.  There is no ground truth to compare"
+            " them with, and the rate above is not a rate of those pages.",
+            "",
+        ]
+
     if len(engines) > 1:
         # The engines are compared on the pages that every engine
         # measured.  A rate that was measured on other pages than the
