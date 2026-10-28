@@ -65,6 +65,7 @@ The rules that follow from this:
 | OCR engine contract, fail-closed default | **Works** | `hebrew_workbench/engine/` |
 | One pretrained Hebrew engine (kraken + PP-OCRv6, Apache-2.0) | **Works, needs the model** | the model is downloaded by the user and checked against two digests; the accuracy is in `docs/OCR_ACCURACY.md` |
 | Spelling proposals | **Works, needs a word list** | `hebrew_workbench/suggestions/spelling.py`; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
+| Working on the proposals of a page together | **Works** | accept or refuse all of them, or only the ones that were checked; change one word in all its places; keep a word in the word list of the user; take the last group of changes back as one action; go back to the text that the recognition gave |
 | Grammar proposals | **Works, a few rules** | `hebrew_workbench/suggestions/grammar.py` |
 | לשון הספר proposals | **Not implemented** | the module is a frame, it is switched off, and it says so |
 | Plugins: install, remove, switch on and off, choose | **Works** | `hebrew_workbench/plugins/`, `hebrew_workbench/ui/settings_dialog.py`, `docs/PLUGINS.md` |
@@ -72,6 +73,7 @@ The rules that follow from this:
 | Real school pages | **Not verified** | the corpus of the modern school handwriting is empty; the tools that build it and that measure the engines on it are ready (`tools/build_benchmark.py`, `tools/benchmark_ocr.py`); the pages with a verified transcript have to be added by the school - see `benchmark/modern_school/README.md` and `docs/MODERN_SCHOOL_BENCHMARK.md` |
 | Comparing several engines on the same pages | **Works** | `tools/benchmark_ocr.py --engines ...` measures every engine on the same pages and writes the rate of each of them |
 | Diagnostic measurement on the old handwriting | **Works** | the Pinkas pages are measured on every build; the numbers are in `docs/OCR_ACCURACY.md` |
+| A release that a user can download | **Works** | a tag that starts with `v` makes the build publish the archive that was built and checked, with its digest and with the notes of the release |
 
 ## First milestone (current scaffold)
 - Runnable Windows desktop interface with batch file selection, RTL editor, TXT export and explicit adapter status.
