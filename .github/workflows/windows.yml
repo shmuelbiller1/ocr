@@ -3,6 +3,9 @@ name: Windows desktop build
 on:
   push:
     branches: [main]
+    # A tag that starts with "v" is a release: the build makes the
+    # program for Windows and publishes it.
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -474,3 +477,46 @@ jobs:
         if: always()
         continue-on-error: true
         run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log check-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json
+
+  release:
+    name: Publish the release
+    # The release is made of the program that the Windows job built and
+    # checked, and not of anything else: the archive of the user is the
+    # one that was unpacked and started.
+    needs: [test-and-package]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Take the archive that was built and checked
+        uses: actions/download-artifact@v4
+        with:
+          name: HebrewNotesWorkbench-release
+          path: release
+      - name: Write the notes of the release
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -o pipefail
+          cp docs/RELEASE_NOTES.md release-notes.md
+          {
+            echo ""
+            echo "## The changes of this version"
+            echo ""
+            gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              -f tag_name="$TAG" -f target_commitish="${{ github.sha }}" \
+              --jq .body || echo ""
+          } >> release-notes.md
+      - name: Publish the release
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -o pipefail
+          cd release
+          sha256sum ./*.zip > ./*.sha256
+          gh release create "$TAG" \
+            ./*.zip ./*.sha256 \
+            --title "Hebrew Notes Workbench $TAG" \
+            --notes-file ../release-notes.md

@@ -238,3 +238,296 @@ class EngineFailureTests(unittest.TestCase):
         # No rate is published, and not a rate of zero.
         self.assertIsNone(report["summary"]["cer"])
         self.assertFalse(report["summary"]["measured"])
+
+
+class IncompleteGroundTruthTests(unittest.TestCase):
+    """A page whose ground truth is not there is not a measurement."""
+
+    def test_a_page_without_a_transcript_is_not_complete(self) -> None:
+        page = Page(image=Path("page.png"))
+        self.assertFalse(page.complete)
+
+    def test_a_page_with_an_empty_report_is_not_complete(self) -> None:
+        page = Page(image=Path("page.png"), report={})
+        self.assertFalse(page.complete)
+
+    def test_a_corpus_with_a_page_without_a_transcript_is_not_verified(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "pages").mkdir()
+            (root / "transcripts").mkdir()
+            (root / "pages" / "p1.png").write_bytes(b"png")
+            (root / "transcripts" / "p1.txt").write_text(
+                "שלום עולם\n", encoding="utf-8"
+            )
+            write_corpus(
+                root,
+                [
+                    {
+                        "image": "pages/p1.png",
+                        "transcript": "transcripts/p1.txt",
+                        "verified_by": ["teacher"],
+                    },
+                    {
+                        "image": "pages/p2.png",
+                        "transcript": "transcripts/p2.txt",
+                        "verified_by": ["teacher"],
+                    },
+                ],
+            )
+            corpus = load_corpus(root)
+        # The second page has no image and no transcript, and so it is
+        # not a measurement: the corpus as a whole is not verified.
+        self.assertFalse(corpus.verified)
+        self.assertEqual(len(corpus.measured_pages), 1)
+
+    def test_the_name_of_one_checker_may_be_given_as_a_string(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "pages").mkdir()
+            (root / "transcripts").mkdir()
+            (root / "pages" / "p1.png").write_bytes(b"png")
+            (root / "transcripts" / "p1.txt").write_text(
+                "שלום עולם\n", encoding="utf-8"
+            )
+            write_corpus(
+                root,
+                [
+                    {
+                        "image": "pages/p1.png",
+                        "transcript": "transcripts/p1.txt",
+                        "verified_by": "teacher",
+                    }
+                ],
+            )
+            corpus = load_corpus(root)
+        self.assertEqual(corpus.pages[0].verified_by, ["teacher"])
+        self.assertTrue(corpus.pages[0].verified)
+
+    def test_a_blank_name_is_not_a_name(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "pages").mkdir()
+            (root / "transcripts").mkdir()
+            (root / "pages" / "p1.png").write_bytes(b"png")
+            (root / "transcripts" / "p1.txt").write_text(
+                "שלום עולם\n", encoding="utf-8"
+            )
+            write_corpus(
+                root,
+                [
+                    {
+                        "image": "pages/p1.png",
+                        "transcript": "transcripts/p1.txt",
+                        "verified_by": ["  ", "teacher"],
+                    }
+                ],
+            )
+            corpus = load_corpus(root)
+        self.assertEqual(corpus.pages[0].verified_by, ["teacher"])
+
+
+class UnreadableXmlTests(unittest.TestCase):
+    """The mark of a line that could not be read is honoured in the XML form."""
+
+    def make_xml(self, folder: Path, text: str) -> Path:
+        path = folder / "page.xml"
+        path.write_text(
+            """<?xml version="1.0" encoding="UTF-8"?>
+<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15">
+  <Page>
+    <TextRegion>
+      <TextLine>
+        <TextEquiv><Unicode>{text}</Unicode></TextEquiv>
+      </TextLine>
+    </TextRegion>
+  </Page>
+</PcGts>
+""".format(text=text),
+            encoding="utf-8",
+        )
+        return path
+
+    def test_a_line_that_could_not_be_read_makes_the_page_not_complete(self) -> None:
+        from hebrew_workbench.benchmark.corpus import read_page_xml_report
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.make_xml(Path(folder), "שלום [?] עולם")
+            _text, report = read_page_xml_report(path)
+        self.assertFalse(report["complete"])
+        self.assertEqual(report["lines_unreadable"], 1)
+
+    def test_a_page_that_was_read_is_complete(self) -> None:
+        from hebrew_workbench.benchmark.corpus import read_page_xml_report
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.make_xml(Path(folder), "שלום עולם")
+            _text, report = read_page_xml_report(path)
+        self.assertTrue(report["complete"])
+        self.assertEqual(report["lines_unreadable"], 0)
+
+
+def make_result(
+    page: str,
+    cer: float = 0.2,
+    characters: int = 100,
+    words: int = 20,
+    word_errors: int = 4,
+    seconds: float = 1.0,
+    complete: bool = True,
+    verified: bool = True,
+) -> dict:
+    """One page that was measured, as the report holds it."""
+    return {
+        "page": page,
+        "ground_truth": {"complete": complete},
+        "verified_by": ["teacher"] if verified else [],
+        "cer": cer,
+        "wer": 0.5,
+        "characters_reference": characters,
+        "words_reference": words,
+        "word_errors": word_errors,
+        "seconds": seconds,
+    }
+
+
+class SharedPagesTests(unittest.TestCase):
+    """The engines are compared on the pages that every engine measured."""
+
+    def test_the_common_pages_are_the_ones_the_engines_are_compared_on(self) -> None:
+        from tools.benchmark_ocr import compare_on_the_same_pages
+
+        first = {
+            "engine": "the small model",
+            "model": "kraken-ppocrv6-small",
+            "results": [
+                make_result("p1.png", cer=0.2, characters=100, words=20, word_errors=4),
+                make_result("p2.png", cer=0.6, characters=100, words=20, word_errors=12),
+            ],
+        }
+        second = {
+            "engine": "the medium model",
+            "model": "kraken-ppocrv6-medium",
+            "results": [
+                make_result("p1.png", cer=0.1, characters=100, words=20, word_errors=2),
+            ],
+        }
+        comparison = compare_on_the_same_pages([first, second])
+
+        self.assertEqual(comparison["pages"], ["p1.png"])
+        # The rate of every engine is the rate on the common pages only.
+        for engine in comparison["engines"]:
+            self.assertEqual(engine["summary"]["pages_measured"], 1)
+            self.assertEqual(engine["summary"]["cer"], 0.2 if "small" in engine["model"] else 0.1)
+        # The page that one of the engines did not read is named.
+        self.assertEqual(
+            comparison["pages_outside_the_comparison"]["the small model"], ["p2.png"]
+        )
+
+    def test_a_page_that_was_not_verified_is_not_a_measurement(self) -> None:
+        from tools.benchmark_ocr import measured_pages_of, summarise
+
+        results = [
+            make_result("p1.png"),
+            make_result("p2.png", verified=False),
+        ]
+        summary = summarise(results)
+        self.assertEqual(summary["pages_measured"], 1)
+        self.assertEqual(summary["cer"], 0.2)
+        self.assertEqual(summary["pages_without_verification"], ["p2.png"])
+        self.assertEqual(measured_pages_of({"results": results}), {"p1.png"})
+
+    def test_a_page_whose_ground_truth_is_not_complete_is_not_a_measurement(self) -> None:
+        from tools.benchmark_ocr import summarise
+
+        results = [
+            make_result("p1.png"),
+            make_result("p2.png", complete=False),
+        ]
+        summary = summarise(results)
+        self.assertEqual(summary["pages_measured"], 1)
+        self.assertEqual(summary["pages_with_incomplete_ground_truth"], ["p2.png"])
+
+    def test_there_is_no_rate_when_no_page_may_be_measured(self) -> None:
+        from tools.benchmark_ocr import summarise
+
+        summary = summarise([make_result("p1.png", verified=False)])
+        self.assertIsNone(summary["cer"])
+        self.assertIsNone(summary["wer"])
+        self.assertFalse(summary["measured"])
+
+
+class ManifestTests(unittest.TestCase):
+    """The images of the corpus are the ones that the manifest holds."""
+
+    def make_corpus(self, folder: Path) -> Path:
+        root = Path(folder)
+        (root / "pages").mkdir(parents=True)
+        (root / "transcripts").mkdir()
+        (root / "pages" / "p1.png").write_bytes(b"the image of the page")
+        (root / "transcripts" / "p1.txt").write_text(
+            "שלום עולם\n", encoding="utf-8"
+        )
+        write_corpus(
+            root,
+            [
+                {
+                    "image": "pages/p1.png",
+                    "transcript": "transcripts/p1.txt",
+                    "verified_by": ["teacher"],
+                }
+            ],
+        )
+        return root
+
+    def test_a_corpus_without_a_manifest_is_not_checked(self) -> None:
+        from tools.benchmark_ocr import check_against_the_manifest
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.make_corpus(Path(folder))
+            corpus = load_corpus(root)
+            self.assertEqual(check_against_the_manifest(root, corpus.pages), [])
+
+    def test_the_image_that_the_manifest_holds_is_accepted(self) -> None:
+        from tools.benchmark_ocr import check_against_the_manifest
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.make_corpus(Path(folder))
+            corpus = load_corpus(root)
+            (root / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "pages": [
+                            {
+                                "image": "p1.png",
+                                "sha256": corpus.pages[0].digest(),
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(check_against_the_manifest(root, corpus.pages), [])
+
+    def test_an_image_that_was_changed_is_not_measured(self) -> None:
+        from tools.benchmark_ocr import check_against_the_manifest
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.make_corpus(Path(folder))
+            corpus = load_corpus(root)
+            (root / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "pages": [
+                            {
+                                "image": "p1.png",
+                                "sha256": "the digest of another image",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(SystemExit) as caught:
+                check_against_the_manifest(root, corpus.pages)
+            self.assertIn("p1.png", str(caught.exception))

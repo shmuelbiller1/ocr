@@ -29,9 +29,11 @@ The rules that follow from this:
   the engine.
 * The engines are compared with the measurement - the rate of the
   errors **and** the time a teacher needs to correct the text - and not
-  with the order in which they are listed.  The default engine is the
-  one that was measured to be the best, and the user can choose
-  another one at any time.
+  with the order in which they are listed.  **This is the plan and it is
+  not what the program does yet:** today the program restores the engine
+  that the user chose, and when there is no such choice it takes the
+  first engine that it finds.  The user can choose another engine at
+  any time, and a choice of the user is never overridden.
 
 ## Rules
 - Work on a feature branch with small pull requests. Do not replace code without reading it.

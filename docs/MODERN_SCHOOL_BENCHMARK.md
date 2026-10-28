@@ -89,8 +89,11 @@ The report holds, for every engine: the character error rate, the word
 error rate, the seconds per page, and the rate for every page, so that
 a page on which one engine is better than the other can be seen.
 
-**The default engine is not the first one in the list.**  The decision
-has two halves, and both of them have to be measured:
+**The default engine is not the first one in the list - that is the plan,
+and it is not what the program does yet.**  Today the program restores
+the engine that the user chose, and when there is no such choice it
+takes the first engine that it finds.  The decision has two halves, and
+both of them have to be measured:
 
 * the number of the errors of the engine;
 * the time that a teacher needs to correct the text of the engine.
@@ -98,8 +101,8 @@ has two halves, and both of them have to be measured:
 The second half is a measurement of people, and it belongs to the
 school.  Until it is made, the default is the engine with the fewest
 errors in the measurement, and the user can choose another engine in
-the settings screen at any time - the engines are plugins, and the
-choice is remembered.
+the settings screen at any time - the engines are plugins, the choice
+is remembered, and a choice of the user is never overridden.
 
 ## How the corpus is filled
 

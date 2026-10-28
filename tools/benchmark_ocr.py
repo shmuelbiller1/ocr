@@ -70,6 +70,10 @@ __all__ = [
     "find_pages",
     "measure_page",
     "measure",
+    "summarise",
+    "measured_pages_of",
+    "compare_on_the_same_pages",
+    "check_against_the_manifest",
     "run_engine",
     "resolve_engines",
     "main",
@@ -223,6 +227,158 @@ def measure_page(
     return measure(engine, page)
 
 
+def summarise(results: list[dict]) -> dict:
+    """The rate of an engine over the pages that it really measured.
+
+    Only the pages whose ground truth is complete and was verified by
+    somebody else are counted: the rate of the errors of an engine
+    against a ground truth that is not there is not a measurement.
+
+    The rate of the whole corpus is the sum of the errors over the
+    whole corpus, and not the average of the rates of the pages: a page
+    with few words would otherwise count as much as a page with many.
+    """
+    incomplete = [
+        item["page"]
+        for item in results
+        if not item["ground_truth"].get("complete", False)
+    ]
+    unverified = [item["page"] for item in results if not item.get("verified_by")]
+    measured_pages = [
+        item
+        for item in results
+        if item["ground_truth"].get("complete", False) and item.get("verified_by")
+    ]
+    if measured_pages:
+        total_reference = sum(item["characters_reference"] for item in measured_pages)
+        total_cer = (
+            sum(
+                item["cer"] * item["characters_reference"]
+                for item in measured_pages
+            )
+            / max(1, total_reference)
+        )
+        total_words = sum(item["words_reference"] for item in measured_pages)
+        total_wer = sum(item["word_errors"] for item in measured_pages) / max(
+            1, total_words
+        )
+        seconds = sum(item["seconds"] for item in measured_pages) / len(measured_pages)
+    else:
+        # There is no page that may be measured: there is no rate, and
+        # not a rate of zero.
+        total_reference = 0
+        total_words = 0
+        total_cer = None
+        total_wer = None
+        seconds = None
+
+    return {
+        "cer": None if total_cer is None else round(total_cer, 4),
+        "wer": None if total_wer is None else round(total_wer, 4),
+        "seconds_per_page": None if seconds is None else round(seconds, 2),
+        "characters_reference": total_reference,
+        "words_reference": total_words,
+        "pages_measured": len(measured_pages),
+        "ground_truth_complete": not incomplete,
+        "pages_with_incomplete_ground_truth": incomplete,
+        "pages_without_verification": unverified,
+        # The rate is only a measurement when the ground truth was
+        # verified; without it the number is not published.
+        "measured": bool(measured_pages),
+    }
+
+
+def measured_pages_of(report: dict) -> set[str]:
+    """The names of the pages that an engine really measured."""
+    return {
+        item["page"]
+        for item in report.get("results", [])
+        if item.get("ground_truth", {}).get("complete", False)
+        and item.get("verified_by")
+    }
+
+
+def compare_on_the_same_pages(reports: list[dict]) -> dict:
+    """Compare the engines on the pages that every engine measured.
+
+    A rate that was measured on other pages than the rate of another
+    engine is not a comparison.  The pages that every engine measured
+    are therefore the pages the engines are compared on, and the rate
+    of every engine is computed over those pages.
+
+    The pages that one of the engines did not read are named, so that
+    a report with fewer pages than the corpus has is not taken for a
+    report of a smaller corpus.
+    """
+    if not reports:
+        return {"pages": [], "engines": [], "pages_outside_the_comparison": {}}
+    pages_of = {
+        str(report.get("engine", "")): measured_pages_of(report) for report in reports
+    }
+    common = set.intersection(*pages_of.values())
+    outside = {
+        name: sorted(pages - common) for name, pages in pages_of.items()
+    }
+    engines = []
+    for report in reports:
+        name = str(report.get("engine", ""))
+        results = [
+            item for item in report.get("results", []) if item["page"] in common
+        ]
+        engines.append(
+            {
+                "engine": name,
+                "model": report.get("model", ""),
+                "summary": summarise(results),
+            }
+        )
+    return {
+        "pages": sorted(common),
+        "engines": engines,
+        "pages_outside_the_comparison": outside,
+    }
+
+
+def check_against_the_manifest(corpus_folder: Path, pages: list[Page]) -> list[str]:
+    """Check that the images are the ones that the manifest holds.
+
+    The measurement has to be of the same pages every time, and the
+    manifest holds the digest of every image.  When an image was
+    changed, the measurement is of a different corpus than the one
+    that was built, and it is not published.
+
+    A corpus without a manifest is not checked: there is nothing to
+    check it against.
+    """
+    manifest_path = Path(corpus_folder) / "manifest.json"
+    if not manifest_path.is_file():
+        return []
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"the manifest of the corpus could not be read: {exc}")
+    digests = {
+        str(entry.get("image", "")): str(entry.get("sha256", ""))
+        for entry in manifest.get("pages", [])
+    }
+    changed = []
+    for page in pages:
+        expected = digests.get(page.image.name)
+        if not expected:
+            continue
+        if page.digest() != expected:
+            changed.append(page.image.name)
+    if changed:
+        raise SystemExit(
+            "the image of these pages is not the one that the manifest holds: "
+            + ", ".join(sorted(changed))
+            + ". The measurement was not published, because it would not be "
+            "the measurement of the corpus. Run tools/build_benchmark.py to "
+            "write a manifest of the pages that are there now."
+        )
+    return changed
+
+
 def run_engine(engine, pages: list[Page], label: str = "") -> dict:
     """Measure one engine on the given pages.
 
@@ -267,56 +423,14 @@ def run_engine(engine, pages: list[Page], label: str = "") -> dict:
     if not results and not failures:
         raise SystemExit("no page with a ground truth was found in the corpus")
 
-    incomplete = [
-        item["page"] for item in results if not item["ground_truth"].get("complete", True)
-    ]
-    unverified = [item["page"] for item in results if not item.get("verified_by")]
-    measured_pages = [
-        item
-        for item in results
-        if item["ground_truth"].get("complete", True) and item.get("verified_by")
-    ]
-    if measured_pages:
-        total_reference = sum(item["characters_reference"] for item in measured_pages)
-        total_cer = (
-            sum(
-                item["cer"] * item["characters_reference"]
-                for item in measured_pages
-            )
-            / max(1, total_reference)
-        )
-        total_words = sum(item["words_reference"] for item in measured_pages)
-        total_wer = sum(item["word_errors"] for item in measured_pages) / max(
-            1, total_words
-        )
-        seconds = sum(item["seconds"] for item in measured_pages) / len(measured_pages)
-    else:
-        # There is no page that may be measured: there is no rate, and
-        # not a rate of zero.
-        total_reference = 0
-        total_words = 0
-        total_cer = None
-        total_wer = None
-        seconds = None
+    summary = summarise(results)
 
     return {
         "engine": getattr(engine, "name", label or "the engine"),
         "model": label,
-        "pages": len(measured_pages),
+        "pages": summary["pages_measured"],
         "pages_seen": len(results),
-        "summary": {
-            "cer": None if total_cer is None else round(total_cer, 4),
-            "wer": None if total_wer is None else round(total_wer, 4),
-            "seconds_per_page": None if seconds is None else round(seconds, 2),
-            "characters_reference": total_reference,
-            "words_reference": total_words,
-            "ground_truth_complete": not incomplete,
-            "pages_with_incomplete_ground_truth": incomplete,
-            "pages_without_verification": unverified,
-            # The rate is only a measurement when the ground truth was
-            # verified; without it the number is not published.
-            "measured": bool(measured_pages),
-        },
+        "summary": summary,
         "results": results,
         # The pages on which the engine failed.  They are named, so
         # that a report with fewer pages than the corpus has is not
@@ -363,7 +477,12 @@ def resolve_engines(model_ids: list[str], models_folder: Path, timeout: float = 
             )
             continue
         engines.append(
-            (_kraken_engine()(model_path, timeout_seconds=timeout), identifier)
+            (
+                _kraken_engine()(
+                    model_path, artifact_id=identifier, timeout_seconds=timeout
+                ),
+                identifier,
+            )
         )
     return engines, warnings
 
@@ -412,8 +531,14 @@ def main(argv: list[str] | None = None) -> int:
         corpus = load_corpus(Path(args.corpus))
         for error in corpus.errors:
             print(f"warning: {error}", file=sys.stderr)
-        pages = corpus.pages
+        # Only the pages that may be measured: a page whose transcript
+        # was not checked by somebody else, or whose transcript could
+        # not be read, is not a measurement.
+        pages = corpus.measured_pages
         description = corpus.summary()
+        # The images have to be the ones that the manifest holds, so
+        # that every build measures the same corpus.
+        check_against_the_manifest(Path(args.corpus), corpus.pages)
     else:
         if args.dataset:
             dataset_root = Path(args.dataset)
@@ -472,7 +597,11 @@ def main(argv: list[str] | None = None) -> int:
         print(report["note"])
         print(f"report written to {args.output}")
         return 0
-    pages = pages[: max(1, args.pages)]
+    if args.pinkas:
+        # The limit of the number of the pages is for the diagnostic
+        # corpus alone: the corpus of the school is measured with all
+        # of the pages that may be measured.
+        pages = pages[: max(1, args.pages)]
 
     # -- the engines --------------------------------------------------------
     from hebrew_workbench.engine.models import models_directory
@@ -512,21 +641,37 @@ def main(argv: list[str] | None = None) -> int:
                 "scholarly style are not part of the measurement"
             ),
         },
+        # The number of the pages of the corpus that may be measured.
+        # It is not the number of the pages that an engine read: an
+        # engine that failed on a page is a fact about that engine.
+        "measured_corpus_pages": len(pages),
         "engines": [],
     }
     for engine, label in engines:
         print(f"=== the engine {label} ===", flush=True)
         report["engines"].append(run_engine(engine, pages, label=label))
 
+    # The engines are compared on the pages that every engine measured.
+    report["comparison"] = compare_on_the_same_pages(report["engines"])
+
     Path(args.output).write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(json.dumps(report["engines"][-1]["summary"], indent=2))
     if not report["engines"][-1]["summary"].get("measured"):
-        print(
-            "no page of this corpus has a verified transcript, so no rate "
-            "is published"
-        )
+        if report["measured_corpus_pages"]:
+            # The corpus has pages that may be measured, and the engine
+            # did not read one of them: the fault is in the engine, and
+            # it is said so.
+            print(
+                "the corpus has pages that may be measured, but the engine "
+                "did not read one of them. No rate is published."
+            )
+        else:
+            print(
+                "no page of this corpus has a verified transcript, so no rate "
+                "is published"
+            )
     print(f"report written to {args.output}")
     return 0
 

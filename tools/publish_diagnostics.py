@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 BRANCH = "ci/diagnostics"
@@ -23,6 +24,30 @@ def run(command: list[str]) -> int:
     if result.returncode != 0:
         sys.stderr.write(result.stdout + result.stderr)
     return result.returncode
+
+
+def push_with_retry(branch: str, attempts: int = 4) -> int:
+    """Push the diagnostics, and try again when the push was refused.
+
+    Several jobs of the same build publish to the same branch, and one
+    of them may push between the moment this job made its commit and
+    the moment it pushes.  The push is then refused, and the build
+    would fail for a reason that has nothing to do with the program.
+    """
+    for attempt in range(1, attempts + 1):
+        code = run(
+            ["git", "push", "--force", "origin", f"HEAD:refs/heads/{branch}"]
+        )
+        if code == 0:
+            return 0
+        if attempt < attempts:
+            print(
+                f"the push to {branch} was refused, trying again "
+                f"({attempt} of {attempts})",
+                file=sys.stderr,
+            )
+            time.sleep(3 * attempt)
+    return 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -77,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     ):
         sys.stderr.write("the diagnostics could not be committed\n")
         return 1
-    if run(["git", "push", "--force", "origin", f"HEAD:refs/heads/{branch}"]) != 0:
+    if push_with_retry(branch) != 0:
         return 1
     print(f"published {copied} to {branch}")
     return 0

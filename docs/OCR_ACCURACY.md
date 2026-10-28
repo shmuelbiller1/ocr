@@ -81,18 +81,18 @@ of a general multilingual handwriting model on real historical Hebrew
 cursive.
 
 <!-- DIAGNOSTIC:BEGIN -->
-The numbers of the last measurement of the build (one engine, the small
-model of PP-OCRv6, on the pages of the dataset whose ground truth is
-complete) were:
+The numbers of the last measurement of the build, on the pages of the
+dataset whose ground truth is complete and was verified, were:
 
-| | |
-| --- | --- |
-| Pages measured | 7 of the 8 that were seen |
-| Character error rate | **61.5%** |
-| Word error rate | **96.4%** |
-| Seconds per page | 21.5 |
-| Characters of the ground truth | 16,892 |
-| Words of the ground truth | 3,404 |
+| Engine | Pages measured | Character error rate | Word error rate | Seconds per page |
+| --- | --- | --- | --- | --- |
+| PP-OCRv6 (small) | 4 | **57.6%** | **93.8%** | 22.43 |
+| PP-OCRv6 (medium) | 4 | **55.7%** | **90.3%** | 39.06 |
+
+The ground truth of those pages holds 10,798 characters and 2,176 words.
+The engines were measured on the **same** pages, and the rates above
+are the rates over those pages, so that they can be compared with one
+another.
 
 The page whose ground truth is not complete was left out of the rates,
 and the report names it.  The build measures every engine that is
@@ -116,19 +116,22 @@ it explicitly, and the file is checked against the MD5 digest published
 by the model authors and against the SHA-256 digest pinned in
 `hebrew_workbench/engine/models.py`.
 
-**The default engine is not the first one that is listed.**  The
-engines are measured on the same pages, and the one with the fewer
-errors - with the time that a teacher needs to correct the text taken
-into account - is the one to make the default.  The engines are
-plugins: the user can choose the engine in the settings screen at any
-time, and the choice is remembered.
+**Choosing the default engine by the measurement is the plan, and it is
+not what the program does yet.**  Today the program restores the engine
+that the user chose, and when there is no such choice it takes the
+first engine that it finds.  The engines are measured on the same
+pages, and the one with the fewer errors - with the time that a teacher
+needs to correct the text taken into account - is the one to make the
+default.  The engines are plugins: the user can choose the engine in
+the settings screen at any time, the choice is remembered, and a choice
+of the user is never overridden.
 
 ### What the numbers of the old pages mean
 
 **The engine works, and it is not accurate enough to be used as it is.**
 The numbers are much worse than the numbers that the authors of the
 model published for their own test set (6.5% character error rate
-against the 61.5% that was measured on the pages of the old
+against the 57.6% that was measured on the pages of the old
 handwriting).
 
 Three things are known to make that measurement worse, and they are

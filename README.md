@@ -18,7 +18,8 @@ the engine, but they are not what the program is made for.
 > the CI build machine, the interface is right-to-left and Hebrew-capable,
 > and the recognition engine reads real handwritten pages with kraken and
 > PP-OCRv6 (both Apache-2.0).  The measured accuracy on early modern
-> Hebrew cursive is a character error rate of 61.5% over the pages whose
+> Hebrew cursive is a character error rate of 57.6% (small model) and
+> 55.7% (medium model) over the 4 pages whose
 > ground truth is complete, so the result of a recognition is a **starting
 > point that has to be read by a person**, and the program says so after
 > every recognition.  The numbers and what they mean are in
@@ -58,8 +59,8 @@ the engine, but they are not what the program is made for.
 | OCR engine slot | **Works** | The engine is found by itself: the worker of the recognition is in the folder `ocr-worker` of the program |
 | Handwriting recognition with a real model | **Works, needs the model** | kraken + PP-OCRv6 (Apache-2.0); the model is installed by the user and checked against two digests; the result has to be read line by line |
 | Accuracy on the handwriting of today | **Not verified** | The corpus of the modern school handwriting is empty: the tools that build it and that measure the engines on it are ready, and the pages with a verified transcript have to be added by the school; see `docs/MODERN_SCHOOL_BENCHMARK.md` |
-| Accuracy on the handwriting of old times (a diagnostic) | **Works** | 61.5% character error rate on early modern cursive (7 of the 8 pages whose ground truth is complete) - the numbers are in `docs/OCR_ACCURACY.md` |
-| Comparing several engines on the same pages | **Works** | Every engine is measured on the same pages; the default engine is the one with the best measurement, and the user can choose another one in the settings screen |
+| Accuracy on the handwriting of old times (a diagnostic) | **Works** | 57.6% character error rate with the small model and 55.7% with the medium model, on the 4 pages of early modern cursive whose ground truth is complete - the numbers are in `docs/OCR_ACCURACY.md` |
+| Comparing several engines on the same pages | **Works** | Every engine is measured on the same pages, and the numbers of each of them are written into `docs/OCR_ACCURACY.md`; choosing the default engine by the measurement is the plan and is not done by the program yet - the user chooses the engine in the settings screen, and a choice of the user is never overridden |
 | Spelling proposals | **Works, needs a word list** | The word list of the user; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
 | Grammar proposals | **Works, a few rules** | Punctuation and spacing |
 | `לשון הספר` proposals | **Not implemented** | The module exists, is switched off, and says so; see `docs/SUGGESTIONS.md` |

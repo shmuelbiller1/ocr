@@ -72,8 +72,14 @@ class Page:
 
     @property
     def complete(self) -> bool:
-        """Is the ground truth of the page complete?"""
-        return bool(self.report.get("complete", True))
+        """Is the ground truth of the page complete?
+
+        A page whose transcript could not be read is not complete, and
+        it is not measured: the engine would be blamed for a line that
+        is not there.  A page that has no transcript at all is not
+        complete either.
+        """
+        return bool(self.report.get("complete", False))
 
     @property
     def verified(self) -> bool:
@@ -131,6 +137,27 @@ class Corpus:
             ],
             "verified": self.verified,
         }
+
+
+def _names(value) -> list[str]:
+    """The names of the people who checked a transcript.
+
+    One name may be given as a plain string, and several names may be
+    given as a list.  A blank name is not a name at all, and it is left
+    out.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return []
+    found = []
+    for item in value:
+        name = str(item).strip()
+        if name:
+            found.append(name)
+    return found
 
 
 def _tag(element) -> str:
@@ -191,6 +218,7 @@ def read_page_xml_report(path: Path) -> tuple[str, dict]:
         "lines_with_text": 0,
         "lines_from_words": 0,
         "lines_incomplete": 0,
+        "lines_unreadable": 0,
         "words": 0,
         "words_with_text": 0,
         "characters": 0,
@@ -214,6 +242,13 @@ def read_page_xml_report(path: Path) -> tuple[str, dict]:
         if not text:
             report["lines_incomplete"] += 1
             continue
+        if UNREADABLE in text:
+            # A line that could not be read is marked `[?]` in this
+            # form as well, and the rule of the plain text form is the
+            # same: the line is missing from the ground truth, and the
+            # page is not measured.
+            report["lines_incomplete"] += 1
+            report["lines_unreadable"] += 1
         lines.append(text)
         report["lines_with_text"] += 1
         report["characters"] += len(text)
@@ -299,7 +334,7 @@ def load_corpus(folder: Path) -> Corpus:
             transcript=transcript,
             writer=str(entry.get("writer", "")),
             date=str(entry.get("date", "")),
-            verified_by=[str(name) for name in entry.get("verified_by", []) or []],
+            verified_by=_names(entry.get("verified_by")),
             notes=str(entry.get("notes", "")),
         )
         if not image.is_file():

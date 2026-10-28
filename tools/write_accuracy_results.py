@@ -89,21 +89,41 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
         ]
         return "\n".join(lines)
 
-    first = engines[0]
-    summary = first.get("summary", {})
-    if summary.get("cer") is None:
-        # The engines ran, but no page of the corpus had a transcript
-        # that was verified: there is no rate to publish.
+    # The engine that is written first is the first engine that was
+    # really measured: an engine that failed has no rate, and it is not
+    # written as if it had one.
+    first = next(
+        (
+            engine
+            for engine in engines
+            if engine.get("summary", {}).get("cer") is not None
+        ),
+        None,
+    )
+    if first is None:
+        # The engines ran, but none of them read a page that may be
+        # measured: there is no rate to publish.
         lines += [
             f"**The accuracy of the recognition on"
             f" {corpus.get('name', 'this corpus')} is not verified.**",
             "",
-            f"The corpus holds {pages_seen} pages, and none of them has a"
-            " transcript that was checked by somebody who is not the one who"
-            " wrote it down.  Without such a transcript there is nothing to"
-            " measure, and no rate is published here.",
-            "",
         ]
+        if report.get("measured_corpus_pages"):
+            lines += [
+                f"The corpus holds {pages_seen} pages, and"
+                f" {report['measured_corpus_pages']} of them may be measured, but"
+                " the engines did not read one of them.  Without a result there"
+                " is nothing to measure, and no rate is published here.",
+                "",
+            ]
+        else:
+            lines += [
+                f"The corpus holds {pages_seen} pages, and none of them has a"
+                " transcript that was checked by somebody who is not the one who"
+                " wrote it down.  Without such a transcript there is nothing to"
+                " measure, and no rate is published here.",
+                "",
+            ]
         if report.get("note"):
             lines += [f"> {report['note']}", ""]
         lines += [
@@ -113,6 +133,7 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
             end,
         ]
         return "\n".join(lines)
+    summary = first.get("summary", {})
     lines += [
         f"Measured with {first.get('engine', 'the engine')} on"
         f" {first.get('pages', 0)} pages of"
@@ -131,10 +152,36 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
     ]
 
     if len(engines) > 1:
+        # The engines are compared on the pages that every engine
+        # measured.  A rate that was measured on other pages than the
+        # rate of another engine is not a comparison.
+        comparison = report.get("comparison") or {}
+        compared = comparison.get("engines") or []
+        outside = comparison.get("pages_outside_the_comparison") or {}
+        missed = sorted({page for pages in outside.values() for page in pages})
         lines += [
             "### The engines on the same pages",
             "",
-            "Every engine was measured on the **same** pages.  The rate of the"
+        ]
+        if missed:
+            lines += [
+                "The engines are compared on the pages that **every** engine"
+                " measured: "
+                f"{len(comparison.get('pages', []))} pages.  These pages were not"
+                " measured by every engine: "
+                + ", ".join(missed)
+                + ".  A rate that was measured on other pages than the rate of"
+                " another engine is not a comparison, and it is not written as"
+                " one.",
+                "",
+            ]
+        else:
+            lines += [
+                "Every engine was measured on the **same** pages.",
+                "",
+            ]
+        lines += [
+            "The rate of the"
             " errors is what decides which engine is the better one; the time"
             " that a teacher needs to correct the text is the other half of the"
             " decision, and it is measured with the people of the school.",
@@ -142,7 +189,7 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
             "| Engine | Character error rate | Word error rate | Seconds per page | Pages |",
             "| --- | --- | --- | --- | --- |",
         ]
-        for engine in engines:
+        for engine in compared or engines:
             engine_summary = engine.get("summary", {})
             lines.append(
                 "| {name} | {cer} | {wer} | {seconds} | {pages} |".format(
@@ -150,7 +197,9 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
                     cer=percent(engine_summary.get("cer", 0.0)),
                     wer=percent(engine_summary.get("wer", 0.0)),
                     seconds=engine_summary.get("seconds_per_page", "?"),
-                    pages=engine.get("pages", 0),
+                    pages=engine_summary.get(
+                        "pages_measured", engine.get("pages", 0)
+                    ),
                 )
             )
         lines.append("")
@@ -274,6 +323,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     report = json.loads(report_path.read_text(encoding="utf-8"))
     document = Path(args.document)
+    if not document.is_file():
+        # The document is not there: the build must not fail with a
+        # traceback, and it must say what is missing.
+        print(f"the document {document} is not there", file=sys.stderr)
+        return 1
     section = build_section(report, begin=args.begin, end=args.end)
     if update_document(document, section, begin=args.begin, end=args.end):
         print(f"the results were written into {document}")

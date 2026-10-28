@@ -220,5 +220,64 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn("HebrewNotesWorkbench/LICENCES/PSF-LICENSE.txt", names)
 
 
+class ReleaseWorkflowTests(unittest.TestCase):
+    """The build that makes a release for the user."""
+
+    def setUp(self) -> None:
+        self.workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "windows.yml"
+        )
+        self.text = self.workflow.read_text(encoding="utf-8")
+
+    def test_a_tag_makes_the_build(self) -> None:
+        self.assertIn("tags: ['v*']", self.text)
+
+    def test_the_release_is_published_only_for_a_tag(self) -> None:
+        self.assertIn("if: startsWith(github.ref, 'refs/tags/v')", self.text)
+
+    def test_the_release_is_made_of_the_program_that_was_checked(self) -> None:
+        """The archive of the user is the one that was unpacked and started."""
+        self.assertIn("needs: [test-and-package]", self.text)
+        self.assertIn("name: HebrewNotesWorkbench-release", self.text)
+
+    def test_the_release_may_write_to_the_repository(self) -> None:
+        self.assertIn("gh release create", self.text)
+        self.assertIn("contents: write", self.text)
+
+    def test_the_digest_of_the_archive_is_published_with_it(self) -> None:
+        self.assertIn("sha256sum", self.text)
+        self.assertIn(".sha256", self.text)
+
+    def test_the_notes_of_the_release_are_the_notes_of_the_repository(self) -> None:
+        self.assertIn("docs/RELEASE_NOTES.md", self.text)
+
+
+class ReleaseNotesTests(unittest.TestCase):
+    """The notes of the release say what works and what does not."""
+
+    def setUp(self) -> None:
+        self.notes = (
+            Path(__file__).resolve().parents[1] / "docs" / "RELEASE_NOTES.md"
+        ).read_text(encoding="utf-8")
+
+    def test_the_notes_say_what_does_not_work(self) -> None:
+        # The text is written in lines, and the words of a sentence may
+        # be on two lines: the text is made one line before it is read.
+        text = " ".join(self.notes.split())
+        self.assertIn("not verified", text)
+        self.assertIn("לשון הספר", text)
+
+    def test_the_notes_say_what_the_program_needs_from_the_user(self) -> None:
+        text = " ".join(self.notes.split())
+        self.assertIn("the model file is checked against the digest", text)
+
+    def test_the_notes_say_that_nothing_is_uploaded(self) -> None:
+        text = " ".join(self.notes.split())
+        self.assertIn("Nothing is uploaded anywhere", text)
+
+
 if __name__ == "__main__":
     unittest.main()

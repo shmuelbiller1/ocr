@@ -224,3 +224,72 @@ class NoVerifiedPageTests(unittest.TestCase):
         notice = load_notice()
         text = notice.summarise(self.REPORT)
         self.assertIn("no verified page", text)
+
+
+class FirstWorkingEngineTests(unittest.TestCase):
+    """The engine that is written first is the first engine that worked."""
+
+    REPORT = {
+        "corpus": {
+            "name": "The Pinkas Dataset",
+            "target": "historical",
+            "pages": 2,
+            "pages_measured": 2,
+            "verified": True,
+        },
+        "measured_corpus_pages": 2,
+        "engines": [
+            {
+                "engine": "the engine that failed",
+                "model": "kraken-ppocrv6-small",
+                "pages": 0,
+                "pages_seen": 2,
+                "summary": {
+                    "cer": None,
+                    "wer": None,
+                    "seconds_per_page": None,
+                },
+                "results": [],
+            },
+            {
+                "engine": "the engine that worked",
+                "model": "kraken-ppocrv6-medium",
+                "pages": 2,
+                "pages_seen": 2,
+                "summary": {
+                    "cer": 0.15,
+                    "wer": 0.3,
+                    "seconds_per_page": 30.0,
+                    "characters_reference": 100,
+                    "words_reference": 20,
+                },
+                "results": [],
+            },
+        ],
+    }
+
+    def test_the_rate_of_the_engine_that_worked_is_written(self) -> None:
+        section = writer.build_section(self.REPORT)
+        self.assertIn("15.0%", section)
+        self.assertNotIn("not verified", section)
+
+    def test_the_engine_that_failed_is_not_the_headline(self) -> None:
+        section = writer.build_section(self.REPORT)
+        head = section.split("###")[0]
+        self.assertNotIn("the engine that failed", head)
+
+
+class MissingDocumentTests(unittest.TestCase):
+    """A document that is not there does not make the build fail."""
+
+    def test_the_tool_says_that_the_document_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            report = Path(folder) / "ocr-accuracy.json"
+            report.write_text(json.dumps(REPORT, ensure_ascii=False), encoding="utf-8")
+            missing = Path(folder) / "no-such-document.md"
+            self.assertEqual(
+                writer.main(
+                    ["--report", str(report), "--document", str(missing)]
+                ),
+                1,
+            )
