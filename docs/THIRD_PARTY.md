@@ -32,10 +32,31 @@ user, so that the program can read handwriting without anything else.
 | kraken | 7.1.1 | Apache-2.0 | PyPI (`kraken`) | The engine that reads the handwriting |
 | PyTorch | 2.14.0 | BSD-3-Clause | PyPI (`torch`) | The library that kraken runs on |
 | torchvision | 0.29.0 | BSD-3-Clause | PyPI (`torchvision`) | The library that kraken asks for |
+| opencv-python-headless | 4.12.0.88 | Apache-2.0 | PyPI (`opencv-python-headless`) | The page segmentation of the second engine (Mishkefet); the "headless" package needs no display |
 
-The licence texts of these three are inside their own packages, and
+The licence texts of these are inside their own packages, and
 `tools/build_release.py` copies them into the folder `LICENCES` of the
 archive.  The release is not made when one of them is missing.
+
+### The code of the second engine
+
+The engine *Mishkefet-v1* is written in Python by Itay Inbar and
+published under the MIT licence.  The parts of that code that recognise a
+page are shipped with the program, unchanged, under
+`hebrew_workbench/engine/vendor/hebocr/`:
+
+| Component | Version | License | Source | Notes |
+| --- | --- | --- | --- | --- |
+| heb-ocr (`hebocr`) | 0.1.0 | MIT, Copyright (c) 2026 Itay Inbar | github.com/itayinbarr/heb-ocr | The line recognition and the page segmentation of the second engine; the text of the licence is in `docs/licences/HEB-OCR-MIT.txt` |
+
+The copied code was not changed at all.  The parts of the project that
+build a training set, that fine-tune a model and that build a language
+model were **not** copied: the program never trains anything, and the text
+of a recognition is never changed by a language model.  The file of the
+model is loaded with the code of its author, which is a `pickle`; the file
+is safe to load because its SHA-256 is checked against the digest that
+this project pinned before it is read, and a file that does not match is
+deleted and is never used.
 
 `PySide6-Essentials` is used instead of the full `PySide6` package on
 purpose: the Essentials package contains only modules that are available
@@ -73,12 +94,23 @@ open work:
 | Component | Version | License | Where it is used |
 | --- | --- | --- | --- |
 | kraken PP-OCRv6 model | see `docs/OCR_ACCURACY.md` | Apache-2.0 | Recognition weights, downloaded on request with a checksum check |
+| Mishkefet-v1 model | 115.3 MB (120,864,761 bytes) | **CC-BY-NC-SA-4.0 — not a commercial licence** | Recognition weights of the second engine, downloaded on request from the place where the author published them, and checked against the SHA-256 `0dfb82e4…f6fd850b88` |
+
+The weights of *Mishkefet-v1* are **not** bundled with the program and are
+not redistributed by it: the user downloads them, on request, from the
+place where the author published them.  The licence is not a commercial
+one, so the model may be used for non-commercial purposes only, and a
+modified file keeps the same licence.  A user who needs a commercial
+licence has to ask the author of the model.  The program shows the licence
+of every model before it is fetched, and the file is checked against the
+digest that this project pinned.
 
 ## Test material
 
 | Material | License | Where it is used |
 | --- | --- | --- |
 | Pinkas corpus (handwritten Hebrew) | CC-BY-4.0 | Accuracy measurement of the handwriting engine, see `docs/OCR_ACCURACY.md` |
+| ivrit.ai Hebrew handwriting benchmark | ivrit.ai licence (gated) | The public benchmark of Hebrew handwriting; the model of the second engine was measured on it by its author, and the program does not download it |
 
 Sample pages that are distributed with the application must carry the
 attribution of their original authors in `docs/SAMPLES.md`.

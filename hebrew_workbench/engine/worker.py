@@ -73,8 +73,11 @@ def make_worker_engine(options: dict | None = None) -> "WorkerEngine":
     if worker is None or model_path is None:
         return None
     # The identity of the model is kept, so that the manifest of the
-    # engine says which model it is and not always the small one.
-    return WorkerEngine(worker, model_path, artifact_id=artifact_id)
+    # engine says which model it is and not always the small one.  The
+    # engine that reads the model is named as well, because the worker
+    # can run more than one of them.
+    engine = str(settings.get("engine", artifact.engine if artifact else "kraken"))
+    return WorkerEngine(worker, model_path, artifact_id=artifact_id, engine=engine)
 
 
 class WorkerEngine:
@@ -88,14 +91,21 @@ class WorkerEngine:
         model_path: str | Path,
         timeout_seconds: float = 1800.0,
         artifact_id: str = "kraken-ppocrv6-small",
+        engine: str = "kraken",
     ) -> None:
         self.worker = Path(worker)
         self.model_path = Path(model_path)
         self.timeout_seconds = timeout_seconds
         #: The model that this engine uses, for the manifest.
         self.artifact_id = artifact_id
+        #: The engine that reads the model: ``kraken`` or ``mishkefet``.
+        self.engine = engine
 
     def manifest(self) -> EngineManifest:
+        if self.engine == "mishkefet":
+            from .mishkefet import build_manifest
+
+            return build_manifest(self.model_path, self.artifact_id)
         from .kraken_local import build_manifest
 
         return build_manifest(self.model_path, self.artifact_id)
@@ -125,6 +135,7 @@ class WorkerEngine:
                     {
                         "document": str(document),
                         "model_path": str(self.model_path),
+                        "engine": self.engine,
                     },
                     ensure_ascii=False,
                 ),

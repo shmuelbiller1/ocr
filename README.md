@@ -17,7 +17,13 @@ the engine, but they are not what the program is made for.
 > **Status: the engine works.** The Windows executable builds and starts on
 > the CI build machine, the interface is right-to-left and Hebrew-capable,
 > and the recognition engine reads real handwritten pages with kraken and
-> PP-OCRv6 (both Apache-2.0).  The measured accuracy on early modern
+> PP-OCRv6 (both Apache-2.0).  A second engine, *Mishkefet-v1*, was added
+> for the handwriting the program is really made for - modern Hebrew
+> cursive - and it is the best open model that was found for that
+> material; its weights carry a non-commercial licence and are fetched by
+> the user, never bundled.
+>
+> The measured accuracy on early modern
 > Hebrew cursive is a character error rate of 57.6% (small model) and
 > 55.7% (medium model) over the 4 pages whose
 > ground truth is complete, so the result of a recognition is a **starting
@@ -58,9 +64,11 @@ the engine, but they are not what the program is made for.
 | Sample pages | **Works** | `File > Open samples` loads the synthetic pages from `samples/` |
 | OCR engine slot | **Works** | The engine is found by itself: the worker of the recognition is in the folder `ocr-worker` of the program |
 | Handwriting recognition with a real model | **Works, needs the model** | kraken + PP-OCRv6 (Apache-2.0); the model is installed by the user and checked against two digests; the result has to be read line by line |
+| A second engine, written for modern Hebrew cursive | **Works, needs the model** | *Mishkefet-v1* (the code is MIT and is shipped with the program; the weights are CC-BY-NC-SA-4.0, are **not** commercial, and are fetched by the user with a digest check); it is the best open model that was found for modern cursive - the search and the models that were not used are in `docs/ENGINES.md` |
 | Accuracy on the handwriting of today | **Not verified** | The corpus of the modern school handwriting is empty: the tools that build it and that measure the engines on it are ready, and the pages with a verified transcript have to be added by the school; see `docs/MODERN_SCHOOL_BENCHMARK.md` |
 | Accuracy on the handwriting of old times (a diagnostic) | **Works** | 57.6% character error rate with the small model and 55.7% with the medium model, on the 4 pages of early modern cursive whose ground truth is complete - the build reads 5 pages of the dataset, and the numbers are in `docs/OCR_ACCURACY.md` |
 | Comparing several engines on the same pages | **Works** | Every engine is measured on the same pages, and the numbers of each of them are written into `docs/OCR_ACCURACY.md`; choosing the default engine by the measurement is the plan and is not done by the program yet - the user chooses the engine in the settings screen, and a choice of the user is never overridden |
+| A warning about the numbers of the second engine | **Written down** | *Mishkefet-v1* was trained on part of the Pinkas corpus, so its rates on the pages of that corpus are optimistic and are **not** a clean comparison with the first engine; the clean comparison is the school corpus, which is still empty - see `docs/OCR_ACCURACY.md` and `docs/ENGINES.md` |
 | Spelling proposals | **Works, needs a word list** | The word list of the user; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
 | Grammar proposals | **Works, a few rules** | Punctuation and spacing |
 | `לשון הספר` proposals | **Not implemented** | The module exists, is switched off, and says so; see `docs/SUGGESTIONS.md` |

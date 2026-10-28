@@ -51,13 +51,19 @@ class ModelArtifact:
     filename: str
     url: str
     size_bytes: int
-    md5: str
-    sha256: str | None
     license: str
     license_url: str
     script: str
     engine_version: str
+    #: Which engine reads this model: ``kraken`` or ``mishkefet``.
+    engine: str = "kraken"
     notes: str = ""
+    #: The MD5 that the author of the model published.  Some hosts publish
+    #: no MD5, and then only the SHA-256 that this project pinned is
+    #: checked.
+    md5: str | None = None
+    #: The SHA-256 of the file, as it was when this project fetched it.
+    sha256: str | None = None
 
     @property
     def size_mb(self) -> float:
@@ -114,6 +120,35 @@ MODEL_ARTIFACTS: dict[str, ModelArtifact] = {
             "error rate for Hebrew is 5.1% and the word error rate 14.2%."
         ),
     ),
+    "mishkefet-v1": ModelArtifact(
+        id="mishkefet-v1",
+        name="Mishkefet-v1, a compact recogniser for modern Hebrew cursive",
+        filename="mishkefet-v1.pt",
+        url=(
+            "https://huggingface.co/itayinbar/Mishkefet-v1/resolve/main/"
+            "mishkefet-v1.pt"
+        ),
+        size_bytes=120_864_761,
+        license="CC-BY-NC-SA-4.0",
+        license_url="https://huggingface.co/itayinbar/Mishkefet-v1",
+        script="Hebrew (modern cursive)",
+        engine_version="heb-ocr 0.1.0",
+        engine="mishkefet",
+        notes=(
+            "The model was written for modern Hebrew cursive, which is the "
+            "material this program is made for. The file is not part of the "
+            "program: it is downloaded by the user, on request, and is "
+            "checked against the SHA-256 below. The licence is not a "
+            "commercial one: the weights may be used for non-commercial "
+            "purposes only, and a modified file keeps the same licence. "
+            "The model was trained on the published lines of real Hebrew "
+            "cursive of the Pinkas corpus, so its numbers on that corpus "
+            "are not a clean measurement."
+        ),
+        sha256=(
+            "0dfb82e440ebfa9dd61f562ad36a83ec41c23904eacd96623c3bd8f6fd850b88"
+        ),
+    ),
 }
 
 
@@ -166,9 +201,10 @@ def verify_file(path: str | Path, artifact: ModelArtifact) -> str | None:
         return (
             f"גודל הקובץ אינו תואם ({size} במקום {artifact.size_bytes} בתים)"
         )
-    published_md5 = md5_of(target)
-    if published_md5.lower() != artifact.md5.lower():
-        return "ה-MD5 שפורסם על יד מפרסם המודל אינו תואם"
+    if artifact.md5:
+        published_md5 = md5_of(target)
+        if published_md5.lower() != artifact.md5.lower():
+            return "ה-MD5 שפורסם על יד מפרסם המודל אינו תואם"
     if artifact.sha256:
         digest = sha256_of(target)
         if digest.lower() != artifact.sha256.lower():

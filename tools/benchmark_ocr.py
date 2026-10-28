@@ -559,6 +559,23 @@ def _kraken_engine():
     return KrakenEngine
 
 
+def _engine_for(artifact, model_path: Path, identifier: str, timeout: float):
+    """The engine that reads a given model.
+
+    Every model belongs to an engine, and the catalogue says which one,
+    so that a new model does not need a change in this file.
+    """
+    if artifact.engine == "mishkefet":
+        from hebrew_workbench.engine.mishkefet import MishkefetEngine
+
+        return MishkefetEngine(
+            model_path, artifact_id=identifier, timeout_seconds=timeout
+        )
+    return _kraken_engine()(
+        model_path, artifact_id=identifier, timeout_seconds=timeout
+    )
+
+
 def resolve_engines(model_ids: list[str], models_folder: Path, timeout: float = 1800.0):
     """The engines to measure, and the reasons for the ones that are left out.
 
@@ -587,9 +604,7 @@ def resolve_engines(model_ids: list[str], models_folder: Path, timeout: float = 
             continue
         engines.append(
             (
-                _kraken_engine()(
-                    model_path, artifact_id=identifier, timeout_seconds=timeout
-                ),
+                _engine_for(artifact, model_path, identifier, timeout),
                 identifier,
             )
         )

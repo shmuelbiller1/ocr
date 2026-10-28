@@ -104,6 +104,11 @@ the one that was measured last.
 
 ## The engines
 
+There are two engines in the program, and every build measures both of
+them on the same pages.
+
+### The first engine: kraken and PP-OCRv6
+
 | | |
 | --- | --- |
 | Engine | [kraken](https://kraken.re) 7.1.1 - Apache-2.0 |
@@ -117,6 +122,55 @@ The model file is never bundled with the application.  The user installs
 it explicitly, and the file is checked against the MD5 digest published
 by the model authors and against the SHA-256 digest pinned in
 `hebrew_workbench/engine/models.py`.
+
+### The second engine: Mishkefet-v1
+
+| | |
+| --- | --- |
+| Engine | [heb-ocr](https://github.com/itayinbarr/heb-ocr) 0.1.0 - MIT (the code is shipped with the program) |
+| Weights | Mishkefet-v1 - **CC-BY-NC-SA-4.0, not a commercial licence**, <https://huggingface.co/itayinbar/Mishkefet-v1> |
+| Script | Hebrew, modern cursive - the material of the program |
+| Device | CPU only, no GPU and no cloud service |
+| Size of the model | 115.3 MB, checked against the SHA-256 `0dfb82e4…f6fd850b88` |
+| Published results of the model authors | A character error rate of 0.175 on the lines of the public Hebrew handwriting benchmark, and the first place in the full-page mode of that benchmark |
+
+The weights of this model are **not** bundled with the program and are not
+redistributed by it: the user fetches them, on request, from the place
+where the author published them, after the licence has been shown.  The
+licence forbids commercial use, so a user who needs a commercial licence
+has to ask the author of the model.
+
+**The numbers of this engine on the pages of the Pinkas corpus are not a
+clean measurement.**  The model was trained on the published lines of
+real Hebrew cursive of that same corpus, and on synthetic Hebrew
+writing.  Its rates on the Pinkas pages are therefore optimistic, and
+they cannot be compared with the rates of the first engine, which was not
+trained on that corpus.  The clean comparison is the corpus of the
+modern school handwriting, and it has no page in it yet.
+
+The engine decodes greedily: no dictionary, no language model and no
+spelling rule is added to the result.  The model itself writes the
+folded punctuation of its own vocabulary, and it keeps the niqqud, the
+te'amim and the final letter forms of the Hebrew.
+
+**The numbers that the author published are not the numbers of this
+program, and the difference is on purpose.**  The author reads with a
+character language model, a word language model, a beam of twelve
+candidates and three or five readings of every line at different widths.
+This program reads with the best path alone, because a measurement with a
+dictionary in it does not measure the engine, and the rule of this project
+is that no word list and no language model take part in a measurement.  The
+rate of the errors of this program is therefore **higher** than the rate
+that the author published, and it is the rate of the engine and not of the
+dictionary.
+
+The page segmentation of this engine has a caveat of its own: its author
+wrote it against the only real pages that exist, which are the pages of
+the public benchmark, and says so.  The rate of the whole page is
+therefore also to be read with that in mind.
+
+The search that led to this engine, and the models that were not used and
+why, are in `docs/ENGINES.md`.
 
 **Choosing the default engine by the measurement is the plan, and it is
 not what the program does yet.**  Today the program restores the engine

@@ -61,6 +61,11 @@ COMPONENTS = [
         "BSD-3-Clause",
         "https://github.com/pytorch/vision/blob/main/LICENSE",
     ),
+    (
+        "opencv-python-headless",
+        "Apache-2.0",
+        "https://github.com/opencv/opencv/blob/4.x/LICENSE",
+    ),
 ]
 
 #: The licence texts that are not inside the packages, with the place
@@ -103,6 +108,8 @@ PACKAGES_IN_THE_WORKER = (
     "kraken",
     "torch",
     "torchvision",
+    # The page segmentation of the second engine (Mishkefet).
+    "opencv-python-headless",
     # The packages that kraken and torch need, and that are inside the
     # worker as well.  The rest of the tree is found from the
     # installed packages themselves.
@@ -132,6 +139,9 @@ REQUIRED_LICENCE_PACKAGES_OF_THE_WORKER = (
     "numpy",
     "scipy",
     "scikit-image",
+    # The licence of OpenCV is inside its own package, and the release
+    # is not made when it is not there.
+    "opencv-python-headless",
 )
 
 #: The files of an installed package that are not licence texts.
@@ -172,6 +182,11 @@ README = """מסמך למשתמש - Hebrew Notes Workbench
    של כ-13 MB (או כ-64 MB למנוע הגדול) ובודקת אותו מול הטבעה שפורסמה
    על יד מפרסם המודל ומול טבעת SHA-256 שנעוץ בתוכנה. אין התקנה אוטומטית
    ואין שום מידע שנשלח לשום מקום.
+   בתפריט "הגדרות" אפשר לבחור מנוע אחר: "Mishkefet-v1", שנכתב לכתב יד
+   עברי מודרני. קובץ המודל שלו הוא בן כ-115 MB, והרישיון שלו הוא
+   CC-BY-NC-SA-4.0 - שימוש לא מסחרי בלבד. התוכנה מציגה את הרישיון לפני
+   ההורדה, והקובץ נבדק מול טבעת SHA-256. הקוד של המנוע (רישיון MIT) מצורף
+   לתוכנה, אבל המשקלים אינם מצורפים ואינם מופצים על יד התוכנה.
 4. בתפריט "קובץ" אפשר להוסיף קבצים (תמונות PNG, JPEG, TIFF, או PDF).
 5. הטקסט המזוהה מופיע באמצע. אפשר לערוך אותו, לשמור את הפרויקט
    (קובץ .hwproj), לייצא אותו ל-TXT או ל-DOCX, ולהדפיס אותו.

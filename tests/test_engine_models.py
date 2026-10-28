@@ -104,7 +104,43 @@ class ModelTests(unittest.TestCase):
             self.assertTrue(artifact.license)
             self.assertTrue(artifact.license_url.startswith("https://"))
             self.assertGreater(artifact.size_bytes, 0)
-            self.assertEqual(len(artifact.md5), 32)
+            # Some hosts publish no MD5.  The SHA-256 that the project
+            # pinned is then the digest that the file is checked against.
+            if artifact.md5 is not None:
+                self.assertEqual(len(artifact.md5), 32)
+
+    def test_a_model_without_a_published_md5_is_checked_by_its_sha256(self) -> None:
+        """Some hosts publish no MD5, and the file is still checked."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "model.bin"
+            path.write_bytes(b"model weights")
+            artifact = make_artifact(path, md5=None)
+            self.assertIsNone(verify_file(path, artifact))
+            wrong = make_artifact(path, md5=None, sha256="0" * 64)
+            self.assertIsNotNone(verify_file(path, wrong))
+
+    def test_the_model_of_the_second_engine_is_known(self) -> None:
+        """The model of the second engine is in the catalogue, with its
+        licence and with the digest that the file must have."""
+        artifact = models.MODEL_ARTIFACTS["mishkefet-v1"]
+        self.assertEqual(artifact.engine, "mishkefet")
+        self.assertEqual(artifact.license, "CC-BY-NC-SA-4.0")
+        self.assertEqual(artifact.size_bytes, 120_864_761)
+        self.assertEqual(
+            artifact.sha256,
+            "0dfb82e440ebfa9dd61f562ad36a83ec41c23904eacd96623c3bd8f6fd850b88",
+        )
+        self.assertTrue(artifact.url.startswith("https://"))
+        # The licence of the model is not a commercial one, and the user
+        # has to be told about it before the file is fetched.
+        self.assertIn("CC-BY-NC-SA-4.0", artifact.summary())
+        self.assertIn("non-commercial", artifact.notes)
+
+    def test_every_model_belongs_to_an_engine_that_exists(self) -> None:
+        """A model of an engine that is not in the program would never be
+        measured and never be read."""
+        for artifact in models.MODEL_ARTIFACTS.values():
+            self.assertIn(artifact.engine, ("kraken", "mishkefet"))
 
     def test_known_models_have_a_pinned_sha256(self) -> None:
         """Every model file is checked against two digests."""

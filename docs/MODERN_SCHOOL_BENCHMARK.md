@@ -16,7 +16,7 @@ is still missing.  The rules of the corpus itself are in
 | --- | --- |
 | The corpus of the modern school handwriting | **Empty** - there is no page in it yet |
 | The tools that build the corpus and measure the engines on it | **Ready** - `tools/build_benchmark.py` and `tools/benchmark_ocr.py` |
-| The measurement of the engines on the same pages | **Ready** - every engine is measured on the same pages |
+| The measurement of the engines on the same pages | **Ready** - every engine is measured on the same pages, including the second engine, *Mishkefet-v1*, that was written for the modern cursive (`docs/ENGINES.md`) |
 | The accuracy of the recognition on the material of the program | **Not verified** - there is nothing to measure it on yet |
 
 The last line is the honest state of the work, and it is written in
@@ -88,7 +88,7 @@ truth, in the same run:
 
 ```bash
 python tools/benchmark_ocr.py --corpus benchmark/modern_school \
-    --engines kraken-ppocrv6-small kraken-ppocrv6-medium
+    --engines kraken-ppocrv6-small kraken-ppocrv6-medium mishkefet-v1
 ```
 
 The report holds, for every engine: the character error rate, the word

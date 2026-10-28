@@ -7,6 +7,10 @@ Windows, that works without an internet connection and without Python.
 
 * זיהוי כתב יד עם kraken ומודל PP-OCRv6 (Apache-2.0).  המודל מותקן
   על ידי המשתמש, ונבדק מול הטבעה שפורסמה על יד מפרסמיו.
+* מנוע שני, "Mishkefet-v1", שנכתב לכתב יד עברי מודרני: הקוד שלו
+  (רישיון MIT) מצורף לתוכנה, והמשקלים שלו (רישיון CC-BY-NC-SA-4.0, שימוש
+  לא מסחרי) מותקנים על ידי המשתמש ונבדקים מול טבעת SHA-256.  המנוע
+  קורא בלי מילון ובלי מודל שפה, כדי שהמדידה תהיה מדידה של המנוע עצמו.
 * מנוע הזיהוי ומודלי השפה הם תוספים: אפשר להתקין, להסיר ולבחור אותם
   במסך "הגדרות".
 * תצוגה מקדימה של תמונות ושל דפי PDF, שמירת העבודה בקובץ .hwproj,
@@ -51,6 +55,14 @@ change one word in every place it appears, keep a word in the word list
 of the user, take the last group of changes back as one action, and go
 back to the text that the recognition gave.  Nothing is applied without
 the press of the user.
+
+There is a second engine, *Mishkefet-v1*, which was written for modern
+Hebrew cursive: its code (MIT) is shipped with the program, and its
+weights (CC-BY-NC-SA-4.0, non-commercial) are installed by the user and
+checked against a SHA-256 digest.  It reads with the best path alone,
+without a dictionary and without a language model, so that a measurement
+measures the engine and not the word list.  The search that led to it and
+the models that were not used are in `docs/ENGINES.md`.
 
 The accuracy of the recognition on modern school handwriting is **not
 verified** yet: there is no page with a transcript that was checked by
