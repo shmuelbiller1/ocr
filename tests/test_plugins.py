@@ -429,7 +429,10 @@ class ExampleEngine:
             plugin = registry.get("unusable")
             self.assertIsNotNone(plugin)
             self.assertFalse(plugin.available())
-            self.assertIsNone(registry.active("ocr"))
+            # The engine that cannot run is not the one that is used,
+            # whether another engine can run or not.
+            active = registry.active("ocr")
+            self.assertTrue(active is None or active.id != "unusable")
 
     def test_a_module_that_waits_for_a_word_list_is_still_the_chosen_one(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

@@ -879,16 +879,9 @@ class MainWindow(QMainWindow):
         for kind in ("spelling", "grammar", "style"):
             registry.set_enabled(kind, self.plugins.kind_enabled(kind))
         self.suggestion_modules = registry
-        dictionary = self.plugins.settings.option(
-            self._spelling_plugin_id(), "dictionary"
-        )
-        if dictionary:
-            module = self.suggestion_modules.module("spelling")
-            if module is not None:
-                try:
-                    module.set_dictionary(dictionary)
-                except OSError:
-                    pass
+        # The settings of every plugin were given to it by the registry
+        # when it was loaded, so the word list of the spelling is
+        # already in place.
 
     def save_text(self) -> None:
         content = self.editor.toPlainText()

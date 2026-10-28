@@ -15,6 +15,7 @@ and the program carries on without it.
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import importlib.util
 import sys
@@ -84,12 +85,15 @@ def _module_file(folder: Path, module_name: str) -> tuple[Path, bool] | None:
 
 
 def _private_name(plugin_id: str) -> str:
-    """The name of the package that holds the code of the plugin."""
-    clean = "".join(
-        character if character.isalnum() or character == "_" else "_"
-        for character in plugin_id
-    )
-    return PRIVATE_PREFIX + (clean or "plugin")
+    """The name of the package that holds the code of the plugin.
+
+    The name is built from a digest of the identifier of the plugin:
+    two plugins whose identifiers look alike - ``my-engine`` and
+    ``my_engine`` - therefore never share a package, and never share
+    the modules inside it.
+    """
+    digest = hashlib.sha256(plugin_id.encode("utf-8")).hexdigest()[:20]
+    return PRIVATE_PREFIX + digest
 
 
 def _make_package(name: str, folder: Path) -> None:
