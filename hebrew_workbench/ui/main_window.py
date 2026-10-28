@@ -1173,8 +1173,8 @@ class MainWindow(QMainWindow):
             # still in place, and the user is told why.
             reason = self.plugins.get(self._spelling_plugin_id())
             message = "התוסף לא קיבל את המילון הזה."
-            if reason is not None and reason.error:
-                message = f"{message}\n{reason.error}"
+            if reason is not None and (reason.rejection or reason.error):
+                message = f"{message}\n{reason.rejection or reason.error}"
             QMessageBox.warning(self, "בחירת מילון", message)
             return
         self._refresh_suggestions(self.suggestions)

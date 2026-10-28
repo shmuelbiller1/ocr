@@ -72,7 +72,9 @@ def make_worker_engine(options: dict | None = None) -> "WorkerEngine":
     worker = worker_path()
     if worker is None or model_path is None:
         return None
-    return WorkerEngine(worker, model_path)
+    # The identity of the model is kept, so that the manifest of the
+    # engine says which model it is and not always the small one.
+    return WorkerEngine(worker, model_path, artifact_id=artifact_id)
 
 
 class WorkerEngine:
@@ -85,15 +87,18 @@ class WorkerEngine:
         worker: str | Path,
         model_path: str | Path,
         timeout_seconds: float = 1800.0,
+        artifact_id: str = "kraken-ppocrv6-small",
     ) -> None:
         self.worker = Path(worker)
         self.model_path = Path(model_path)
         self.timeout_seconds = timeout_seconds
+        #: The model that this engine uses, for the manifest.
+        self.artifact_id = artifact_id
 
     def manifest(self) -> EngineManifest:
         from .kraken_local import build_manifest
 
-        return build_manifest(self.model_path)
+        return build_manifest(self.model_path, self.artifact_id)
 
     def available(self) -> bool:
         return self.worker.is_file() and self.model_path.is_file()

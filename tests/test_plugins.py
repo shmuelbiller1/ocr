@@ -666,7 +666,66 @@ class ExampleEngine:
                 "another-model",
             )
             self.assertEqual(plugin.object.options.get("model_id"), "another-model")
-            self.assertIn("not allowed", plugin.error)
+            self.assertIn("not allowed", plugin.rejection)
+            # The plugin itself works, and it is still the one that the
+            # user chose.
+            self.assertTrue(registry.is_enabled("example-engine"))
+
+
+class PackageExportTests(unittest.TestCase):
+    """A package that exports its engine loads without importing twice."""
+
+    INIT = """
+from .engine import DemoEngine
+
+__all__ = ["DemoEngine"]
+"""
+
+    ENGINE = """
+import builtins
+
+if getattr(builtins, "_demo_engine_loaded", False):
+    raise RuntimeError("the module of the engine was imported twice")
+
+builtins._demo_engine_loaded = True
+
+
+class DemoEngine:
+    name = "Engine of a package"
+
+    def __init__(self, options=None):
+        self.options = dict(options or {})
+
+    def available(self):
+        return True
+"""
+
+    def test_the_engine_of_a_package_is_imported_once(self) -> None:
+        import builtins
+
+        if hasattr(builtins, "_demo_engine_loaded"):
+            del builtins._demo_engine_loaded
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            package = source / "demo"
+            package.mkdir(parents=True)
+            manifest = {
+                **MANIFEST,
+                "id": "demo-engine",
+                "entry": "demo.engine:DemoEngine",
+            }
+            (source / "plugin.json").write_text(
+                json.dumps(manifest), encoding="utf-8"
+            )
+            (package / "__init__.py").write_text(self.INIT, encoding="utf-8")
+            (package / "engine.py").write_text(self.ENGINE, encoding="utf-8")
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("demo-engine")
+            self.assertEqual(plugin.error, "")
+            self.assertIsNotNone(plugin.object)
+            self.assertEqual(plugin.object.name, "Engine of a package")
 
 
 class ReservedIdentifierTests(unittest.TestCase):

@@ -179,6 +179,10 @@ class Plugin:
     manifest: PluginManifest
     object: object | None = None
     error: str = ""
+    #: The reason why the last setting of the plugin was not accepted.
+    #: This is not a mistake of the plugin: the plugin itself works,
+    #: and the user is told what was refused.
+    rejection: str = ""
 
     @property
     def id(self) -> str:

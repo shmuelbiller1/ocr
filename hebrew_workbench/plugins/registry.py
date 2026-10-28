@@ -139,10 +139,12 @@ class PluginRegistry:
                 configure(dict(options))
             except Exception as exc:
                 plugin.error = f"the settings of the plugin could not be used: {exc}"
+                plugin.rejection = plugin.error
                 return False
             # The settings were used: an earlier mistake is not the
             # mistake of the plugin any more.
             plugin.error = ""
+            plugin.rejection = ""
         return True
 
     # -- what is there -----------------------------------------------------
@@ -355,8 +357,11 @@ class PluginRegistry:
             self.settings.options.get(plugin_id, {}).pop(key, None)
         self._apply_options(plugin, self._options_of(plugin.manifest))
         # The reason why the value was refused stays with the plugin,
-        # so that the user can be told what happened.
-        plugin.error = reason
+        # so that the user can be told what happened.  It is not a
+        # mistake of the plugin: the plugin itself works, and it stays
+        # the one that the user chose.
+        plugin.error = ""
+        plugin.rejection = reason
         self.save()
         return False
 

@@ -163,6 +163,14 @@ def _import_from_folder(module_name: str, folder: Path, plugin_id: str):
         )
     file_path, is_package = found
     name = f"{root}.{module_name}"
+    # The parent package may have imported the module of the entry
+    # point already - `from .engine import Engine` does that.  The
+    # module that is already there is used, and not imported again: a
+    # plugin that registers something when it is imported would fail
+    # with a duplicate.
+    existing = sys.modules.get(name)
+    if existing is not None:
+        return existing
     try:
         spec = importlib.util.spec_from_file_location(
             name,
