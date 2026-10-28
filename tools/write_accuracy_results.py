@@ -151,6 +151,18 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
         "",
     ]
 
+    # How much of the corpus was really measured: a corpus of thirty
+    # pages of which four were read is not a corpus of four pages, and
+    # the report says which is which.
+    if pages_seen and measured_corpus and measured_corpus < pages_seen:
+        lines += [
+            f"The corpus holds {pages_seen} pages.  The build read"
+            f" {report.get('pages_read', measured_corpus)} of them, and"
+            f" {measured_corpus} of them could be measured.  The rate above"
+            " is of those pages, and it is not a rate of the whole corpus.",
+            "",
+        ]
+
     # The failures of an engine are named: a rate that is of the pages
     # the engine read is not a rate of the corpus, and it is not
     # written as if it were one.

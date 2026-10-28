@@ -251,3 +251,34 @@ class AccuracyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MeasuredPagesTests(unittest.TestCase):
+    """The number of the pages that may be measured is not the number of
+    the pages of the corpus."""
+
+    def _page(self, name: str, complete: bool, verified: bool) -> benchmark.Page:
+        page = benchmark.Page(image=Path(name))
+        page.report = {"complete": complete}
+        page.verified_by = ["a teacher"] if verified else []
+        return page
+
+    def test_a_page_that_is_complete_and_verified_is_measured(self) -> None:
+        pages = [self._page("a.jpg", True, True)]
+        self.assertEqual(benchmark.pages_that_may_be_measured(pages), 1)
+
+    def test_a_page_whose_ground_truth_is_not_complete_is_not_measured(self) -> None:
+        pages = [self._page("a.jpg", False, True)]
+        self.assertEqual(benchmark.pages_that_may_be_measured(pages), 0)
+
+    def test_a_page_that_was_not_verified_is_not_measured(self) -> None:
+        pages = [self._page("a.jpg", True, False)]
+        self.assertEqual(benchmark.pages_that_may_be_measured(pages), 0)
+
+    def test_the_pages_of_the_corpus_are_not_all_measured(self) -> None:
+        pages = [
+            self._page("a.jpg", True, True),
+            self._page("b.jpg", False, True),
+            self._page("c.jpg", True, False),
+        ]
+        self.assertEqual(benchmark.pages_that_may_be_measured(pages), 1)

@@ -355,3 +355,57 @@ class EngineFailureTests(unittest.TestCase):
         text = notice.summarise(self.REPORT)
         self.assertIn("failed", text)
         self.assertIn("15.0%", text)
+
+
+class CorpusSizeTests(unittest.TestCase):
+    """The size of the corpus and the number of the pages that were
+    measured are two different numbers, and the report keeps them
+    apart."""
+
+    def _report(self) -> dict:
+        return {
+            "corpus": {
+                "name": "The Pinkas Dataset",
+                "target": "historical",
+                "pages": 30,
+                "pages_measured": 4,
+            },
+            "pages_read": 5,
+            "measured_corpus_pages": 4,
+            "engines": [
+                {
+                    "engine": "kraken PP-OCRv6 (Apache-2.0)",
+                    "model": "kraken-ppocrv6-small",
+                    "pages": 4,
+                    "pages_seen": 4,
+                    "summary": {
+                        "cer": 0.576,
+                        "wer": 0.9375,
+                        "seconds_per_page": 22.4,
+                        "characters_reference": 10798,
+                        "words_reference": 2176,
+                        "pages_measured": 4,
+                        "measured": True,
+                    },
+                    "failures": [],
+                }
+            ],
+        }
+
+    def test_the_report_says_how_much_of_the_corpus_was_read(self) -> None:
+        text = writer.build_section(self._report())
+        self.assertIn("The corpus holds 30 pages.", text)
+        self.assertIn("The build read 5 of them", text)
+        self.assertIn("4 of them could be measured", text)
+
+    def test_the_rate_is_not_written_as_a_rate_of_the_whole_corpus(self) -> None:
+        text = writer.build_section(self._report())
+        self.assertIn("it is not a rate of the whole corpus", text)
+
+    def test_a_corpus_that_was_measured_whole_says_nothing_of_the_sort(self) -> None:
+        report = self._report()
+        report["corpus"]["pages_measured"] = 30
+        report["pages_read"] = 30
+        report["measured_corpus_pages"] = 30
+        text = writer.build_section(report)
+        self.assertNotIn("it is not a rate of the whole corpus", text)

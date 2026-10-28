@@ -288,6 +288,16 @@ def summarise(results: list[dict]) -> dict:
     }
 
 
+def pages_that_may_be_measured(pages: list[Page]) -> int:
+    """The number of the pages whose ground truth may be measured.
+
+    A page whose transcript could not be read, or whose transcript was
+    not checked by somebody else, is not a measurement: the engine
+    would be blamed for a text that is not there.
+    """
+    return len([page for page in pages if page.complete and page.verified])
+
+
 def measured_pages_of(report: dict) -> set[str]:
     """The names of the pages that an engine really measured."""
     return {
@@ -559,7 +569,9 @@ def main(argv: list[str] | None = None) -> int:
                 "A diagnostic corpus: it is not the material the program is made for."
             ),
             "pages": len(pages),
-            "pages_measured": len(pages),
+            # The number of the pages that were measured is not known
+            # yet: it is set after the pages were chosen.
+            "pages_measured": 0,
             "verified": False,
         }
         corpus = Corpus(
@@ -603,6 +615,14 @@ def main(argv: list[str] | None = None) -> int:
         # of the pages that may be measured.
         pages = pages[: max(1, args.pages)]
 
+    # The number of the pages that were read is not the number of the
+    # pages that were measured: a page whose ground truth is not
+    # complete is not a measurement, and a corpus of thirty pages of
+    # which four were read is not a corpus of four pages.
+    pages_read = len(pages)
+    pages_measured = pages_that_may_be_measured(pages)
+    description["pages_measured"] = pages_measured
+
     # -- the engines --------------------------------------------------------
     from hebrew_workbench.engine.models import models_directory
 
@@ -641,10 +661,14 @@ def main(argv: list[str] | None = None) -> int:
                 "scholarly style are not part of the measurement"
             ),
         },
-        # The number of the pages of the corpus that may be measured.
-        # It is not the number of the pages that an engine read: an
-        # engine that failed on a page is a fact about that engine.
-        "measured_corpus_pages": len(pages),
+        # The number of the pages that were read, and the number of
+        # the pages of the corpus that may be measured.  They are not
+        # the same: a page whose ground truth is not complete is not a
+        # measurement.  The number of the pages that an engine read is
+        # a fact about that engine, and it is in its own part of the
+        # report.
+        "pages_read": pages_read,
+        "measured_corpus_pages": pages_measured,
         "engines": [],
     }
     for engine, label in engines:
