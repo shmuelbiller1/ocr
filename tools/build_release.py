@@ -34,6 +34,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from hebrew_workbench import __version__  # noqa: E402
 
+from hebrew_workbench.console import use_utf8  # noqa: E402
+
 #: The components that end up inside the application, and where the
 #: text of their licence is found.
 COMPONENTS = [
@@ -485,6 +487,10 @@ def sha256_of(path: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The console of Windows cannot write Hebrew in the code page
+    # of the system, and the program would stop in the middle of a
+    # report because of a letter.
+    use_utf8()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app", default="dist/HebrewNotesWorkbench")
     parser.add_argument("--output")

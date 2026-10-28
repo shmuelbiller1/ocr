@@ -15,6 +15,11 @@ import sys
 import time
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from hebrew_workbench.console import use_utf8  # noqa: E402
+
 BRANCH = "ci/diagnostics"
 FOLDER = "ci-diagnostics"
 
@@ -51,6 +56,11 @@ def push_with_retry(branch: str, attempts: int = 4) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The console of Windows cannot write Hebrew in the code page of
+    # the system, and the program would stop in the middle of a report
+    # because of a letter.
+    use_utf8()
+
     argv = list(sys.argv[1:] if argv is None else argv)
     branch = BRANCH
     if argv and argv[0].startswith("--branch="):
