@@ -251,6 +251,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("sha256sum", self.text)
         self.assertIn(".sha256", self.text)
 
+    def test_the_release_is_made_for_the_tag_that_was_pushed(self) -> None:
+        self.assertIn("--verify-tag", self.text)
+
+    def test_the_release_has_the_token_that_it_needs(self) -> None:
+        self.assertIn("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}", self.text)
+
     def test_the_notes_of_the_release_are_the_notes_of_the_repository(self) -> None:
         self.assertIn("docs/RELEASE_NOTES.md", self.text)
 

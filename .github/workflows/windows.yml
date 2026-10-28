@@ -512,11 +512,15 @@ jobs:
       - name: Publish the release
         env:
           TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -o pipefail
           cd release
           sha256sum ./*.zip > ./*.sha256
+          # --verify-tag: the release is made for the tag that was
+          # pushed, and not for a new tag that the tool would make.
           gh release create "$TAG" \
             ./*.zip ./*.sha256 \
+            --verify-tag \
             --title "Hebrew Notes Workbench $TAG" \
             --notes-file ../release-notes.md
