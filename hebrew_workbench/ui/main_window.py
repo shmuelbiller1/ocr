@@ -587,6 +587,8 @@ class MainWindow(QMainWindow):
         entry = self._shown_entry
         if entry is not None:
             entry.edited = True
+        # The text is not in a project file yet.
+        self.project.dirty = True
 
     def _store_editor_text(self) -> None:
         """Save the text of the document that is in the editor.
@@ -957,9 +959,12 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        target = Path(path)
+        chosen = Path(path)
+        target = chosen
         if target.suffix.lower() != ".txt":
             target = target.with_suffix(".txt")
+        if not self._ask_before_replacing(target, chosen, "שמירת הטקסט"):
+            return
         try:
             write_txt(target, content)
         except ExportError as exc:
@@ -979,15 +984,39 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        target = Path(path)
+        chosen = Path(path)
+        target = chosen
         if target.suffix.lower() != ".docx":
             target = target.with_suffix(".docx")
+        if not self._ask_before_replacing(target, chosen, "ייצוא ל-Word"):
+            return
         try:
             write_docx(target, content)
         except ExportError as exc:
             QMessageBox.warning(self, "ייצוא ל-Word", str(exc))
             return
         self.statusBar().showMessage(f"נוצר קובץ: {target}", 6000)
+
+    def _ask_before_replacing(self, target: Path, chosen: Path, title: str) -> bool:
+        """Ask the user before a file that is there is replaced.
+
+        The dialog of the save knows about the file that was chosen,
+        and not about the file that is really written: the name of the
+        file may be changed after the dialog was closed, and the
+        question of the dialog was asked about the old name.  The
+        question is therefore asked here, about the file that is
+        really written.
+        """
+        if target == chosen or not target.exists():
+            return True
+        answer = QMessageBox.question(
+            self,
+            title,
+            f"הקובץ {target.name} כבר קיים. להחליף אותו?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return answer == QMessageBox.Yes
 
     # -- printing ----------------------------------------------------------
     def _printer(self) -> QPrinter:
@@ -1546,8 +1575,32 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
         self._store_editor_text()
+        if self._there_is_work_that_was_not_saved():
+            answer = QMessageBox.question(
+                self,
+                "סגירת התוכנה",
+                "יש עבודה שלא נשמרה לקובץ של פרויקט. לצאת בכל זאת?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                event.ignore()
+                return
         self.preview.close_document()
         event.accept()
+
+    def _there_is_work_that_was_not_saved(self) -> bool:
+        """Is there text of the user that is not in a project file?
+
+        The text of the documents is kept in the project file.  A
+        project that was never saved, and a text that was changed after
+        the project was saved, are work that would be lost.
+        """
+        if self.project.dirty:
+            return True
+        if self.project.path is not None:
+            return False
+        return any(entry.transcription.strip() for entry in self.project)
 
 
 def run(argv: list[str] | None = None) -> int:

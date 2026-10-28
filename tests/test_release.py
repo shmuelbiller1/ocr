@@ -369,6 +369,11 @@ class PublishTheReleaseTests(unittest.TestCase):
         self.assertIn("-F draft=false", self.script)
         self.assertNotIn("-f draft=false", self.script)
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "the release is made by the runner of Linux, and the shell of the "
+        "Windows runner is not the shell of that runner",
+    )
     def test_the_file_of_the_user_is_not_replaced_with_a_clobber(self) -> None:
         """`gh release upload --clobber` deletes the file that was
         published before it puts the new one, and a failure in between

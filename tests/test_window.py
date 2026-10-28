@@ -203,6 +203,143 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class UnsavedWorkTests(unittest.TestCase):
+    """The program asks before it throws the work of the user away."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        self.home = temporary_home()
+        self.window = MainWindow()
+
+    def tearDown(self) -> None:
+        self.window.close()
+
+    def answer_the_question(self, answer) -> list:
+        from PySide6.QtWidgets import QMessageBox
+
+        asked = []
+
+        def question(*args, **kwargs):
+            asked.append(args[1] if len(args) > 1 else "")
+            return answer
+
+        original = QMessageBox.question
+        QMessageBox.question = staticmethod(question)
+        self.addCleanup(lambda: setattr(QMessageBox, "question", original))
+        return asked
+
+    def test_the_user_is_asked_before_the_window_is_closed(self) -> None:
+        """The text of the user is not in a project file, and the
+        program has to ask before it is lost."""
+        self.window.editor.setPlainText("מה שהמשתמש הקליד")
+        asked = self.answer_the_question(self.no())
+        self.window.close()
+        self.assertTrue(asked)
+
+    def test_the_window_stays_open_when_the_user_refuses(self) -> None:
+        self.window.editor.setPlainText("מה שהמשתמש הקליד")
+        self.answer_the_question(self.no())
+        self.window.show()
+        self.window.close()
+        self.assertTrue(self.window.isVisible())
+
+    def test_nothing_is_asked_when_the_work_was_saved(self) -> None:
+        """The text is in a project file, and there is nothing to lose."""
+        with tempfile.TemporaryDirectory() as folder:
+            self.window.editor.setPlainText("מה שהמשתמש הקליד")
+            self.window.project.save(Path(folder) / "the-project.hwb")
+        asked = self.answer_the_question(self.no())
+        self.window.close()
+        self.assertFalse(asked)
+
+    def test_the_work_is_not_asked_about_when_the_window_is_empty(self) -> None:
+        asked = self.answer_the_question(self.no())
+        self.window.close()
+        self.assertFalse(asked)
+
+    @staticmethod
+    def no():
+        from PySide6.QtWidgets import QMessageBox
+
+        return QMessageBox.No
+
+
+class ExportOverwriteTests(unittest.TestCase):
+    """The question of the overwrite is asked about the file that is
+    really written."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        self.home = temporary_home()
+        self.window = MainWindow()
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+
+    def tearDown(self) -> None:
+        self.window.close()
+
+    def answer_the_question(self, answer) -> list:
+        from PySide6.QtWidgets import QMessageBox
+
+        asked = []
+
+        def question(*args, **kwargs):
+            asked.append(args[1] if len(args) > 1 else "")
+            return answer
+
+        original = QMessageBox.question
+        QMessageBox.question = staticmethod(question)
+        self.addCleanup(lambda: setattr(QMessageBox, "question", original))
+        return asked
+
+    @staticmethod
+    def no():
+        from PySide6.QtWidgets import QMessageBox
+
+        return QMessageBox.No
+
+    def test_a_file_that_is_there_is_not_replaced_without_a_question(self) -> None:
+        target = Path(self.folder.name) / "notes.txt"
+        target.write_text("the text of another transcription", encoding="utf-8")
+        chosen = Path(self.folder.name) / "notes.md"
+        asked = self.answer_the_question(self.no())
+        allowed = self.window._ask_before_replacing(target, chosen, "שמירת הטקסט")
+        self.assertTrue(asked)
+        self.assertFalse(allowed)
+        self.assertEqual(
+            target.read_text(encoding="utf-8"), "the text of another transcription"
+        )
+
+    def test_a_file_that_is_not_there_is_written_without_a_question(self) -> None:
+        target = Path(self.folder.name) / "notes.txt"
+        chosen = Path(self.folder.name) / "notes.md"
+        asked = self.answer_the_question(self.no())
+        allowed = self.window._ask_before_replacing(target, chosen, "שמירת הטקסט")
+        self.assertFalse(asked)
+        self.assertTrue(allowed)
+
+    def test_the_file_that_is_written_is_the_one_that_was_asked_about(self) -> None:
+        """The name of the file changes after the dialog was closed, and
+        the question is about the file that is really written."""
+        from PySide6.QtWidgets import QFileDialog
+
+        target = Path(self.folder.name) / "notes.txt"
+        target.write_text("the text of another transcription", encoding="utf-8")
+        chosen = Path(self.folder.name) / "notes.md"
+        original = QFileDialog.getSaveFileName
+        QFileDialog.getSaveFileName = staticmethod(
+            lambda *args, **kwargs: (str(chosen), "")
+        )
+        self.addCleanup(lambda: setattr(QFileDialog, "getSaveFileName", original))
+        self.window.editor.setPlainText("מה שהמשתמש הקליד")
+        self.answer_the_question(self.no())
+        self.window.save_text()
+        # The user refused, and the file that was there is as it was.
+        self.assertEqual(
+            target.read_text(encoding="utf-8"), "the text of another transcription"
+        )
+
+
 class OriginalTextTests(unittest.TestCase):
     """The text as the recognition gave it is kept, so it can be found again."""
 

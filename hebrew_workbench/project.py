@@ -133,6 +133,9 @@ class Project:
     def __init__(self, documents: Iterable[DocumentEntry] | None = None) -> None:
         self.documents: list[DocumentEntry] = list(documents or [])
         self.path: Path | None = None
+        # Is there work that was not written to a project file?  The
+        # program asks the user before it throws it away.
+        self.dirty: bool = False
 
     # -- container helpers -------------------------------------------------
     def __len__(self) -> int:
@@ -201,6 +204,9 @@ class Project:
             raise
         _sync_directory(target.parent)
         self.path = target
+        # The work is in a file now, and the program does not have to
+        # ask about it any more.
+        self.dirty = False
         return target
 
     @classmethod
