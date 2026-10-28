@@ -124,8 +124,11 @@ python tools/build_benchmark.py --corpus benchmark/modern_school
 ```
 
 The command checks every page, writes the digest of every image into
-the manifest of the corpus - so that the same pages are measured every
-time - and says which pages are not verified.
+the manifest of the corpus and says which pages are not verified.  The
+measurement checks the images against that manifest before it measures
+anything: when an image was changed, the measurement is of a different
+corpus than the one that was built, and it is not published, so that
+the same pages are measured every time.
 
 Before a page is put in the corpus, the school has to agree to it in
 writing, and the agreement has to allow the use of the page for

@@ -27,23 +27,34 @@ def summarise(report: dict) -> str:
         )
     sentences = []
     for engine in engines:
+        name = engine.get("model") or engine.get("engine")
         summary = engine.get("summary") or {}
+        failures = engine.get("failures") or []
         if summary.get("cer") is None:
-            sentences.append(
-                f"{engine.get('model') or engine.get('engine')}: no verified page"
-            )
+            if failures:
+                # The engine failed: it is not the same thing as a
+                # corpus without a verified transcript.
+                sentences.append(
+                    f"{name}: the engine failed on {len(failures)} pages"
+                    + (f" ({failures[0].get('page', '?')})" if failures else "")
+                )
+            else:
+                sentences.append(f"{name}: no verified page")
             continue
         if not engine.get("pages"):
-            sentences.append(
-                f"{engine.get('model') or engine.get('engine')}: nothing to measure"
-            )
+            sentences.append(f"{name}: nothing to measure")
             continue
         sentences.append(
-            f"{engine.get('model') or engine.get('engine')}: "
+            f"{name}: "
             f"{engine.get('pages')} pages, "
             f"character error rate {summary.get('cer', 0) * 100:.1f}%, "
             f"word error rate {summary.get('wer', 0) * 100:.1f}%, "
             f"{summary.get('seconds_per_page', '?')} seconds per page"
+            + (
+                f", the engine failed on {len(failures)} pages"
+                if failures
+                else ""
+            )
         )
     return "; ".join(sentences)
 

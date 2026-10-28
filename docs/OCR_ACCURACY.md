@@ -81,8 +81,10 @@ of a general multilingual handwriting model on real historical Hebrew
 cursive.
 
 <!-- DIAGNOSTIC:BEGIN -->
-The numbers of the last measurement of the build, on the pages of the
-dataset whose ground truth is complete and was verified, were:
+The numbers of the last measurement of the build.  The build reads the
+first **5** pages of the dataset (`--pages 5`), and 4 of them have a
+ground truth that is complete and was verified.  The rates below are of
+those 4 pages, and the report names the page that was left out.
 
 | Engine | Pages measured | Character error rate | Word error rate | Seconds per page |
 | --- | --- | --- | --- | --- |
@@ -94,10 +96,10 @@ The engines were measured on the **same** pages, and the rates above
 are the rates over those pages, so that they can be compared with one
 another.
 
-The page whose ground truth is not complete was left out of the rates,
-and the report names it.  The build measures every engine that is
-installed on the same pages, and writes the fresh numbers into this
-block.
+The build measures every engine that is installed on the same pages,
+and writes the fresh numbers into this block.  The numbers here are
+the ones of the last build; the block in the artifact of the build is
+the one that was measured last.
 <!-- DIAGNOSTIC:END -->
 
 ## The engines

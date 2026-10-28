@@ -293,3 +293,65 @@ class MissingDocumentTests(unittest.TestCase):
                 ),
                 1,
             )
+
+
+class EngineFailureTests(unittest.TestCase):
+    """A failure of an engine is not the same as a missing transcript."""
+
+    REPORT = {
+        "corpus": {
+            "name": "The Pinkas Dataset",
+            "target": "historical",
+            "pages": 5,
+            "pages_measured": 5,
+            "verified": True,
+        },
+        "measured_corpus_pages": 5,
+        "engines": [
+            {
+                "engine": "the engine that failed",
+                "model": "kraken-ppocrv6-small",
+                "pages": 0,
+                "pages_seen": 5,
+                "summary": {
+                    "cer": None,
+                    "wer": None,
+                    "seconds_per_page": None,
+                },
+                "results": [],
+                "failures": [
+                    {"page": "page_01.jpg", "error": "RuntimeError: no model"}
+                ],
+            },
+            {
+                "engine": "the engine that worked",
+                "model": "kraken-ppocrv6-medium",
+                "pages": 4,
+                "pages_seen": 5,
+                "summary": {
+                    "cer": 0.15,
+                    "wer": 0.3,
+                    "seconds_per_page": 30.0,
+                    "characters_reference": 100,
+                    "words_reference": 20,
+                },
+                "results": [],
+                "failures": [],
+            },
+        ],
+    }
+
+    def test_the_results_of_the_engine_that_worked_are_kept(self) -> None:
+        section = writer.build_section(self.REPORT)
+        self.assertIn("15.0%", section)
+        self.assertNotIn("not verified", section)
+
+    def test_the_failure_of_the_engine_is_named(self) -> None:
+        section = writer.build_section(self.REPORT)
+        self.assertIn("page_01.jpg", section)
+        self.assertIn("failed", section)
+
+    def test_the_notice_of_the_build_tells_the_failure_and_the_result(self) -> None:
+        text = notice.summarise(self.REPORT)
+        self.assertIn("failed", text)
+        self.assertIn("15.0%", text)

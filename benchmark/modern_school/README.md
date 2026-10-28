@@ -86,9 +86,12 @@ python tools/benchmark_ocr.py --corpus benchmark/modern_school \
 ```
 
 The first command checks the corpus and writes the manifest of it (the
-digest of every page, so that the same pages are measured every time).
-The second command measures every engine on the **same** pages, and
-writes the rates of every engine into a report.
+digest of every page).  The second command measures every engine on the
+**same** pages, and writes the rates of every engine into a report.
+
+The measurement checks the images against the manifest before it
+measures anything: when an image was changed, the measurement is of a
+different corpus than the one that was built, and it is not published.
 
 The engines are compared with the rate of the errors and with the time
 that a teacher needs to correct the text - not with the order in which

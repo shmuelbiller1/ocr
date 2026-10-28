@@ -151,6 +151,21 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
         "",
     ]
 
+    # The failures of an engine are named: a rate that is of the pages
+    # the engine read is not a rate of the corpus, and it is not
+    # written as if it were one.
+    failures = first.get("failures") or []
+    if failures:
+        names = ", ".join(str(item.get("page", "?")) for item in failures)
+        lines += [
+            "> **The engine failed on {count} of the pages it was given:**"
+            " {names}.  The rate above is of the pages it read, and it is not"
+            " a rate of the whole corpus.".format(
+                count=len(failures), names=names
+            ),
+            "",
+        ]
+
     if len(engines) > 1:
         # The engines are compared on the pages that every engine
         # measured.  A rate that was measured on other pages than the
@@ -203,6 +218,28 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
                 )
             )
         lines.append("")
+
+        broken = [
+            (engine.get("model") or engine.get("engine", "the engine"),
+             engine.get("failures") or [])
+            for engine in engines
+            if engine.get("failures")
+        ]
+        if broken:
+            lines += [
+                "**The engines that failed:**",
+                "",
+            ]
+            for name, items in broken:
+                pages = ", ".join(str(item.get("page", "?")) for item in items)
+                lines.append(f"* {name} failed on {pages}.")
+            lines += [
+                "",
+                "The comparison above is of the pages that every engine read."
+                " A rate that is of other pages than the rate of another engine"
+                " is not a comparison, and it is not written as one.",
+                "",
+            ]
 
     # The ground truth of a page has to be complete, or the page is not
     # a measurement of the recognition: the text that was not
