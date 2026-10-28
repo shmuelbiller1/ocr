@@ -334,6 +334,7 @@ jobs:
           # this material is not verified - and that is the truth.
           python tools/benchmark_ocr.py \
             --corpus benchmark/modern_school \
+            --models .cache/models \
             --engines kraken-ppocrv6-small kraken-ppocrv6-medium \
             --output ocr-accuracy-modern.json 2>&1 | tee benchmark-modern.log
           if [ "$?" -ne 0 ]; then throw 'the measurement of the modern corpus failed'; fi
@@ -341,9 +342,11 @@ jobs:
         run: |
           set -o pipefail
           # Every engine is measured on the same pages, so that they can
-          # be compared with one another.
+          # be compared with one another.  The models are the ones that
+          # were downloaded above, and not the ones of the program.
           python tools/benchmark_ocr.py \
             --pinkas --download --cache .cache/pinkas --pages 5 \
+            --models .cache/models \
             --engines kraken-ppocrv6-small kraken-ppocrv6-medium \
             --output ocr-accuracy.json 2>&1 | tee benchmark.log
           if [ "$?" -ne 0 ]; then throw 'the measurement failed'; fi

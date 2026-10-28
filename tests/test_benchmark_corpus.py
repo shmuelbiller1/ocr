@@ -9,6 +9,7 @@ from pathlib import Path
 
 from hebrew_workbench.benchmark.corpus import (
     Corpus,
+    Page,
     load_corpus,
     pinkas_pages,
     read_transcript,
@@ -165,3 +166,75 @@ class UnreadableLineTests(unittest.TestCase):
         self.assertIn("שלום עולם", text)
         self.assertFalse(report["complete"])
         self.assertEqual(report["lines_unreadable"], 1)
+
+
+class EngineFolderTests(unittest.TestCase):
+    """The models are looked for in the folder that is given."""
+
+    def test_the_model_of_the_folder_that_is_given_is_found(self) -> None:
+        from tools.benchmark_ocr import resolve_engines
+
+        with tempfile.TemporaryDirectory() as folder:
+            models = Path(folder) / "models"
+            models.mkdir()
+            (models / "small.safetensors").write_bytes(b"not a real model")
+            engines, warnings = resolve_engines(
+                ["kraken-ppocrv6-small"], models
+            )
+            self.assertEqual(warnings, [])
+            self.assertEqual(len(engines), 1)
+            self.assertEqual(engines[0][1], "kraken-ppocrv6-small")
+
+    def test_a_model_that_is_not_there_is_not_measured(self) -> None:
+        from tools.benchmark_ocr import resolve_engines
+
+        with tempfile.TemporaryDirectory() as folder:
+            models = Path(folder) / "models"
+            models.mkdir()
+            engines, warnings = resolve_engines(
+                ["kraken-ppocrv6-small", "kraken-ppocrv6-medium"], models
+            )
+            self.assertEqual(engines, [])
+            self.assertEqual(len(warnings), 2)
+            self.assertIn("not installed", warnings[0])
+
+    def test_a_model_that_is_not_known_is_not_measured(self) -> None:
+        from tools.benchmark_ocr import resolve_engines
+
+        with tempfile.TemporaryDirectory() as folder:
+            engines, warnings = resolve_engines(["no-such-model"], Path(folder))
+            self.assertEqual(engines, [])
+            self.assertIn("not known to the program", warnings[0])
+
+
+class EngineFailureTests(unittest.TestCase):
+    """A broken engine does not stop the measurement of the others."""
+
+    def test_the_failure_of_an_engine_is_named_and_the_run_goes_on(self) -> None:
+        from tools.benchmark_ocr import run_engine
+
+        class BrokenEngine:
+            name = "The broken engine"
+
+            def recognize(self, image):
+                raise RuntimeError("the engine is not installed")
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "transcripts").mkdir()
+            transcript = root / "transcripts" / "page.txt"
+            transcript.write_text("שלום עולם\n", encoding="utf-8")
+            page = Page(
+                image=root / "page.png",
+                transcript=transcript,
+                text="שלום עולם",
+                report={"complete": True},
+                verified_by=["the teacher"],
+            )
+            report = run_engine(BrokenEngine(), [page], label="broken")
+        self.assertEqual(report["results"], [])
+        self.assertEqual(len(report["failures"]), 1)
+        self.assertIn("the engine is not installed", report["failures"][0]["error"])
+        # No rate is published, and not a rate of zero.
+        self.assertIsNone(report["summary"]["cer"])
+        self.assertFalse(report["summary"]["measured"])
