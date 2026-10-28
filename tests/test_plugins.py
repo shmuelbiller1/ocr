@@ -846,6 +846,111 @@ class DemoEngine:
             self.assertEqual(registry.ocr_engines(), [])
 
 
+class ConstructorErrorTests(unittest.TestCase):
+    """A mistake in the constructor is a mistake of the plugin."""
+
+    CODE = """
+class ExampleEngine:
+    name = "Engine with a mistake"
+
+    def __init__(self, options=None):
+        raise TypeError("the beam size is not a number")
+"""
+
+    def test_the_error_of_the_plugin_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "id": "demo-engine"}
+            make_plugin_folder(source, manifest=manifest, code=self.CODE)
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("demo-engine")
+            self.assertIsNone(plugin.object)
+            self.assertIn("beam size", plugin.error)
+            # The engine is not offered to the user.
+            self.assertEqual(registry.ocr_engines(), [])
+
+
+class RollbackTests(unittest.TestCase):
+    """After a refusal the plugin is put back the way it was."""
+
+    CODE = """
+class ExampleEngine:
+    name = "Module with a strict dictionary"
+
+    def __init__(self, options=None):
+        self.options = dict(options or {})
+        self.dictionary = None
+
+    def available(self):
+        return True
+
+    def check(self, text):
+        return []
+
+    def configure(self, options):
+        self.options = dict(options or {})
+        self.dictionary = self.options.get("dictionary")
+        if self.dictionary == "not-allowed":
+            raise ValueError("this word list is not allowed")
+"""
+
+    def test_the_module_is_put_back_the_way_it_was(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "kind": "spelling", "id": "demo-spelling"}
+            make_plugin_folder(source, manifest=manifest, code=self.CODE)
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            registry.set_option("demo-spelling", "dictionary", "good.txt")
+            refused = registry.set_option("demo-spelling", "dictionary", "not-allowed")
+            self.assertFalse(refused)
+            plugin = registry.get("demo-spelling")
+            # The module was put back the way it was before the refusal.
+            self.assertEqual(plugin.object.dictionary, "good.txt")
+
+
+class ReinstallTests(unittest.TestCase):
+    """A plugin that is installed again is read from the disk."""
+
+    def test_the_new_code_of_the_plugin_is_used(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "id": "demo-engine", "entry": "demo:DemoEngine"}
+            source.mkdir(parents=True)
+            (source / "plugin.json").write_text(
+                json.dumps(manifest), encoding="utf-8"
+            )
+            (source / "demo.py").write_text(
+                "class DemoEngine:\n"
+                "    name = 'Demo'\n"
+                "    HELPER = 'the first version'\n\n"
+                "    def available(self):\n"
+                "        return True\n",
+                encoding="utf-8",
+            )
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            self.assertEqual(registry.get("demo-engine").object.HELPER, "the first version")
+
+            # The plugin is changed on the disk and read again.
+            (root / "demo-engine" / "demo.py").write_text(
+                "class DemoEngine:\n"
+                "    name = 'Demo'\n"
+                "    HELPER = 'the second version'\n\n"
+                "    def available(self):\n"
+                "        return True\n",
+                encoding="utf-8",
+            )
+            registry.load()
+            self.assertEqual(
+                registry.get("demo-engine").object.HELPER, "the second version"
+            )
+
+
 class ReservedIdentifierTests(unittest.TestCase):
     """The identifiers that the program keeps for itself."""
 

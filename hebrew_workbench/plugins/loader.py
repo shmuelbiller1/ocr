@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import inspect
 import importlib.machinery
 import importlib.util
 import sys
@@ -61,12 +62,36 @@ def forget_modules(folders: list[Path]) -> list[str]:
     for name in list(sys.modules):
         module = sys.modules.get(name)
         file_name = getattr(module, "__file__", None)
-        if not file_name:
-            continue
-        if _belongs_to(folders, file_name):
+        if file_name and _belongs_to(folders, file_name):
             del sys.modules[name]
             forgotten.append(name)
+            continue
+        # The packages that the program makes for a plugin have no file
+        # of their own, and they hold the modules of the plugin as
+        # attributes.  They are forgotten as well, so that the next load
+        # reads the code that is on the disk now and not the old one
+        # that is still in the cache.
+        if not name.startswith(PRIVATE_PREFIX):
+            continue
+        if not _is_private_of(folders, module):
+            continue
+        del sys.modules[name]
+        forgotten.append(name)
     return forgotten
+
+
+def _is_private_of(folders: list[Path], module) -> bool:
+    """Is this the private package of one of these folders?
+
+    The name of the private package is built from a digest of the
+    identifier of the plugin and of the folder it lives in, so the
+    folder cannot be read out of the name.  The path of the package
+    says where it lives, and that is what is looked at.
+    """
+    for entry in getattr(module, "__path__", None) or []:
+        if _belongs_to(folders, str(entry)):
+            return True
+    return False
 
 
 def _module_file(folder: Path, module_name: str) -> tuple[Path, bool] | None:
@@ -236,6 +261,38 @@ def _import(module_name: str, search_paths: list[Path], plugin_id: str = ""):
     return _import_from_folder(module_name, search_paths[0], plugin_id)
 
 
+def _accepts_options(target) -> bool:
+    """Does this object take the settings of the plugin?
+
+    The signature is looked at, so that a mistake in the body of the
+    constructor is not taken for an argument that the constructor does
+    not have.
+    """
+    try:
+        signature = inspect.signature(target)
+    except (TypeError, ValueError):
+        return True
+    for name, parameter in signature.parameters.items():
+        if name == "options" or parameter.kind == parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
+def _takes_one_argument(target) -> bool:
+    """Does this object take a single argument?"""
+    try:
+        signature = inspect.signature(target)
+    except (TypeError, ValueError):
+        return False
+    positional = [
+        parameter
+        for parameter in signature.parameters.values()
+        if parameter.kind
+        in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD)
+    ]
+    return len(positional) == 1
+
+
 def _build(attribute, manifest: PluginManifest, options: dict | None = None):
     """Turn the entry point into an object.
 
@@ -246,18 +303,17 @@ def _build(attribute, manifest: PluginManifest, options: dict | None = None):
     """
     settings = dict(options if options is not None else manifest.options)
     if isinstance(attribute, type):
-        try:
+        if _accepts_options(attribute):
+            # The constructor takes the settings.  A mistake in its
+            # body is a mistake of the plugin, and is reported as one.
             return attribute(options=settings)
-        except TypeError:
-            return attribute()
+        return attribute()
     if callable(attribute):
-        try:
+        if _accepts_options(attribute):
             return attribute(options=settings)
-        except TypeError:
-            try:
-                return attribute(settings)
-            except TypeError:
-                return attribute()
+        if _takes_one_argument(attribute):
+            return attribute(settings)
+        return attribute()
     return attribute
 
 

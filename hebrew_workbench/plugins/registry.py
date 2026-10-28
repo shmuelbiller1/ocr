@@ -131,8 +131,6 @@ class PluginRegistry:
         """
         if options is None:
             options = self._options_of(plugin.manifest)
-        if not options:
-            return True
         configure = getattr(plugin.object, "configure", None)
         if callable(configure):
             try:
