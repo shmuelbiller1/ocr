@@ -71,6 +71,7 @@ __all__ = [
     "measure_page",
     "measure",
     "run_engine",
+    "resolve_engines",
     "main",
 ]
 
@@ -230,9 +231,21 @@ def run_engine(engine, pages: list[Page], label: str = "") -> dict:
     the report.
     """
     results = []
+    failures = []
     for index, page in enumerate(pages, start=1):
         print(f"[{index}/{len(pages)}] recognising {page.image.name} ...", flush=True)
-        measured = measure(engine, page)
+        try:
+            measured = measure(engine, page)
+        except Exception as exc:
+            # A failure of the engine on one page does not stop the
+            # measurement of the other pages, and it does not stop the
+            # other engines: every engine is measured on the same
+            # pages, and one of them that is broken is a fact about that
+            # engine and not about the others.
+            message = f"{type(exc).__name__}: {exc}"
+            print(f"    the engine failed on this page: {message}", flush=True)
+            failures.append({"page": page.image.name, "error": message})
+            continue
         if measured is None:
             print("    no ground truth, the page is left out", flush=True)
             continue
@@ -251,7 +264,7 @@ def run_engine(engine, pages: list[Page], label: str = "") -> dict:
         print(f"    ground truth: {measured['reference_sample']}", flush=True)
         print(f"    recognised:   {measured['hypothesis_sample']}", flush=True)
 
-    if not results:
+    if not results and not failures:
         raise SystemExit("no page with a ground truth was found in the corpus")
 
     incomplete = [
@@ -281,6 +294,7 @@ def run_engine(engine, pages: list[Page], label: str = "") -> dict:
         # There is no page that may be measured: there is no rate, and
         # not a rate of zero.
         total_reference = 0
+        total_words = 0
         total_cer = None
         total_wer = None
         seconds = None
@@ -304,7 +318,54 @@ def run_engine(engine, pages: list[Page], label: str = "") -> dict:
             "measured": bool(measured_pages),
         },
         "results": results,
+        # The pages on which the engine failed.  They are named, so
+        # that a report with fewer pages than the corpus has is not
+        # taken for a report of a smaller corpus.
+        "failures": failures,
     }
+
+
+def _kraken_engine():
+    """The class of the engine, imported only when it is needed.
+
+    The engine is imported lazily, so that the tools that only look at
+    the corpora work even where kraken is not installed.
+    """
+    from hebrew_workbench.engine.kraken_local import KrakenEngine
+
+    return KrakenEngine
+
+
+def resolve_engines(model_ids: list[str], models_folder: Path, timeout: float = 1800.0):
+    """The engines to measure, and the reasons for the ones that are left out.
+
+    The models are looked for in the folder that is given, so that a
+    build can measure the models it downloaded itself, and not only the
+    ones that the program keeps for the user.
+
+    ``kraken`` is imported only when an engine is really made, so that
+    this function works where the engine is not installed.
+    """
+    from hebrew_workbench.engine.models import MODEL_ARTIFACTS
+
+    engines = []
+    warnings = []
+    for identifier in model_ids:
+        artifact = MODEL_ARTIFACTS.get(identifier)
+        if artifact is None:
+            warnings.append(f"the model {identifier} is not known to the program")
+            continue
+        model_path = models_folder / artifact.filename
+        if not model_path.is_file():
+            warnings.append(
+                f"the model {identifier} is not installed ({model_path}), "
+                "it was not measured"
+            )
+            continue
+        engines.append(
+            (_kraken_engine()(model_path, timeout_seconds=timeout), identifier)
+        )
+    return engines, warnings
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -325,6 +386,13 @@ def main(argv: list[str] | None = None) -> int:
         help="the models to measure, e.g. kraken-ppocrv6-small kraken-ppocrv6-medium",
     )
     parser.add_argument("--model", help="path to one recognition model file")
+    parser.add_argument(
+        "--models",
+        help=(
+            "folder where the model files are, when they are not in the "
+            "folder of the program"
+        ),
+    )
     parser.add_argument("--dataset", help="folder with an extracted Pinkas dataset")
     parser.add_argument("--download", action="store_true", help="download the corpus first")
     parser.add_argument("--cache", default=".cache/pinkas", help="download cache folder")
@@ -407,8 +475,7 @@ def main(argv: list[str] | None = None) -> int:
     pages = pages[: max(1, args.pages)]
 
     # -- the engines --------------------------------------------------------
-    from hebrew_workbench.engine.kraken_local import KrakenEngine
-    from hebrew_workbench.engine.models import MODEL_ARTIFACTS, models_directory
+    from hebrew_workbench.engine.models import models_directory
 
     model_ids = list(args.engines)
     if args.model:
@@ -416,30 +483,19 @@ def main(argv: list[str] | None = None) -> int:
 
     engines = []
     if args.model:
-        engines.append((KrakenEngine(Path(args.model), timeout_seconds=args.timeout), str(args.model)))
-    else:
-        for identifier in model_ids:
-            artifact = MODEL_ARTIFACTS.get(identifier)
-            if artifact is None:
-                print(
-                    f"warning: the model {identifier} is not known to the program",
-                    file=sys.stderr,
-                )
-                continue
-            model_path = models_directory() / artifact.filename
-            if not model_path.is_file():
-                print(
-                    f"warning: the model {identifier} is not installed "
-                    f"({model_path}), it was not measured",
-                    file=sys.stderr,
-                )
-                continue
-            engines.append(
-                (
-                    KrakenEngine(model_path, timeout_seconds=args.timeout),
-                    identifier,
-                )
+        engines.append(
+            (
+                _kraken_engine()(Path(args.model), timeout_seconds=args.timeout),
+                str(args.model),
             )
+        )
+    else:
+        models_folder = Path(args.models) if args.models else models_directory()
+        engines, warnings = resolve_engines(
+            model_ids, models_folder, timeout=args.timeout
+        )
+        for warning in warnings:
+            print(f"warning: {warning}", file=sys.stderr)
     if not engines:
         raise SystemExit(
             "no engine to measure: give --engines with the models that are "
