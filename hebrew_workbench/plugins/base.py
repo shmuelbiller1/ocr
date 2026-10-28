@@ -132,7 +132,9 @@ class PluginManifest:
             description=str(data.get("description", "")).strip(),
             author=str(data.get("author", "")).strip(),
             homepage=str(data.get("homepage", "")).strip(),
-            builtin=bool(data.get("builtin", False)),
+            # Only the program decides what comes with it; a file of a
+            # plugin cannot say that it is built in.
+            builtin=False,
             enabled_by_default=bool(data.get("enabled_by_default", True)),
             options=dict(options),
         )

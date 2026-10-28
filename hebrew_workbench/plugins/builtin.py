@@ -35,7 +35,7 @@ BUILTIN_MANIFESTS: tuple[PluginManifest, ...] = (
     ),
     PluginManifest(
         id="kraken-worker",
-        name="Kraken + PP-OCRv6 (תהליב נפרד)",
+        name="Kraken + PP-OCRv6 (תהליך נפרד)",
         version="1.0.0",
         kind=KIND_OCR,
         entry="hebrew_workbench.engine.worker:make_worker_engine",

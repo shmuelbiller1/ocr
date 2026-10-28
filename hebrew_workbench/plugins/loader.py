@@ -204,26 +204,35 @@ def _import(module_name: str, search_paths: list[Path], plugin_id: str = ""):
     return _import_from_folder(module_name, search_paths[0], plugin_id)
 
 
-def _build(attribute, manifest: PluginManifest):
-    """Turn the entry point into an object."""
+def _build(attribute, manifest: PluginManifest, options: dict | None = None):
+    """Turn the entry point into an object.
+
+    The options of the manifest, with the choices of the user on top of
+    them, are given to the plugin that takes them, so that a plugin
+    whose settings are in its constructor works as well as one that
+    has a ``configure`` method.
+    """
+    settings = dict(options if options is not None else manifest.options)
     if isinstance(attribute, type):
         try:
-            return attribute(options=dict(manifest.options))
+            return attribute(options=settings)
         except TypeError:
             return attribute()
     if callable(attribute):
         try:
-            return attribute(options=dict(manifest.options))
+            return attribute(options=settings)
         except TypeError:
             try:
-                return attribute(dict(manifest.options))
+                return attribute(settings)
             except TypeError:
                 return attribute()
     return attribute
 
 
 def load_object(
-    manifest: PluginManifest, search_paths: list[Path] | None = None
+    manifest: PluginManifest,
+    search_paths: list[Path] | None = None,
+    options: dict | None = None,
 ):
     """Load the object of a plugin.
 
@@ -239,19 +248,24 @@ def load_object(
             f"{manifest.entry} does not exist in {module_name}"
         ) from exc
     try:
-        return _build(attribute, manifest)
+        return _build(attribute, manifest, options)
     except Exception as exc:
         raise PluginError(f"{manifest.id} could not be started: {exc}") from exc
 
 
 def load_plugin(
-    manifest: PluginManifest, search_paths: list[Path] | None = None
+    manifest: PluginManifest,
+    search_paths: list[Path] | None = None,
+    options: dict | None = None,
 ):
     """Load a plugin and give back the object, or the reason it failed."""
     from .base import Plugin
 
     try:
-        return Plugin(manifest=manifest, object=load_object(manifest, search_paths))
+        return Plugin(
+            manifest=manifest,
+            object=load_object(manifest, search_paths, options),
+        )
     except PluginError as exc:
         return Plugin(manifest=manifest, object=None, error=str(exc))
     except Exception as exc:

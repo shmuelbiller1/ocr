@@ -123,6 +123,19 @@ class WindowPluginTests(unittest.TestCase):
         proposals = self.window.suggestion_modules.check("שלום , עולם")
         self.assertEqual(proposals, [])
 
+    def test_the_choice_of_no_engine_is_kept(self) -> None:
+        # The user chooses that the program has no engine at all: the
+        # recognition is then not offered, and the choice is remembered.
+        self.window.plugins.set_active("ocr", "")
+        self.window._on_plugins_changed()
+        # The engine of the registry is the one that says that there is
+        # no engine, and the choice is remembered.
+        self.assertFalse(self.window.registry.engine.available())
+        self.assertEqual(self.window.plugins.settings.active.get("ocr"), "")
+        # The program knows that this is a choice and not a missing
+        # choice, and does not pick an engine on its own.
+        self.assertTrue(self.window.plugins.without_plugin("ocr"))
+
     def test_when_every_module_is_off_there_are_no_modules_at_all(self) -> None:
         for plugin in self.window.plugins.by_kind("spelling"):
             self.window.plugins.set_enabled(plugin.id, False)

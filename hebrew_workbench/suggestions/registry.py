@@ -67,7 +67,8 @@ class SuggestionRegistry:
         for module in self.modules:
             if not self.is_enabled(module.kind):
                 continue
-            if not module.available():
+            available = getattr(module, "available", None)
+            if not callable(available) or not available():
                 continue
             try:
                 proposals.extend(module.check(text))

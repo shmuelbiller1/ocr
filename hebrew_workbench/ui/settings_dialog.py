@@ -254,6 +254,7 @@ class SettingsDialog(QDialog):
         # later starts switched on.
         self.registry.settings.enabled.discard(plugin.id)
         self.registry.settings.disabled.discard(plugin.id)
+        self.registry.settings.options.pop(plugin.id, None)
         self.registry.settings.active = {
             key: value
             for key, value in self.registry.settings.active.items()

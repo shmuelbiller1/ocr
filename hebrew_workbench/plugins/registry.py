@@ -94,14 +94,26 @@ class PluginRegistry:
             self.plugins.append(self._load_one(manifest, [folder]))
 
     def _load_one(self, manifest: PluginManifest, search_paths: list[Path]) -> Plugin:
-        plugin = load_plugin(manifest, search_paths)
+        options = self._options_of(manifest)
+        plugin = load_plugin(manifest, search_paths, options)
         if plugin.error:
             self.errors.append(f"{manifest.id}: {plugin.error}")
             return plugin
-        self._apply_options(plugin)
+        self._apply_options(plugin, options)
         return plugin
 
-    def _apply_options(self, plugin: Plugin) -> None:
+    def _options_of(self, manifest: PluginManifest) -> dict:
+        """The settings of a plugin: the manifest, and the choices on top.
+
+        The choices of the user are put on top of the options of the
+        manifest, and the result is given both to the constructor of the
+        plugin and to its ``configure`` method.
+        """
+        options = dict(manifest.options or {})
+        options.update(self.settings.options.get(manifest.id, {}))
+        return options
+
+    def _apply_options(self, plugin: Plugin, options: dict | None = None) -> None:
         """Give the plugin the settings of the manifest and the choices.
 
         The options of the manifest are the defaults of the plugin, and
@@ -109,8 +121,8 @@ class PluginRegistry:
         has a ``configure`` method gets them, even when the user has
         not changed anything.
         """
-        options = dict(plugin.manifest.options or {})
-        options.update(self.settings.options.get(plugin.id, {}))
+        if options is None:
+            options = self._options_of(plugin.manifest)
         if not options:
             return
         configure = getattr(plugin.object, "configure", None)
@@ -176,6 +188,15 @@ class PluginRegistry:
             if self._can_be_used(plugin):
                 return plugin
         return None
+
+    def without_plugin(self, kind: str) -> bool:
+        """Did the user choose that this kind has no plugin at all?
+
+        This is different from a choice that was not made yet: the
+        program then works without a plugin of this kind on purpose.
+        """
+        wanted = self.settings.active.get(kind)
+        return wanted is not None and not wanted
 
     def chosen(self, kind: str) -> Plugin | None:
         """The plugin the user chose for this kind.
@@ -253,16 +274,37 @@ class PluginRegistry:
 
     # -- the modules of proposals ------------------------------------------
     def suggestion_modules(self) -> list:
-        """The modules of proposals the user chose."""
+        """The modules of proposals the user chose.
+
+        A module that does not follow the contract of the program is
+        left out, and not given to the program: a broken plugin may
+        never stop the program from starting.
+        """
         modules = []
         for kind in (KIND_SPELLING, KIND_GRAMMAR, KIND_STYLE):
             plugin = self.active(kind)
             if plugin is None:
                 continue
-            if plugin.object is None:
+            module = plugin.object
+            if module is None:
                 # A plugin that could not be built has no module.
                 continue
-            modules.append(plugin.object)
+            if not callable(getattr(module, "check", None)):
+                self.errors.append(
+                    f"{plugin.id}: the object is not a module of proposals"
+                )
+                continue
+            # The attributes of the contract come from the manifest
+            # when the plugin does not have them of its own.
+            if not getattr(module, "kind", None):
+                module.kind = kind
+            if not getattr(module, "id", None):
+                module.id = plugin.id
+            if not hasattr(module, "enabled_by_default"):
+                module.enabled_by_default = bool(
+                    plugin.manifest.enabled_by_default
+                )
+            modules.append(module)
         return modules
 
     # -- keeping the settings ----------------------------------------------
@@ -275,7 +317,7 @@ class PluginRegistry:
         self.save()
         plugin = self.get(plugin_id)
         if plugin is not None:
-            self._apply_options(plugin)
+            self._apply_options(plugin, self._options_of(plugin.manifest))
 
     # -- for the user -------------------------------------------------------
     def status(self) -> list[str]:

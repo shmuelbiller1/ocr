@@ -239,11 +239,12 @@ class RegistryTests(unittest.TestCase):
         self.assertIsNotNone(registry.get("kraken"))
         self.assertIsNotNone(registry.get("spelling-hebrew"))
 
-    def test_a_plugin_with_the_same_id_as_a_built_in_one_does_not_win(self) -> None:
+    def test_a_plugin_with_the_same_id_as_a_built_in_one_is_refused(self) -> None:
         source = make_plugin_folder(
             Path(self.temporary.name) / "source", {**MANIFEST, "id": "kraken"}
         )
-        PluginInstaller(self.root).install_folder(source)
+        with self.assertRaises(PluginError):
+            PluginInstaller(self.root).install_folder(source)
         registry = PluginRegistry(root=self.root)
         plugin = registry.get("kraken")
         self.assertTrue(plugin.builtin)
@@ -581,6 +582,78 @@ class FolderNameTests(unittest.TestCase):
         third = _private_name("other", Path("/tmp/one"))
         self.assertNotEqual(first, second)
         self.assertNotEqual(first, third)
+
+
+class WithoutPluginTests(unittest.TestCase):
+    """The choice of the user: no plugin of this kind at all."""
+
+    def test_a_choice_that_was_not_made_is_not_a_choice_of_none(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            registry = PluginRegistry(root=Path(folder) / "plugins")
+            self.assertFalse(registry.without_plugin("ocr"))
+            registry.set_active("ocr", "")
+            self.assertTrue(registry.without_plugin("ocr"))
+            registry.set_active("ocr", "kraken")
+            self.assertFalse(registry.without_plugin("ocr"))
+
+
+class SavedOptionTests(unittest.TestCase):
+    """The choices of the user reach the plugin that takes them."""
+
+    CODE = """
+class ExampleEngine:
+    name = "Engine with options"
+
+    def __init__(self, options=None):
+        self.options = dict(options or {})
+
+    def available(self):
+        return True
+"""
+
+    def test_the_options_of_the_user_reach_the_constructor(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "options": {"model_id": "the-model"}}
+            make_plugin_folder(source, manifest=manifest, code=self.CODE)
+            installer = PluginInstaller(root)
+            installer.install_folder(source)
+            registry = PluginRegistry(root=root)
+            registry.set_option("example-engine", "model_id", "another-model")
+            # The plugin is built again with the choices of the user.
+            registry.load()
+            plugin = registry.get("example-engine")
+            self.assertEqual(plugin.object.options.get("model_id"), "another-model")
+
+
+class BrokenModuleTests(unittest.TestCase):
+    """A module that does not follow the contract is left out."""
+
+    CODE = """
+class ExampleEngine:
+    name = "Not a module of proposals"
+
+    def __init__(self, options=None):
+        self.options = dict(options or {})
+"""
+
+    def test_a_module_without_check_is_not_given_to_the_program(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "kind": "grammar", "id": "broken-grammar"}
+            make_plugin_folder(source, manifest=manifest, code=self.CODE)
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            registry.set_active("grammar", "broken-grammar")
+            modules = registry.suggestion_modules()
+        # The module that does not follow the contract is left out; the
+        # modules that do follow it are still there.
+        self.assertNotIn("broken-grammar", [getattr(m, "id", "") for m in modules])
+        self.assertEqual(
+            [getattr(m, "id", "") for m in modules].count("broken-grammar"), 0
+        )
 
 
 if __name__ == "__main__":

@@ -815,11 +815,13 @@ class MainWindow(QMainWindow):
             if engine is None:
                 continue
             self.engines.append(engine)
-        if self.engines:
+        if self.engines and not self.plugins.without_plugin("ocr"):
             active = self.plugins.active_engine()
             chosen = active if active in self.engines else self.engines[0]
             self.registry = EngineRegistry(chosen)
         else:
+            # No engine, or the user chose that this program has none:
+            # the program works without a recognition, and says so.
             self.registry = EngineRegistry()
         self._update_engine_status()
         self._rebuild_engine_menu()
@@ -861,6 +863,9 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self.plugins, self)
         dialog.changed.connect(self._on_plugins_changed)
         dialog.exec()
+        # The dialog reads the plugins again, so the engines of the
+        # window are old even when the user changed nothing.
+        self._on_plugins_changed()
 
     def _on_plugins_changed(self) -> None:
         """The user changed the plugins: look at them again."""
@@ -1142,18 +1147,25 @@ class MainWindow(QMainWindow):
         module = self.suggestion_modules.module("spelling")
         if module is None:
             return
-        try:
-            module.set_dictionary(path)
-        except OSError as exc:
-            QMessageBox.warning(self, "בחירת מילון", f"לא ניתן לקרוא את המילון: {exc}")
-            return
         # The word list belongs to the spelling plugin, so that it is
         # remembered with it, and the proposals of the text that is
-        # shown are looked for again.
+        # shown are looked for again.  A plugin of another maker gets
+        # the word list through its own settings, and not through a
+        # method of the program.
         self.plugins.set_option(self._spelling_plugin_id(), "dictionary", path)
+        setter = getattr(module, "set_dictionary", None)
+        if callable(setter):
+            try:
+                setter(path)
+            except OSError as exc:
+                QMessageBox.warning(
+                    self, "בחירת מילון", f"לא ניתן לקרוא את המילון: {exc}"
+                )
+                return
         self._refresh_suggestions(self.suggestions)
+        words = getattr(module, "word_count", "?")
         self.statusBar().showMessage(
-            f"המילון של מודל האיות הוא עכשיו: {path} ({module.word_count} מילים)",
+            f"המילון של מודל האיות הוא עכשיו: {path} ({words} מילים)",
             8000,
         )
 

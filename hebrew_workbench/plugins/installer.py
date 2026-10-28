@@ -15,6 +15,7 @@ import zipfile
 from pathlib import Path
 
 from .base import PluginError, PluginManifest
+from .builtin import BUILTIN_MANIFESTS
 from .manifest import MANIFEST_NAME
 from .paths import plugins_directory
 
@@ -94,6 +95,11 @@ class PluginInstaller:
         if not source.is_dir():
             raise PluginError(f"{source} is not a folder")
         manifest = read_manifest(source)
+        if manifest.id in {item.id for item in BUILTIN_MANIFESTS}:
+            raise PluginError(
+                f"the identifier {manifest.id!r} belongs to a plugin that "
+                "comes with the program"
+            )
         target = self.plugin_folder(manifest.id)
         if target.exists():
             if not overwrite:
