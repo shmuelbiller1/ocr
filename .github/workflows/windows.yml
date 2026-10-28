@@ -498,6 +498,9 @@ jobs:
       - name: Write the notes of the release
         env:
           TAG: ${{ github.ref_name }}
+          # The notes of the release are written by the tool of GitHub,
+          # and it needs the token to ask for them.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -o pipefail
           cp docs/RELEASE_NOTES.md release-notes.md

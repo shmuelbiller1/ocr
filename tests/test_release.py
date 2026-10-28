@@ -257,6 +257,11 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_the_release_has_the_token_that_it_needs(self) -> None:
         self.assertIn("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}", self.text)
 
+    def test_the_notes_of_the_release_have_the_token_that_they_need(self) -> None:
+        self.assertGreaterEqual(
+            self.text.count("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}"), 2
+        )
+
     def test_the_notes_of_the_release_are_the_notes_of_the_repository(self) -> None:
         self.assertIn("docs/RELEASE_NOTES.md", self.text)
 
