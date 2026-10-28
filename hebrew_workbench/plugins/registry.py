@@ -118,24 +118,32 @@ class PluginRegistry:
         options.update(self.settings.options.get(manifest.id, {}))
         return options
 
-    def _apply_options(self, plugin: Plugin, options: dict | None = None) -> None:
+    def _apply_options(self, plugin: Plugin, options: dict | None = None) -> bool:
         """Give the plugin the settings of the manifest and the choices.
 
         The options of the manifest are the defaults of the plugin, and
         the choices of the user are put on top of them.  A plugin that
         has a ``configure`` method gets them, even when the user has
         not changed anything.
+
+        ``False`` is returned when the plugin did not accept the
+        settings: the reason is then in the error of the plugin.
         """
         if options is None:
             options = self._options_of(plugin.manifest)
         if not options:
-            return
+            return True
         configure = getattr(plugin.object, "configure", None)
         if callable(configure):
             try:
                 configure(dict(options))
             except Exception as exc:
                 plugin.error = f"the settings of the plugin could not be used: {exc}"
+                return False
+            # The settings were used: an earlier mistake is not the
+            # mistake of the plugin any more.
+            plugin.error = ""
+        return True
 
     # -- what is there -----------------------------------------------------
     def get(self, plugin_id: str) -> Plugin | None:
@@ -321,12 +329,36 @@ class PluginRegistry:
         """Write the choices of the user."""
         self.settings.save(self.settings_path)
 
-    def set_option(self, plugin_id: str, key: str, value) -> None:
+    def set_option(self, plugin_id: str, key: str, value) -> bool:
+        """Change one setting of a plugin.
+
+        A plugin that does not accept the new value does not keep it:
+        the old value is put back, and the new one is not saved.  The
+        reason is in the error of the plugin.
+        """
+        previous = self.settings.options.get(plugin_id, {}).get(key)
+        had_previous = key in self.settings.options.get(plugin_id, {})
         self.settings.set_option(plugin_id, key, value)
-        self.save()
         plugin = self.get(plugin_id)
-        if plugin is not None:
-            self._apply_options(plugin, self._options_of(plugin.manifest))
+        if plugin is None:
+            self.save()
+            return True
+        if self._apply_options(plugin, self._options_of(plugin.manifest)):
+            self.save()
+            return True
+        # The plugin did not accept the value: the old one comes back,
+        # and the new one is not saved.
+        reason = plugin.error
+        if had_previous:
+            self.settings.options.setdefault(plugin_id, {})[key] = previous
+        else:
+            self.settings.options.get(plugin_id, {}).pop(key, None)
+        self._apply_options(plugin, self._options_of(plugin.manifest))
+        # The reason why the value was refused stays with the plugin,
+        # so that the user can be told what happened.
+        plugin.error = reason
+        self.save()
+        return False
 
     # -- for the user -------------------------------------------------------
     def status(self) -> list[str]:

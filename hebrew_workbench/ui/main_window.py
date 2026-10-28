@@ -1157,7 +1157,6 @@ class MainWindow(QMainWindow):
         # shown are looked for again.  A plugin of another maker gets
         # the word list through its own settings, and not through a
         # method of the program.
-        self.plugins.set_option(self._spelling_plugin_id(), "dictionary", path)
         setter = getattr(module, "set_dictionary", None)
         if callable(setter):
             try:
@@ -1167,6 +1166,17 @@ class MainWindow(QMainWindow):
                     self, "בחירת מילון", f"לא ניתן לקרוא את המילון: {exc}"
                 )
                 return
+        if not self.plugins.set_option(
+            self._spelling_plugin_id(), "dictionary", path
+        ):
+            # The plugin did not accept the word list: the old one is
+            # still in place, and the user is told why.
+            reason = self.plugins.get(self._spelling_plugin_id())
+            message = "התוסף לא קיבל את המילון הזה."
+            if reason is not None and reason.error:
+                message = f"{message}\n{reason.error}"
+            QMessageBox.warning(self, "בחירת מילון", message)
+            return
         self._refresh_suggestions(self.suggestions)
         words = getattr(module, "word_count", "?")
         self.statusBar().showMessage(

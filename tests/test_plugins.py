@@ -627,6 +627,48 @@ class ExampleEngine:
             self.assertEqual(plugin.object.options.get("model_id"), "another-model")
 
 
+class RefusedOptionTests(unittest.TestCase):
+    """A plugin that does not accept a value does not keep it."""
+
+    CODE = """
+class ExampleEngine:
+    name = "Engine with a strict setting"
+
+    def __init__(self, options=None):
+        self.options = dict(options or {})
+
+    def available(self):
+        return True
+
+    def configure(self, options):
+        if options.get("model_id") == "not-allowed":
+            raise ValueError("this model is not allowed")
+        self.options = dict(options)
+"""
+
+    def test_the_old_value_stays_when_the_plugin_refuses_the_new_one(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "options": {"model_id": "a-model"}}
+            make_plugin_folder(source, manifest=manifest, code=self.CODE)
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            accepted = registry.set_option("example-engine", "model_id", "another-model")
+            self.assertTrue(accepted)
+            refused = registry.set_option("example-engine", "model_id", "not-allowed")
+            self.assertFalse(refused)
+            plugin = registry.get("example-engine")
+            # The value that was refused is not saved, and the old one
+            # is still the one of the plugin.
+            self.assertEqual(
+                registry.settings.options["example-engine"]["model_id"],
+                "another-model",
+            )
+            self.assertEqual(plugin.object.options.get("model_id"), "another-model")
+            self.assertIn("not allowed", plugin.error)
+
+
 class ReservedIdentifierTests(unittest.TestCase):
     """The identifiers that the program keeps for itself."""
 
