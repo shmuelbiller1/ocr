@@ -217,9 +217,13 @@ class Plugin:
         if self.error or self.object is None:
             return False
         checker = getattr(self.object, "available", None)
-        if callable(checker):
-            try:
-                return bool(checker())
-            except Exception:
-                return False
-        return True
+        if not callable(checker):
+            # An object of an engine without this method cannot say
+            # that it can work, and the program would call the missing
+            # method later.  It is treated as an object that cannot
+            # work.
+            return False
+        try:
+            return bool(checker())
+        except Exception:
+            return False

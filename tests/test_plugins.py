@@ -728,6 +728,124 @@ class DemoEngine:
             self.assertEqual(plugin.object.name, "Engine of a package")
 
 
+class NestedPackageTests(unittest.TestCase):
+    """A plugin whose engine is in a package of a package."""
+
+    INIT = """
+from .sub.engine import DemoEngine
+
+__all__ = ["DemoEngine"]
+"""
+
+    SUB_INIT = """
+import builtins
+
+if getattr(builtins, "_demo_sub_loaded", False):
+    raise RuntimeError("the package of the engine was imported twice")
+
+builtins._demo_sub_loaded = True
+"""
+
+    ENGINE = """
+class DemoEngine:
+    name = "Engine of a nested package"
+
+    def __init__(self, options=None):
+        self.options = dict(options or {})
+
+    def available(self):
+        return True
+"""
+
+    def test_the_engine_of_a_nested_package_is_imported_once(self) -> None:
+        import builtins
+
+        if hasattr(builtins, "_demo_sub_loaded"):
+            del builtins._demo_sub_loaded
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            package = source / "demo"
+            package.mkdir(parents=True)
+            manifest = {
+                **MANIFEST,
+                "id": "demo-engine",
+                "entry": "demo.sub.engine:DemoEngine",
+            }
+            (source / "plugin.json").write_text(
+                json.dumps(manifest), encoding="utf-8"
+            )
+            (package / "__init__.py").write_text(self.INIT, encoding="utf-8")
+            sub = package / "sub"
+            sub.mkdir()
+            (sub / "__init__.py").write_text(self.SUB_INIT, encoding="utf-8")
+            (sub / "engine.py").write_text(self.ENGINE, encoding="utf-8")
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("demo-engine")
+            self.assertEqual(plugin.error, "")
+            self.assertIsNotNone(plugin.object)
+
+
+class PluginResourceTests(unittest.TestCase):
+    """A plugin reads the files that come with it."""
+
+    CODE = """
+import importlib.resources
+
+DATA = importlib.resources.files(__package__).joinpath("data.txt").read_text()
+
+
+class DemoEngine:
+    name = "Engine with a file of its own"
+
+    def __init__(self, options=None):
+        self.options = dict(options or {})
+        self.data = DATA
+
+    def available(self):
+        return True
+"""
+
+    def test_a_plugin_can_read_the_files_that_come_with_it(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            source.mkdir(parents=True)
+            manifest = {**MANIFEST, "id": "demo-engine", "entry": "demo:DemoEngine"}
+            (source / "plugin.json").write_text(
+                json.dumps(manifest), encoding="utf-8"
+            )
+            (source / "data.txt").write_text("the data of the plugin", encoding="utf-8")
+            (source / "demo.py").write_text(self.CODE, encoding="utf-8")
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("demo-engine")
+            self.assertEqual(plugin.error, "")
+            self.assertEqual(plugin.object.data, "the data of the plugin")
+
+
+class EngineWithoutAvailabilityTests(unittest.TestCase):
+    """An engine without `available` cannot be offered."""
+
+    CODE = """
+class DemoEngine:
+    name = "Engine without a way to say that it can work"
+"""
+
+    def test_the_engine_is_not_offered(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "id": "demo-engine"}
+            make_plugin_folder(source, manifest=manifest, code=self.CODE)
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("demo-engine")
+            self.assertFalse(plugin.available())
+            self.assertEqual(registry.ocr_engines(), [])
+
+
 class ReservedIdentifierTests(unittest.TestCase):
     """The identifiers that the program keeps for itself."""
 

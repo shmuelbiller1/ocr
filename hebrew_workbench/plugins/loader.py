@@ -17,9 +17,9 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import importlib.machinery
 import importlib.util
 import sys
-import types
 from pathlib import Path
 
 from .base import PluginError, PluginManifest
@@ -101,9 +101,25 @@ def _private_name(plugin_id: str, folder: Path) -> str:
 
 
 def _make_package(name: str, folder: Path) -> None:
-    """Make a package of the plugin, so that relative imports work."""
-    module = types.ModuleType(name)
-    module.__path__ = [str(folder)]
+    """Make a package of the plugin, so that relative imports work.
+
+    The package gets a real specification, so that the plugin can read
+    the files that come with it the ordinary way -
+    ``importlib.resources.files(__package__)``.
+    """
+    try:
+        place = str(Path(folder).resolve())
+    except OSError:
+        place = str(folder)
+    spec = importlib.machinery.ModuleSpec(
+        name,
+        importlib.machinery.SourceFileLoader(name, str(Path(folder) / "__init__.py")),
+        origin=str(Path(folder) / "__init__.py"),
+        is_package=True,
+    )
+    spec.submodule_search_locations = [place]
+    module = importlib.util.module_from_spec(spec)
+    module.__path__ = [place]
     module.__package__ = name
     sys.modules[name] = module
 
@@ -145,12 +161,20 @@ def _import_from_folder(module_name: str, folder: Path, plugin_id: str):
         raise PluginError(f"the module {module_name} has no name")
 
     root = _private_name(plugin_id, folder)
-    _make_package(root, folder)
+    if root not in sys.modules:
+        _make_package(root, folder)
     current = root
     for number, part in enumerate(parts[:-1], start=1):
         current = f"{current}.{part}"
         place = folder.joinpath(*parts[:number])
         init = place / "__init__.py"
+        if current in sys.modules:
+            # The package was already imported - by the initializer of
+            # the package above it, for example.  It is used as it is
+            # and not read a second time: a plugin that registers
+            # something when it is imported would fail with a
+            # duplicate.
+            continue
         if init.is_file():
             _run_package(current, init)
         else:
