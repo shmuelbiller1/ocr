@@ -242,19 +242,20 @@ class SuggestionSession:
         if not self._round_shifts:
             return position
         # The place in the round is the place in the text as it is now
-        # without the changes that are to the left of it.  The place
-        # that is looked for is the one that says which changes are to
-        # the left of it, and the place is therefore looked for again
-        # and again, until it does not change any more.
+        # without the changes that are to the left of it.  The changes
+        # are taken in the order of their places, and the place is
+        # found in the interval of the places that it can be in: a
+        # change that ends before the place is to the left of it, and
+        # a change that ends after it is to the right of it and does
+        # not move it.
         ordered = sorted(self._round_shifts, key=lambda item: item[0])
-        result = position
-        for _ in range(len(ordered) + 1):
-            shift = sum(change for end, change in ordered if end <= result)
+        shift = 0
+        for end, change in ordered:
             found = position - shift
-            if found == result:
-                break
-            result = found
-        return result
+            if found < end:
+                return found
+            shift += change
+        return position - shift
 
     def place_of(self, suggestion: Suggestion) -> tuple[int, int] | None:
         """Where the text of a proposal is now, after the accepted changes."""
@@ -567,13 +568,14 @@ class SuggestionSession:
             change for change in self.accepted if change.batch != last
         ]
         # The change that was taken back is not covering anything any
-        # more: the text of the changes that it covered is back.
+        # more: the text of the changes that it covered is back.  A
+        # change that is still accepted is still covering the changes
+        # that it covered.
+        taken_back = {
+            change.identifier for change in self.accepted if change.batch == last
+        }
         for change in self.accepted:
-            if change.covered_by == change.identifier:
-                change.covered_by = None
-            elif change.covered_by is not None:
-                # The change that covered this one was taken back in
-                # another group: the text of this change is back.
+            if change.covered_by in taken_back:
                 change.covered_by = None
         # The text around the changes that were not taken back may be a
         # different text now.  The text that was kept with them is not

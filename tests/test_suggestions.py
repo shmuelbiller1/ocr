@@ -864,6 +864,23 @@ class OverlappingChangesTests(unittest.TestCase):
         # The place of "dog" in the round was 4.
         self.assertEqual(session.unshift(12), 4)
 
+    def test_a_word_between_two_changes_that_grow(self) -> None:
+        """Two changes, one on each side of a word, move it in two ways,
+        and the place of the word in the round has to be found through
+        both of them."""
+        session = self.make_session("cat dog fox")
+        session.set_suggestions(
+            [
+                self.a_suggestion("cat", "caterpillar", 0),
+                self.a_suggestion("fox", "foxesandfoxes", 8),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "caterpillar dog foxesandfoxes")
+        # The place of "dog" in the round was 4.
+        self.assertEqual(session.unshift(12), 4)
+
     def test_a_change_that_is_covered_and_a_change_before_it(self) -> None:
         """A change that was covered by a later change keeps its place,
         and a change that is before it and that is not related to it
@@ -876,6 +893,20 @@ class OverlappingChangesTests(unittest.TestCase):
         session.set_suggestions([self.a_suggestion("a", "longlong", 0)])
         session.accept(session.pending()[0])
         self.assertEqual(session.current_text, "longlong fox")
+        self.assertEqual(session.undo_all(), "a red cat")
+
+    def test_a_covered_change_and_a_group_that_is_taken_back(self) -> None:
+        """A change that covers another one is still covering it when
+        another group is taken back."""
+        session = self.make_session("a red cat")
+        session.set_suggestions([self.a_suggestion("cat", "dog", 6)])
+        session.accept(session.pending()[0], batch=1)
+        session.set_suggestions([self.a_suggestion("red dog", "fox", 2)])
+        session.accept(session.pending()[0], batch=2)
+        session.set_suggestions([self.a_suggestion("a", "longlong", 0)])
+        session.accept(session.pending()[0], batch=3)
+        # The last group is taken back, and then everything.
+        session.undo_last_batch()
         self.assertEqual(session.undo_all(), "a red cat")
 
     def test_two_proposals_whose_text_is_one_inside_the_other(self) -> None:
