@@ -7,6 +7,11 @@ script puts them between the two markers of `docs/OCR_ACCURACY.md`, so
 that the page always shows what was measured and not what somebody
 remembered.
 
+The report may hold the measurements of several engines, and they are
+written as one table, so that the engines can be compared with one
+another.  A corpus in which no page has a verified transcript is
+written as **not verified**, and no rate is published for it.
+
 The script writes nothing when the report is missing, and it leaves the
 file untouched when the numbers are already there.
 """
@@ -24,21 +29,93 @@ END = "<!-- RESULTS:END -->"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def percent(value: float) -> str:
+def percent(value) -> str:
+    """A rate, or the words that say that there is no rate."""
+    if value is None:
+        return "not measured"
     return f"{value * 100:.1f}%"
 
 
-def build_section(report: dict) -> str:
-    """The markdown of the results, taken from the report."""
-    summary = report.get("summary") or {}
-    corpus = report.get("corpus") or {}
-    pages = report.get("results") or []
+def engine_rows(report: dict) -> list[dict]:
+    """The measurements of the report, one for every engine."""
+    engines = report.get("engines")
+    if isinstance(engines, list) and engines:
+        return [engine for engine in engines if isinstance(engine, dict)]
+    # The older shape of the report: one engine at the top.
+    if report.get("summary"):
+        return [
+            {
+                "engine": report.get("engine", "the engine"),
+                "model": report.get("model", ""),
+                "pages": report.get("pages", 0),
+                "pages_seen": report.get("pages_seen", 0),
+                "summary": report.get("summary", {}),
+                "results": report.get("results", []),
+            }
+        ]
+    return []
 
-    lines = [
-        BEGIN,
-        "",
-        f"Measured with {report.get('engine', 'the engine')} on"
-        f" {report.get('pages', len(pages))} pages of"
+
+def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
+    """The markdown of the results, taken from the report."""
+    corpus = report.get("corpus") or {}
+    engines = engine_rows(report)
+    target = corpus.get("target", "modern")
+    pages_seen = corpus.get("pages", 0)
+    measured_corpus = corpus.get("pages_measured", 0)
+
+    lines = [begin, ""]
+
+    if not engines:
+        # Nothing was measured: the corpus has no verified page, and
+        # the accuracy of the recognition on it is not verified.
+        lines += [
+            f"**The accuracy of the recognition on"
+            f" {corpus.get('name', 'this corpus')} is not verified.**",
+            "",
+            f"The corpus holds {pages_seen} pages, and none of them has a"
+            " transcript that was checked by somebody who is not the one who"
+            " wrote it down.  Without such a transcript there is nothing to"
+            " measure, and no rate is published here.",
+            "",
+        ]
+        if report.get("note"):
+            lines += [f"> {report['note']}", ""]
+        lines += [
+            "The tools that build the corpus and that measure the engines on"
+            " it are ready: see `docs/MODERN_SCHOOL_BENCHMARK.md`.",
+            "",
+            end,
+        ]
+        return "\n".join(lines)
+
+    first = engines[0]
+    summary = first.get("summary", {})
+    if summary.get("cer") is None:
+        # The engines ran, but no page of the corpus had a transcript
+        # that was verified: there is no rate to publish.
+        lines += [
+            f"**The accuracy of the recognition on"
+            f" {corpus.get('name', 'this corpus')} is not verified.**",
+            "",
+            f"The corpus holds {pages_seen} pages, and none of them has a"
+            " transcript that was checked by somebody who is not the one who"
+            " wrote it down.  Without such a transcript there is nothing to"
+            " measure, and no rate is published here.",
+            "",
+        ]
+        if report.get("note"):
+            lines += [f"> {report['note']}", ""]
+        lines += [
+            "The tools that build the corpus and that measure the engines on"
+            " it are ready: see `docs/MODERN_SCHOOL_BENCHMARK.md`.",
+            "",
+            end,
+        ]
+        return "\n".join(lines)
+    lines += [
+        f"Measured with {first.get('engine', 'the engine')} on"
+        f" {first.get('pages', 0)} pages of"
         f" {corpus.get('name', 'the corpus')}:",
         "",
         "| | |",
@@ -46,9 +123,37 @@ def build_section(report: dict) -> str:
         f"| Character error rate | **{percent(summary.get('cer', 0.0))}** |",
         f"| Word error rate | **{percent(summary.get('wer', 0.0))}** |",
         f"| Seconds per page | {summary.get('seconds_per_page', '?')} |",
-        f"| Pages | {report.get('pages', len(pages))} |",
+        f"| Pages measured | {first.get('pages', 0)} |",
+        f"| Pages seen | {first.get('pages_seen', 0)} |",
+        f"| Characters of the ground truth | {summary.get('characters_reference', '?')} |",
+        f"| Words of the ground truth | {summary.get('words_reference', '?')} |",
         "",
     ]
+
+    if len(engines) > 1:
+        lines += [
+            "### The engines on the same pages",
+            "",
+            "Every engine was measured on the **same** pages.  The rate of the"
+            " errors is what decides which engine is the better one; the time"
+            " that a teacher needs to correct the text is the other half of the"
+            " decision, and it is measured with the people of the school.",
+            "",
+            "| Engine | Character error rate | Word error rate | Seconds per page | Pages |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+        for engine in engines:
+            engine_summary = engine.get("summary", {})
+            lines.append(
+                "| {name} | {cer} | {wer} | {seconds} | {pages} |".format(
+                    name=engine.get("model") or engine.get("engine", "the engine"),
+                    cer=percent(engine_summary.get("cer", 0.0)),
+                    wer=percent(engine_summary.get("wer", 0.0)),
+                    seconds=engine_summary.get("seconds_per_page", "?"),
+                    pages=engine.get("pages", 0),
+                )
+            )
+        lines.append("")
 
     # The ground truth of a page has to be complete, or the page is not
     # a measurement of the recognition: the text that was not
@@ -64,6 +169,17 @@ def build_section(report: dict) -> str:
             "",
         ]
 
+    unverified = summary.get("pages_without_verification") or []
+    if unverified:
+        lines += [
+            "> **The transcript of these pages was not verified, and they are"
+            " not part of the rates above:** "
+            + ", ".join(unverified)
+            + ".",
+            "",
+        ]
+
+    pages = first.get("results") or []
     if pages:
         lines += [
             "| Page | Characters in the ground truth | Character error rate | Word error rate | Seconds | Ground truth |",
@@ -71,6 +187,10 @@ def build_section(report: dict) -> str:
         ]
         for page in pages:
             complete = (page.get("ground_truth") or {}).get("complete", True)
+            verified = bool(page.get("verified_by"))
+            state = "complete" if complete else "**not complete**"
+            if not verified:
+                state = "**not verified**"
             lines.append(
                 "| {page} | {chars} | {cer} | {wer} | {seconds} | {ground} |".format(
                     page=page.get("page", "?"),
@@ -78,29 +198,47 @@ def build_section(report: dict) -> str:
                     cer=percent(page.get("cer", 0.0)),
                     wer=percent(page.get("wer", 0.0)),
                     seconds=page.get("seconds", "?"),
-                    ground="complete" if complete else "**not complete**",
+                    ground=state,
                 )
             )
         lines.append("")
+
+    if target == "modern":
+        lines += [
+            "These pages are the material the program is made for.  The rate"
+            " is the rate of the raw recognition: no dictionary, no language"
+            " model and no proposal of the spelling, of the grammar or of the"
+            " scholarly style is part of it.",
+            "",
+        ]
+    else:
+        lines += [
+            "These pages are the *diagnostic* corpus of the old handwriting."
+            " They are not the material the program is made for, and they do"
+            " not decide which engine is the better one.",
+            "",
+        ]
 
     lines += [
         "The numbers were produced by `tools/benchmark_ocr.py` in the"
         " `ocr-engine` job of the build, and the report they come from is"
         " uploaded as the artefact `ocr-accuracy-report`.",
         "",
-        END,
+        end,
     ]
     return "\n".join(lines)
 
 
-def update_document(document: Path, section: str) -> bool:
+def update_document(
+    document: Path, section: str, begin: str = BEGIN, end: str = END
+) -> bool:
     """Put the section between the markers.  Returns True when the file changed."""
     if not document.is_file():
         return False
     text = document.read_text(encoding="utf-8")
-    if BEGIN in text and END in text:
-        start = text.index(BEGIN)
-        finish = text.index(END) + len(END)
+    if begin in text and end in text:
+        start = text.index(begin)
+        finish = text.index(end) + len(end)
         new_text = text[:start] + section + text[finish:]
     elif "<!-- RESULTS -->" in text:
         new_text = text.replace("<!-- RESULTS -->", section, 1)
@@ -118,6 +256,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--document", default=str(REPO_ROOT / "docs" / "OCR_ACCURACY.md")
     )
+    parser.add_argument(
+        "--begin",
+        default=BEGIN,
+        help="the marker where the section begins",
+    )
+    parser.add_argument(
+        "--end",
+        default=END,
+        help="the marker where the section ends",
+    )
     args = parser.parse_args(argv)
 
     report_path = Path(args.report)
@@ -126,8 +274,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     report = json.loads(report_path.read_text(encoding="utf-8"))
     document = Path(args.document)
-    if update_document(document, build_section(report)):
+    section = build_section(report, begin=args.begin, end=args.end)
+    if update_document(document, section, begin=args.begin, end=args.end):
         print(f"the results were written into {document}")
+    elif args.begin not in document.read_text(encoding="utf-8"):
+        print(
+            f"the document {document} has no marker {args.begin}, "
+            "nothing was written"
+        )
     else:
         print("the results are already in the document")
     return 0

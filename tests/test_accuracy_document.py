@@ -14,6 +14,18 @@ writer = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(writer)
 
+NOTICE_PATH = Path(__file__).resolve().parents[1] / "tools" / "accuracy_notice.py"
+NOTICE_SPEC = importlib.util.spec_from_file_location("accuracy_notice", NOTICE_PATH)
+notice = importlib.util.module_from_spec(NOTICE_SPEC)
+assert NOTICE_SPEC and NOTICE_SPEC.loader
+NOTICE_SPEC.loader.exec_module(notice)
+
+
+def load_notice():
+    """The module of the notice of the build."""
+    return notice
+
+
 REPORT = {
     "engine": "kraken",
     "model": "small.safetensors",
@@ -90,5 +102,125 @@ class AccuracyDocumentTests(unittest.TestCase):
             self.assertIn("kraken", document.read_text(encoding="utf-8"))
 
 
+class ModernCorpusTests(unittest.TestCase):
+    """The report of the modern corpus says when it is not verified."""
+
+    REPORT = {
+        "corpus": {
+            "name": "Modern school handwriting",
+            "target": "modern",
+            "pages": 0,
+            "pages_measured": 0,
+            "verified": False,
+        },
+        "engines": [],
+        "note": (
+            "the corpus has no page with a verified transcript, so the "
+            "accuracy of the recognition on this material is NOT verified"
+        ),
+    }
+
+    def test_an_empty_corpus_is_written_as_not_verified(self) -> None:
+        section = writer.build_section(self.REPORT)
+        self.assertIn("not verified", section)
+        self.assertNotIn("Character error rate | **", section)
+
+    def test_the_note_of_the_report_is_shown(self) -> None:
+        self.assertIn("NOT verified", writer.build_section(self.REPORT))
+
+
+class SeveralEnginesTests(unittest.TestCase):
+    """The engines are written as one table, so that they can be compared."""
+
+    REPORT = {
+        "corpus": {
+            "name": "Modern school handwriting",
+            "target": "modern",
+            "pages": 2,
+            "pages_measured": 2,
+            "verified": True,
+        },
+        "engines": [
+            {
+                "engine": "kraken PP-OCRv6 (small)",
+                "model": "kraken-ppocrv6-small",
+                "pages": 2,
+                "pages_seen": 2,
+                "summary": {
+                    "cer": 0.2,
+                    "wer": 0.4,
+                    "seconds_per_page": 12.5,
+                    "characters_reference": 100,
+                    "words_reference": 20,
+                    "ground_truth_complete": True,
+                    "pages_with_incomplete_ground_truth": [],
+                    "pages_without_verification": [],
+                },
+                "results": [],
+            },
+            {
+                "engine": "kraken PP-OCRv6 (medium)",
+                "model": "kraken-ppocrv6-medium",
+                "pages": 2,
+                "pages_seen": 2,
+                "summary": {
+                    "cer": 0.15,
+                    "wer": 0.3,
+                    "seconds_per_page": 30.0,
+                    "characters_reference": 100,
+                    "words_reference": 20,
+                    "ground_truth_complete": True,
+                    "pages_with_incomplete_ground_truth": [],
+                    "pages_without_verification": [],
+                },
+                "results": [],
+            },
+        ],
+    }
+
+    def test_every_engine_is_in_the_table(self) -> None:
+        section = writer.build_section(self.REPORT)
+        self.assertIn("kraken-ppocrv6-small", section)
+        self.assertIn("kraken-ppocrv6-medium", section)
+
+    def test_the_rates_of_the_engines_are_written(self) -> None:
+        section = writer.build_section(self.REPORT)
+        self.assertIn("20.0%", section)
+        self.assertIn("15.0%", section)
+
+    def test_the_measurement_says_that_no_correction_is_part_of_it(self) -> None:
+        section = writer.build_section(self.REPORT)
+        self.assertIn("no dictionary", section)
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoVerifiedPageTests(unittest.TestCase):
+    """An engine that ran, but no page that may be measured."""
+
+    REPORT = {
+        "corpus": {"name": "Modern school handwriting", "target": "modern", "pages": 2},
+        "engines": [
+            {
+                "engine": "kraken",
+                "model": "kraken-ppocrv6-small",
+                "pages": 0,
+                "pages_seen": 2,
+                "summary": {"cer": None, "wer": None, "seconds_per_page": None},
+                "results": [],
+            }
+        ],
+    }
+
+    def test_no_rate_is_published(self) -> None:
+        section = writer.build_section(self.REPORT)
+        self.assertIn("not verified", section)
+        self.assertNotIn("0.0%", section)
+        self.assertNotIn("Character error rate |", section)
+
+    def test_the_notice_of_the_build_says_so(self) -> None:
+        notice = load_notice()
+        text = notice.summarise(self.REPORT)
+        self.assertIn("no verified page", text)
