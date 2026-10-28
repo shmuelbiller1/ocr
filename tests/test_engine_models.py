@@ -89,6 +89,22 @@ class ModelTests(unittest.TestCase):
             self.assertTrue(installed.is_file())
             self.assertIsNone(verify_file(installed, artifact))
 
+    def test_installing_uses_fallback_when_primary_download_is_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            primary = Path(folder) / "primary.bin"
+            fallback = Path(folder) / "fallback.bin"
+            primary.write_bytes(b"bad weights!!")
+            fallback.write_bytes(b"model weights")
+            artifact = make_artifact(
+                fallback,
+                url=primary.as_uri(),
+                fallback_urls=(fallback.as_uri(),),
+            )
+            target_dir = Path(folder) / "models"
+            installed = install_artifact(artifact, target_dir)
+            self.assertEqual(installed.read_bytes(), b"model weights")
+            self.assertIsNone(verify_file(installed, artifact))
+
     def test_installing_a_broken_download_does_not_leave_a_file(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "model.bin"
