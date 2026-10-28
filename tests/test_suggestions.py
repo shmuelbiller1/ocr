@@ -895,6 +895,38 @@ class OverlappingChangesTests(unittest.TestCase):
         self.assertEqual(session.current_text, "longlong fox")
         self.assertEqual(session.undo_all(), "a red cat")
 
+    def test_a_change_that_shrinks_and_a_change_that_follows_it(self) -> None:
+        """A change that makes the text shorter moves the place of the
+        words that follow it, and the place has to be found through it.
+        """
+        session = self.make_session("elephant cat dog")
+        session.set_suggestions(
+            [
+                self.a_suggestion("elephant", "x", 0),
+                self.a_suggestion("cat", "cats", 9),
+                self.a_suggestion("dog", "dogs", 13),
+            ]
+        )
+        session.accept(session.pending()[0])
+        outcome = session.accept_every_occurrence(session.pending()[1])
+        self.assertIsNotNone(outcome)
+        self.assertEqual(session.current_text, "x cat dogs")
+        # The proposal of "cat" is still good: its place did not move.
+        self.assertEqual(len(session.pending()), 1)
+
+    def test_a_change_that_covers_a_change_that_covers_another(self) -> None:
+        """A change that covers a change that covers another one keeps
+        the first covering, so that every correction can be taken back.
+        """
+        session = self.make_session("a red cat end")
+        session.set_suggestions([self.a_suggestion("cat", "dog", 6)])
+        session.accept(session.pending()[0])
+        session.set_suggestions([self.a_suggestion("red dog", "fox", 2)])
+        session.accept(session.pending()[0])
+        session.set_suggestions([self.a_suggestion("a fox end", "newtext", 0)])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.undo_all(), "a red cat end")
+
     def test_a_covered_change_and_a_group_that_is_taken_back(self) -> None:
         """A change that covers another one is still covering it when
         another group is taken back."""

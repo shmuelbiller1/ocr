@@ -64,6 +64,19 @@ def _read_changes(value) -> list[dict]:
     for item in value:
         if not isinstance(item, dict):
             raise ValueError("a correction must be an object")
+        # The numbers of the corrections are read when the corrections
+        # are taken back, and a file that holds something else is
+        # refused here, and not in the middle of the work.
+        for name in ("identifier", "covered_by", "batch"):
+            number = item.get(name)
+            if number is None:
+                continue
+            try:
+                int(number)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"the {name} of a correction must be a number"
+                ) from None
         changes.append(dict(item))
     return changes
 

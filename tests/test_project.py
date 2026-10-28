@@ -67,6 +67,32 @@ class ProjectTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Project.load(target)
 
+    def test_a_correction_with_a_number_that_is_not_a_number_is_refused(self) -> None:
+        """A file that was written by another program may hold numbers
+        that are not numbers, and such a file is refused when it is
+        read, and not in the middle of the work.
+        """
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder) / "broken.hwproj"
+            target.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "documents": [
+                            {
+                                "path": "scan.png",
+                                "changes": [
+                                    {"identifier": "not a number", "covered_by": None}
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                Project.load(target)
+
     def test_remove_and_clear(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             scan = Path(folder) / "scan.png"

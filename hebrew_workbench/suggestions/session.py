@@ -242,19 +242,20 @@ class SuggestionSession:
         if not self._round_shifts:
             return position
         # The place in the round is the place in the text as it is now
-        # without the changes that are to the left of it.  The changes
-        # are taken in the order of their places, and the place is
-        # found in the interval of the places that it can be in: a
-        # change that ends before the place is to the left of it, and
-        # a change that ends after it is to the right of it and does
-        # not move it.
+        # without the changes that are to the left of it.  The end of
+        # a change in the places of the text as it is now is the end of
+        # the change in the places of the round with the changes that
+        # are before it, because they moved it.
         ordered = sorted(self._round_shifts, key=lambda item: item[0])
-        shift = 0
-        for end, change in ordered:
-            found = position - shift
-            if found < end:
-                return found
-            shift += change
+        ends = [
+            end + sum(change for other_end, change in ordered if other_end <= end)
+            for end, _ in ordered
+        ]
+        shift = sum(
+            change
+            for (_, change), end in zip(ordered, ends)
+            if end <= position
+        )
         return position - shift
 
     def place_of(self, suggestion: Suggestion) -> tuple[int, int] | None:
@@ -302,10 +303,13 @@ class SuggestionSession:
             # replaces keeps its place: its own text is gone, and the
             # place of the change that is made on it is not the place
             # it had.
-            if start <= change.position < was:
+            if start <= change.position < was and change.covered_by is None:
                 # The text of the change is inside the text that this
                 # change replaces: the change is covered by it, and
-                # its place is the place it had before.
+                # its place is the place it had before.  A change that
+                # is already covered keeps the change that covers it
+                # first, because that is the one that has to be taken
+                # back before it.
                 change.covered_by = identifier
             if change.position >= was:
                 change.position += shift
@@ -564,16 +568,16 @@ class SuggestionSession:
                 if other is not change and other.position >= was:
                     other.position += shift
         self.current_text = result
-        self.accepted = [
-            change for change in self.accepted if change.batch != last
-        ]
-        # The change that was taken back is not covering anything any
-        # more: the text of the changes that it covered is back.  A
-        # change that is still accepted is still covering the changes
-        # that it covered.
+        # The numbers of the changes that are taken back are kept
+        # before they are taken out of the list: a change that is still
+        # accepted is still covering the changes that it covered, and
+        # only a change that was really taken back stops covering them.
         taken_back = {
             change.identifier for change in self.accepted if change.batch == last
         }
+        self.accepted = [
+            change for change in self.accepted if change.batch != last
+        ]
         for change in self.accepted:
             if change.covered_by in taken_back:
                 change.covered_by = None
