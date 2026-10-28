@@ -353,12 +353,18 @@ class PluginRegistry:
             self.settings.options.setdefault(plugin_id, {})[key] = previous
         else:
             self.settings.options.get(plugin_id, {}).pop(key, None)
-        self._apply_options(plugin, self._options_of(plugin.manifest))
+        restored = self._apply_options(plugin, self._options_of(plugin.manifest))
         # The reason why the value was refused stays with the plugin,
         # so that the user can be told what happened.  It is not a
         # mistake of the plugin: the plugin itself works, and it stays
         # the one that the user chose.
-        plugin.error = ""
+        #
+        # When the old value could not be put back either, that is a
+        # real mistake of the plugin, and it stays in the error of the
+        # plugin.  A plugin whose settings were not restored is not
+        # used.
+        if restored:
+            plugin.error = ""
         plugin.rejection = reason
         self.save()
         return False

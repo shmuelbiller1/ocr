@@ -1199,6 +1199,14 @@ class MainWindow(QMainWindow):
         # plugin that reads it in its constructor gets it as well.
         self.refresh_engines()
         module = self.suggestion_modules.module("spelling")
+        # The proposals of the old word list are not good any more.
+        # They are cleared in every document, and not only in the one
+        # that is shown, because every document has its own session.
+        sessions = list(self._sessions.values())
+        if self.suggestions not in sessions:
+            sessions.append(self.suggestions)
+        for session in sessions:
+            session.set_suggestions([])
         self._refresh_suggestions(self.suggestions)
         words = getattr(module, "word_count", "?") if module else "?"
         self.statusBar().showMessage(

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 if sys.platform.startswith("linux"):
     # The machine that runs the tests has no screen.
@@ -178,6 +179,43 @@ class WindowSuggestionsTests(unittest.TestCase):
         )
         self.window.accept_suggestion(stale)
         self.assertEqual(self.window.editor.toPlainText(), "טקסט של המסמך השני")
+
+    def test_the_proposals_are_cleared_when_the_word_list_changes(self) -> None:
+        """The proposals of the old word list are not offered any more."""
+        self.add_two_documents()
+
+        # The first document has proposals.
+        self.window.doc_list.setCurrentRow(0)
+        self.app.processEvents()
+        self.window.editor.setPlainText("שלום , עולם")
+        self.window.check_suggestions()
+        self.assertEqual(len(self.window.suggestions.pending()), 1)
+        first = self.window.suggestions
+
+        # The second document has proposals as well, and it is not the
+        # one that is shown.
+        self.window.doc_list.setCurrentRow(1)
+        self.app.processEvents()
+        self.window.editor.setPlainText("טקסט של המסמך השני , עולם")
+        self.window.check_suggestions()
+        other = self.window.suggestions
+        self.assertEqual(len(other.pending()), 1)
+        self.assertIsNot(first, other)
+
+        # The user chooses another word list.
+        with tempfile.TemporaryDirectory() as folder:
+            words = Path(folder) / "words.txt"
+            words.write_text("שלום\nעולם\n", encoding="utf-8")
+            with mock.patch(
+                "hebrew_workbench.ui.main_window.QFileDialog.getOpenFileName",
+                return_value=(str(words), ""),
+            ):
+                self.window.choose_dictionary()
+
+        # The proposals of the old word list are gone, in every
+        # document and not only in the one that is shown.
+        self.assertEqual(first.pending(), [])
+        self.assertEqual(other.pending(), [])
 
     def test_a_proposal_is_not_applied_when_the_text_was_changed_after_the_check(
         self,

@@ -896,6 +896,33 @@ class ExampleEngine:
             raise ValueError("this word list is not allowed")
 """
 
+    # A plugin that takes the first word list and refuses every one
+    # that comes after it, and the old one as well.
+    STUBBORN_CODE = """
+class ExampleEngine:
+    name = "Module that refuses the old word list too"
+
+    def __init__(self, options=None):
+        self.options = dict(options or {})
+        self.dictionary = None
+        self.seen = 0
+
+    def available(self):
+        return True
+
+    def check(self, text):
+        return []
+
+    def configure(self, options):
+        self.options = dict(options or {})
+        self.dictionary = self.options.get("dictionary")
+        if not self.dictionary:
+            return
+        self.seen += 1
+        if self.seen > 1:
+            raise ValueError("this word list is not allowed")
+"""
+
     def test_the_module_is_put_back_the_way_it_was(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder) / "plugins"
@@ -910,6 +937,30 @@ class ExampleEngine:
             plugin = registry.get("demo-spelling")
             # The module was put back the way it was before the refusal.
             self.assertEqual(plugin.object.dictionary, "good.txt")
+
+    def test_the_mistake_stays_when_the_old_value_cannot_be_put_back(self) -> None:
+        """A plugin that breaks while it is put back is not used."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "kind": "spelling", "id": "demo-spelling"}
+            make_plugin_folder(source, manifest=manifest, code=self.STUBBORN_CODE)
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            # The first word list is taken.
+            self.assertTrue(
+                registry.set_option("demo-spelling", "dictionary", "first.txt")
+            )
+            # The second one is refused, and the first one cannot be
+            # put back either.
+            self.assertFalse(
+                registry.set_option("demo-spelling", "dictionary", "second.txt")
+            )
+            plugin = registry.get("demo-spelling")
+            # The mistake of the plugin is not forgotten, and the plugin
+            # is not used with settings that were not restored.
+            self.assertNotEqual(plugin.error, "")
+            self.assertFalse(registry.is_enabled("demo-spelling"))
 
 
 class ReinstallTests(unittest.TestCase):
