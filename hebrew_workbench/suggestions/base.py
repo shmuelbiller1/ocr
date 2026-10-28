@@ -47,6 +47,11 @@ class Suggestion:
         return f"{self.original} → {self.replacement}"
 
 
+#: The kind of a module of proposals that did not choose one.  A module
+#: that has this kind is taken to have the kind of its manifest.
+DEFAULT_MODULE_KIND = "text"
+
+
 class SuggestionModule:
     """The base of every module that proposes corrections.
 
@@ -59,7 +64,7 @@ class SuggestionModule:
     #: The name of the module, for the user.
     name: str = ""
     #: What kind of proposals the module makes.
-    kind: str = "text"
+    kind: str = DEFAULT_MODULE_KIND
     #: What the module does, in one sentence.
     description: str = ""
     #: Whether the module is switched on when the program starts.

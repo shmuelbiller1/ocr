@@ -747,9 +747,11 @@ class MainWindow(QMainWindow):
         artifact_id = "kraken-ppocrv6-small"
         plugin = self.plugins.chosen("ocr") or self.plugins.active("ocr")
         if plugin is not None:
-            artifact_id = str(
-                plugin.manifest.options.get("model_id", artifact_id) or artifact_id
-            )
+            # The options of the manifest and the choices of the user
+            # together: the model that is installed has to be the model
+            # that the engine waits for.
+            options = self.plugins.options_of(plugin)
+            artifact_id = str(options.get("model_id", artifact_id) or artifact_id)
         artifact = MODEL_ARTIFACTS.get(artifact_id)
         if artifact is None:
             QMessageBox.information(
@@ -809,6 +811,9 @@ class MainWindow(QMainWindow):
         switched off, or whose model is not installed, is not offered.
         """
         self.plugins.load()
+        # The load builds the plugins again, so the modules of proposals
+        # of the window are the old ones and have to be looked at again.
+        self._refresh_suggestion_modules()
         self.engines = []
         for plugin in self.plugins.ocr_engines():
             engine = plugin.object

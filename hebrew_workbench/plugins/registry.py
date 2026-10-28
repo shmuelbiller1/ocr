@@ -28,6 +28,7 @@ from .installer import PluginInstaller, read_manifest
 from .loader import forget_modules, load_plugin
 from .paths import plugins_directory
 from .settings import PluginSettings
+from ..suggestions.base import DEFAULT_MODULE_KIND
 
 __all__ = ["PluginRegistry"]
 
@@ -101,6 +102,10 @@ class PluginRegistry:
             return plugin
         self._apply_options(plugin, options)
         return plugin
+
+    def options_of(self, plugin: Plugin) -> dict:
+        """The options of a plugin: the manifest, and the choices on top."""
+        return self._options_of(plugin.manifest)
 
     def _options_of(self, manifest: PluginManifest) -> dict:
         """The settings of a plugin: the manifest, and the choices on top.
@@ -295,8 +300,12 @@ class PluginRegistry:
                 )
                 continue
             # The attributes of the contract come from the manifest
-            # when the plugin does not have them of its own.
-            if not getattr(module, "kind", None):
+            # when the plugin does not have them of its own.  The kind
+            # that the base class of the program has is the default of
+            # the class and not a kind that the plugin chose, and the
+            # kind of the manifest is the one that counts.
+            module_kind = str(getattr(module, "kind", "") or "")
+            if not module_kind or module_kind == DEFAULT_MODULE_KIND:
                 module.kind = kind
             if not getattr(module, "id", None):
                 module.id = plugin.id

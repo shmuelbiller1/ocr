@@ -627,6 +627,52 @@ class ExampleEngine:
             self.assertEqual(plugin.object.options.get("model_id"), "another-model")
 
 
+class ReservedIdentifierTests(unittest.TestCase):
+    """The identifiers that the program keeps for itself."""
+
+    def test_the_name_of_the_settings_file_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "id": "settings.json"}
+            make_plugin_folder(source, manifest=manifest)
+            with self.assertRaises(PluginError):
+                PluginInstaller(root).install_folder(source)
+            self.assertFalse((root / "settings.json").exists())
+
+
+class ModuleKindTests(unittest.TestCase):
+    """The kind of a module comes from the manifest of its plugin."""
+
+    CODE = """
+from hebrew_workbench.suggestions.base import SuggestionModule
+
+
+class ExampleModule(SuggestionModule):
+    def __init__(self, options=None):
+        self.options = dict(options or {})
+
+    def check(self, text):
+        return []
+"""
+
+    def test_the_kind_of_the_manifest_is_the_kind_of_the_module(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source"
+            manifest = {**MANIFEST, "kind": "spelling", "id": "example-spelling"}
+            make_plugin_folder(source, manifest=manifest, code=self.CODE)
+            PluginInstaller(root).install_folder(source)
+            registry = PluginRegistry(root=root)
+            registry.set_active("spelling", "example-spelling")
+            modules = registry.suggestion_modules()
+        kinds = [module.kind for module in modules]
+        self.assertIn("spelling", kinds)
+        # The module of the plugin is the first one, and it has the
+        # kind of the manifest and not the default of the base class.
+        self.assertEqual(modules[0].kind, "spelling")
+
+
 class BrokenModuleTests(unittest.TestCase):
     """A module that does not follow the contract is left out."""
 

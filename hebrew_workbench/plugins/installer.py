@@ -19,6 +19,10 @@ from .builtin import BUILTIN_MANIFESTS
 from .manifest import MANIFEST_NAME
 from .paths import plugins_directory
 
+#: The identifiers that the program keeps for itself.  A plugin with
+#: one of them would take the place of the settings of the plugins.
+RESERVED_IDS = frozenset({"settings.json", "settings"})
+
 __all__ = ["PluginInstaller", "read_manifest"]
 
 
@@ -99,6 +103,10 @@ class PluginInstaller:
             raise PluginError(
                 f"the identifier {manifest.id!r} belongs to a plugin that "
                 "comes with the program"
+            )
+        if manifest.id.lower() in RESERVED_IDS:
+            raise PluginError(
+                f"the identifier {manifest.id!r} is reserved by the program"
             )
         target = self.plugin_folder(manifest.id)
         if target.exists():
