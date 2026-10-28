@@ -84,15 +84,19 @@ def _module_file(folder: Path, module_name: str) -> tuple[Path, bool] | None:
     return None
 
 
-def _private_name(plugin_id: str) -> str:
+def _private_name(plugin_id: str, folder: Path) -> str:
     """The name of the package that holds the code of the plugin.
 
-    The name is built from a digest of the identifier of the plugin:
-    two plugins whose identifiers look alike - ``my-engine`` and
-    ``my_engine`` - therefore never share a package, and never share
-    the modules inside it.
+    The name is built from a digest of the identifier of the plugin and
+    of the folder it lives in: two plugins whose identifiers look alike
+    - ``my-engine`` and ``my_engine`` - therefore never share a
+    package, and never share the modules inside it.
     """
-    digest = hashlib.sha256(plugin_id.encode("utf-8")).hexdigest()[:20]
+    try:
+        place = str(Path(folder).resolve())
+    except OSError:
+        place = str(folder)
+    digest = hashlib.sha256(f"{plugin_id}\0{place}".encode("utf-8")).hexdigest()[:20]
     return PRIVATE_PREFIX + digest
 
 
@@ -102,6 +106,29 @@ def _make_package(name: str, folder: Path) -> None:
     module.__path__ = [str(folder)]
     module.__package__ = name
     sys.modules[name] = module
+
+
+def _run_package(name: str, file_path: Path) -> None:
+    """Read the ``__init__.py`` of a package of the plugin.
+
+    The code of the package has to run, because a plugin may put
+    something in it that the rest of the plugin needs.
+    """
+    try:
+        spec = importlib.util.spec_from_file_location(
+            name, file_path, submodule_search_locations=[str(file_path.parent)]
+        )
+    except (ImportError, ValueError) as exc:
+        raise PluginError(f"the package {name} could not be prepared: {exc}") from exc
+    if spec is None or spec.loader is None:
+        raise PluginError(f"the package {name} could not be prepared")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:  # the plugin may raise anything
+        sys.modules.pop(name, None)
+        raise PluginError(f"the package {name} could not be imported: {exc}") from exc
 
 
 def _import_from_folder(module_name: str, folder: Path, plugin_id: str):
@@ -117,12 +144,17 @@ def _import_from_folder(module_name: str, folder: Path, plugin_id: str):
     if not parts:
         raise PluginError(f"the module {module_name} has no name")
 
-    root = _private_name(plugin_id)
+    root = _private_name(plugin_id, folder)
     _make_package(root, folder)
     current = root
     for number, part in enumerate(parts[:-1], start=1):
         current = f"{current}.{part}"
-        _make_package(current, folder.joinpath(*parts[:number]))
+        place = folder.joinpath(*parts[:number])
+        init = place / "__init__.py"
+        if init.is_file():
+            _run_package(current, init)
+        else:
+            _make_package(current, place)
 
     found = _module_file(folder, module_name)
     if found is None:

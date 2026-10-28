@@ -530,5 +530,58 @@ class ExampleEngine:
             self.assertEqual(plugin.object.options.get("model_id"), "another-model")
 
 
+class PackageInitTests(unittest.TestCase):
+    """The code of the package of a plugin runs when the plugin loads."""
+
+    def test_the_code_of_the_package_of_the_plugin_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            source = Path(folder) / "source" / "my_plugin"
+            source.mkdir(parents=True)
+            (source / "__init__.py").write_text(
+                'READY = "the package is ready"\n', encoding="utf-8"
+            )
+            (source / "engine.py").write_text(
+                "from . import READY\n"
+                "\n"
+                "class Engine:\n"
+                '    name = "Engine of the package"\n'
+                "\n"
+                "    def __init__(self, options=None):\n"
+                "        self.options = dict(options or {})\n"
+                "        self.ready = READY\n"
+                "\n"
+                "    def available(self):\n"
+                "        return True\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                **MANIFEST,
+                "id": "package-engine",
+                "entry": "my_plugin.engine:Engine",
+            }
+            (Path(folder) / "source" / "plugin.json").write_text(
+                json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+            )
+            PluginInstaller(root).install_folder(Path(folder) / "source")
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("package-engine")
+            self.assertEqual(plugin.error, "")
+            self.assertEqual(plugin.object.ready, "the package is ready")
+
+
+class FolderNameTests(unittest.TestCase):
+    """Two plugins with the same identifier in different folders are apart."""
+
+    def test_the_name_of_the_package_includes_the_folder(self) -> None:
+        from hebrew_workbench.plugins.loader import _private_name
+
+        first = _private_name("engine", Path("/tmp/one"))
+        second = _private_name("engine", Path("/tmp/two"))
+        third = _private_name("other", Path("/tmp/one"))
+        self.assertNotEqual(first, second)
+        self.assertNotEqual(first, third)
+
+
 if __name__ == "__main__":
     unittest.main()
