@@ -51,6 +51,10 @@ from .preview_pane import PreviewPane
 from .suggestions_pane import SuggestionsPane
 from .tasks import TaskThread
 
+#: The plugins that come with the program and that use the models of
+#: kraken.  The model of another plugin is the model of its own maker.
+KRAKEN_PLUGINS = frozenset({"kraken", "kraken-worker"})
+
 __all__ = ["MainWindow", "run", "SUPPORTED_SUFFIXES"]
 
 SUPPORTED_SUFFIXES = (".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp")
@@ -751,7 +755,21 @@ class MainWindow(QMainWindow):
             # together: the model that is installed has to be the model
             # that the engine waits for.
             options = self.plugins.options_of(plugin)
-            artifact_id = str(options.get("model_id", artifact_id) or artifact_id)
+            model_id = str(options.get("model_id", "") or "")
+            if model_id:
+                artifact_id = model_id
+            elif plugin.id not in KRAKEN_PLUGINS:
+                # A plugin of another maker: the program does not know
+                # which model it uses, and does not offer the model of
+                # another engine.
+                QMessageBox.information(
+                    self,
+                    "התקנת מודל הזיהוי",
+                    f"התוסף {plugin.name} אינו משתמש באחד מהמודלים "
+                    "שהתוכנית יודעת. יש להתקין את המודל לפי הוראות "
+                    "של יצרן התוסף.",
+                )
+                return
         artifact = MODEL_ARTIFACTS.get(artifact_id)
         if artifact is None:
             QMessageBox.information(
@@ -1177,8 +1195,12 @@ class MainWindow(QMainWindow):
                 message = f"{message}\n{reason.rejection or reason.error}"
             QMessageBox.warning(self, "בחירת מילון", message)
             return
+        # The plugin is built again with the new setting, so that a
+        # plugin that reads it in its constructor gets it as well.
+        self.refresh_engines()
+        module = self.suggestion_modules.module("spelling")
         self._refresh_suggestions(self.suggestions)
-        words = getattr(module, "word_count", "?")
+        words = getattr(module, "word_count", "?") if module else "?"
         self.statusBar().showMessage(
             f"המילון של מודל האיות הוא עכשיו: {path} ({words} מילים)",
             8000,
