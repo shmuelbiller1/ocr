@@ -427,3 +427,169 @@ class SessionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BatchTests(unittest.TestCase):
+    """Several proposals at once, and taking them back as one action."""
+
+    def make_session(self, text: str = "שלום ,עולם ועוד ,דבר") -> SuggestionSession:
+        session = SuggestionSession(text)
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original=" ,",
+                    replacement=",",
+                    message="אין רווח לפני הפסיק",
+                    start=4,
+                    end=6,
+                ),
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original=" ,",
+                    replacement=",",
+                    message="אין רווח לפני הפסיק",
+                    start=text.rfind(" ,"),
+                    end=text.rfind(" ,") + 2,
+                ),
+            ],
+            text,
+        )
+        return session
+
+    def test_several_proposals_are_accepted_as_one_group(self) -> None:
+        session = self.make_session()
+        outcome = session.accept_many(session.pending())
+        self.assertIsNotNone(outcome)
+        text, changes = outcome
+        self.assertEqual(text, "שלום,עולם ועוד,דבר")
+        self.assertEqual(len(changes), 2)
+        # Every change of the group is part of the same group.
+        self.assertEqual({change.batch for change in changes}, {changes[0].batch})
+        self.assertTrue(session.has_batch)
+
+    def test_the_group_is_taken_back_as_one_action(self) -> None:
+        session = self.make_session()
+        session.accept_many(session.pending())
+        text = session.undo_last_batch()
+        self.assertEqual(text, "שלום ,עולם ועוד ,דבר")
+        self.assertEqual(session.accepted, [])
+        self.assertFalse(session.has_batch)
+
+    def test_a_change_that_was_accepted_alone_is_not_taken_back_with_the_group(
+        self,
+    ) -> None:
+        session = self.make_session()
+        # The first proposal is accepted on its own.
+        session.accept(session.pending()[0])
+        # The second one is accepted as a group.
+        session.accept_many(session.pending())
+        text = session.undo_last_batch()
+        self.assertEqual(text, "שלום,עולם ועוד ,דבר")
+        self.assertEqual(len(session.accepted), 1)
+
+    def test_there_is_no_group_to_take_back_when_nothing_was_accepted(self) -> None:
+        session = self.make_session()
+        self.assertIsNone(session.undo_last_batch())
+        self.assertFalse(session.has_batch)
+
+    def test_the_group_is_kept_when_the_project_is_saved(self) -> None:
+        session = self.make_session()
+        session.accept_many(session.pending())
+        log = session.change_log()
+        self.assertTrue(log)
+        self.assertTrue(all("batch" in item for item in log))
+        from hebrew_workbench.suggestions.session import AcceptedChange
+
+        restored = AcceptedChange.from_dict(log[0])
+        self.assertEqual(restored.batch, log[0]["batch"])
+
+
+class EveryOccurrenceTests(unittest.TestCase):
+    """One correction in every place where the word appears."""
+
+    def make_session(self) -> SuggestionSession:
+        text = "ספר טוב ספר טוב ספר"
+        session = SuggestionSession(text)
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_SPELLING,
+                    original="ספר",
+                    replacement="ספרים",
+                    message="אפשרות נוספת למילה",
+                    start=0,
+                    end=3,
+                    kind="word",
+                )
+            ],
+            text,
+        )
+        return session
+
+    def test_the_word_is_changed_in_every_place(self) -> None:
+        session = self.make_session()
+        outcome = session.accept_every_occurrence(session.pending()[0])
+        self.assertIsNotNone(outcome)
+        text, changes = outcome
+        self.assertEqual(text, "ספרים טוב ספרים טוב ספרים")
+        self.assertEqual(len(changes), 3)
+
+    def test_the_places_can_be_taken_back_as_one_action(self) -> None:
+        session = self.make_session()
+        session.accept_every_occurrence(session.pending()[0])
+        text = session.undo_last_batch()
+        self.assertEqual(text, "ספר טוב ספר טוב ספר")
+
+    def test_a_word_that_is_a_part_of_another_word_is_not_changed(self) -> None:
+        text = "ספר ספרים"
+        session = SuggestionSession(text)
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_SPELLING,
+                    original="ספר",
+                    replacement="ספרים",
+                    start=0,
+                    end=3,
+                    kind="word",
+                )
+            ],
+            text,
+        )
+        outcome = session.accept_every_occurrence(session.pending()[0])
+        self.assertIsNotNone(outcome)
+        text, changes = outcome
+        self.assertEqual(text, "ספרים ספרים")
+        self.assertEqual(len(changes), 1)
+
+
+class KeepWordTests(unittest.TestCase):
+    """The user keeps a word in their own list."""
+
+    def test_the_word_is_added_to_the_list_of_the_user(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "words.txt"
+            path.write_text("שלום\n", encoding="utf-8")
+            module = SpellingModule()
+            module.set_dictionary(path)
+            self.assertTrue(module.keep_word("עולם"))
+            self.assertEqual(module.word_count, 2)
+            # The word is in the file, so that it is known the next time
+            # the program starts.
+            self.assertIn("עולם", path.read_text(encoding="utf-8"))
+            # The word is not proposed any more.
+            self.assertEqual(module.check("שלום עולם"), [])
+
+    def test_a_word_that_is_already_there_is_not_written_twice(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "words.txt"
+            path.write_text("שלום\n", encoding="utf-8")
+            module = SpellingModule()
+            module.set_dictionary(path)
+            self.assertTrue(module.keep_word("שלום"))
+            self.assertEqual(path.read_text(encoding="utf-8"), "שלום\n")
+
+    def test_without_a_list_the_word_is_known_only_in_this_session(self) -> None:
+        module = SpellingModule()
+        self.assertFalse(module.keep_word("עולם"))

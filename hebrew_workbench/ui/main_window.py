@@ -330,6 +330,25 @@ class MainWindow(QMainWindow):
         self.suggestions_pane.undo_requested.connect(self.undo_all_changes)
         self.suggestions_pane.accept_requested.connect(self.accept_suggestion)
         self.suggestions_pane.refuse_requested.connect(self.refuse_suggestion)
+        self.suggestions_pane.accept_all_requested.connect(self.accept_all_suggestions)
+        self.suggestions_pane.refuse_all_requested.connect(self.refuse_all_suggestions)
+        self.suggestions_pane.accept_selected_requested.connect(
+            self.accept_selected_suggestions
+        )
+        self.suggestions_pane.refuse_selected_requested.connect(
+            self.refuse_selected_suggestions
+        )
+        self.suggestions_pane.every_occurrence_requested.connect(
+            self.accept_every_occurrence
+        )
+        self.suggestions_pane.keep_word_requested.connect(self.keep_word)
+        self.suggestions_pane.alternative_chosen_requested.connect(
+            self.accept_alternative
+        )
+        self.suggestions_pane.undo_batch_requested.connect(self.undo_last_batch)
+        self.suggestions_pane.restore_original_requested.connect(
+            self.restore_original_text
+        )
 
         self.suggestions_dock = QDockWidget("הצעות תיקון", self)
         self.suggestions_dock.setObjectName("suggestions-dock")
@@ -678,6 +697,9 @@ class MainWindow(QMainWindow):
             entry = self._current_entry()
         if entry is not None:
             entry.transcription = result.text
+            # The text as the recognition gave it is kept, so that the
+            # user can go back to it.
+            entry.original_transcription = result.text
             entry.engine_name = result.engine_name
             # The text of the document is new, and the corrections that
             # were made on the old text do not belong to it any more.
@@ -1026,6 +1048,11 @@ class MainWindow(QMainWindow):
         """Show the proposals of a session and what can be taken back."""
         self.suggestions_pane.show_suggestions(session.pending())
         self.suggestions_pane.set_undo_available(bool(session.accepted))
+        self.suggestions_pane.set_batch_available(bool(session.has_batch))
+        entry = self._shown_entry
+        self.suggestions_pane.set_restore_available(
+            bool(getattr(entry, "original_transcription", ""))
+        )
 
     def check_suggestions(self) -> None:
         """Ask the modules what they would change, and show the proposals."""
@@ -1104,6 +1131,245 @@ class MainWindow(QMainWindow):
         session.refuse(suggestion)
         self._refresh_suggestions(session)
         self.statusBar().showMessage("ההצעה נדחתה. הטקסט לא השתנה.", 5000)
+
+    # -- the proposals of the document as a whole --------------------------
+    def _session_of_the_document(self) -> SuggestionSession | None:
+        """The session of the document that is shown, when it may be used."""
+        session = self.suggestions
+        if session is not self._session_for(self._shown_entry):
+            self.statusBar().showMessage(
+                "ההצעות שייכות למסמך אחר, ולכן לא הוחלו.", 6000
+            )
+            return None
+        if self.editor.toPlainText() != session.current_text:
+            # The user wrote something after the proposals were made, so
+            # they no longer fit the text and applying them would throw
+            # away what was written.
+            self.statusBar().showMessage(
+                "הטקסט השתנה אחרי הבדיקה, ולכן ההצעות לא הוחלו. יש לבדוק את ההצעות שוב.",
+                8000,
+            )
+            self._refresh_suggestions(session)
+            return None
+        return session
+
+    def _apply_the_changes(self, text: str, session: SuggestionSession) -> None:
+        """Put a new text in the editor and remember what was changed."""
+        self._loading = True
+        # The text is put in with a cursor and not with
+        # `setPlainText`, so that the undo of the editor keeps working
+        # and the user can take back the change.
+        self._replace_editor_text(text)
+        self._loading = False
+        self._store_editor_text()
+        self._refresh_suggestions(session)
+        self._store_changes()
+
+    def accept_all_suggestions(self) -> None:
+        """Accept every proposal that is shown now.
+
+        The proposals are applied as one group, so that the user can
+        take them all back with one click.
+        """
+        session = self._session_of_the_document()
+        if session is None:
+            return
+        pending = session.pending()
+        if not pending:
+            self.statusBar().showMessage("אין הצעות לקבל.", 5000)
+            return
+        outcome = session.accept_many(pending)
+        if outcome is None:
+            self.statusBar().showMessage(
+                "אף הצעה אינה מתאימה יותר לטקסט, ולכן לא הוחלה.", 6000
+            )
+            self._refresh_suggestions(session)
+            return
+        text, changes = outcome
+        self._apply_the_changes(text, session)
+        self.statusBar().showMessage(
+            f"{len(changes)} הצעות התקבלו. אפשר לבטל את כולן בלחיצה אחת.", 6000
+        )
+
+    def refuse_all_suggestions(self) -> None:
+        """Refuse every proposal that is shown now."""
+        session = self._session_of_the_document()
+        if session is None:
+            return
+        pending = session.pending()
+        if not pending:
+            self.statusBar().showMessage("אין הצעות לדחייה.", 5000)
+            return
+        for suggestion in pending:
+            session.refuse(suggestion)
+        self._refresh_suggestions(session)
+        self.statusBar().showMessage(
+            f"{len(pending)} הצעות נדחו. הטקסט לא השתנה.", 6000
+        )
+
+    def accept_selected_suggestions(self, suggestions: list) -> None:
+        """Accept the proposals that the user marked."""
+        session = self._session_of_the_document()
+        if session is None:
+            return
+        if not suggestions:
+            self.statusBar().showMessage("לא סומנו הצעות.", 5000)
+            return
+        outcome = session.accept_many(list(suggestions))
+        if outcome is None:
+            self.statusBar().showMessage(
+                "אף הצעה אינה מתאימה יותר לטקסט, ולכן לא הוחלה.", 6000
+            )
+            self._refresh_suggestions(session)
+            return
+        text, changes = outcome
+        self._apply_the_changes(text, session)
+        self.statusBar().showMessage(
+            f"{len(changes)} הצעות התקבלו. אפשר לבטל את כולן בלחיצה אחת.", 6000
+        )
+
+    def refuse_selected_suggestions(self, suggestions: list) -> None:
+        """Refuse the proposals that the user marked."""
+        session = self._session_of_the_document()
+        if session is None:
+            return
+        if not suggestions:
+            self.statusBar().showMessage("לא סומנו הצעות.", 5000)
+            return
+        for suggestion in suggestions:
+            session.refuse(suggestion)
+        self._refresh_suggestions(session)
+        self.statusBar().showMessage(
+            f"{len(suggestions)} הצעות נדחו. הטקסט לא השתנה.", 6000
+        )
+
+    def accept_every_occurrence(self, suggestion) -> None:
+        """Accept a proposal in every place where its word appears."""
+        session = self._session_of_the_document()
+        if session is None:
+            return
+        outcome = session.accept_every_occurrence(suggestion)
+        if outcome is None:
+            self.statusBar().showMessage(
+                "אין מקום אחר שבו המילה מופיעה.", 6000
+            )
+            self._refresh_suggestions(session)
+            return
+        text, changes = outcome
+        self._apply_the_changes(text, session)
+        self.statusBar().showMessage(
+            f"ההצעה התקבלה ב{len(changes)} מקומות. אפשר לבטל את כולם בלחיצה אחת.",
+            6000,
+        )
+
+    def accept_alternative(self, suggestion, replacement: str) -> None:
+        """Accept a proposal with another possibility that the user chose."""
+        from hebrew_workbench.suggestions.base import Suggestion
+
+        chosen = Suggestion(
+            module=suggestion.module,
+            original=suggestion.original,
+            replacement=replacement,
+            message=suggestion.message,
+            start=suggestion.start,
+            end=suggestion.end,
+            kind=suggestion.kind,
+            alternatives=suggestion.alternatives,
+        )
+        self.accept_suggestion(chosen)
+
+    def keep_word(self, suggestion) -> None:
+        """Take the word as it is written, and do not propose to change it."""
+        module = self.suggestion_modules.module("spelling")
+        keeper = getattr(module, "keep_word", None)
+        if not callable(keeper):
+            self.statusBar().showMessage(
+                "מודל האיות אינו יכול לשמור מילים.", 6000
+            )
+            return
+        try:
+            written = keeper(suggestion.original)
+        except OSError as exc:
+            self.statusBar().showMessage(
+                f"לא ניתן לשמור את המילה במילון: {exc}", 6000
+            )
+            return
+        if written:
+            self.statusBar().showMessage(
+                f"המילה {suggestion.original} נשמרה במילון שלך.", 6000
+            )
+        elif getattr(module, "dictionary_path", None) is None:
+            self.statusBar().showMessage(
+                f"המילה {suggestion.original} נשמרה להפעלה הזאת בלבד, "
+                "כי לא נבחר מילון.",
+                8000,
+            )
+        else:
+            self.statusBar().showMessage(
+                f"המילה {suggestion.original} נשמרה להפעלה הזאת בלבד, כי אי אפשר לכתוב למילון.",
+                8000,
+            )
+        # The proposals are made again, so that the word is not proposed
+        # any more.
+        self.check_suggestions()
+
+    def undo_last_batch(self) -> None:
+        """Take back the last group of changes, as one action."""
+        session = self.suggestions
+        if session is not self._session_for(self._shown_entry):
+            self.statusBar().showMessage(
+                "ההצעות שייכות למסמך אחר, ולכן לא בוטלו.", 6000
+            )
+            return
+        if not session.has_batch:
+            self.statusBar().showMessage("אין פעולה אחרונה לביטול.", 5000)
+            return
+        text = session.undo_last_batch(self.editor.toPlainText())
+        if text is None:
+            self.statusBar().showMessage("אין פעולה אחרונה לביטול.", 5000)
+            return
+        self._apply_the_changes(text, session)
+        self.statusBar().showMessage("הפעולה האחרונה בוטלה.", 6000)
+
+    def restore_original_text(self) -> None:
+        """Go back to the text that the recognition gave."""
+        entry = self._shown_entry
+        if entry is None:
+            self.statusBar().showMessage("אין מסמך פתוח.", 5000)
+            return
+        original = getattr(entry, "original_transcription", "")
+        if not original:
+            self.statusBar().showMessage(
+                "אין טקסט מקורי למסמך הזה: הוא לא הוכרע עדיין.", 6000
+            )
+            return
+        session = self._session_for(entry)
+        if self.editor.toPlainText() != session.current_text:
+            # The user wrote something after the last correction, and
+            # going back to the text of the recognition takes it away.
+            # The user is asked first.
+            answer = QMessageBox.question(
+                self,
+                "חזרה לטקסט המקורי",
+                "הטקסט שהקלדת יימחק. לחזור לטקסט המקורי?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                return
+        self._loading = True
+        # The text is put in with a cursor and not with `setPlainText`,
+        # so that the undo of the editor keeps working.
+        self._replace_editor_text(original)
+        self._loading = False
+        self._store_editor_text()
+        session.undo_all(self.editor.toPlainText())
+        self.suggestions = session
+        self._refresh_suggestions(session)
+        self._store_changes()
+        self.statusBar().showMessage(
+            "הטקסט חזר למה שהזיהוי נתן. יש לבדוק את ההצעות שוב.", 8000
+        )
 
     def undo_all_changes(self) -> None:
         """Take back every correction that was accepted."""

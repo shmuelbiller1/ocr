@@ -65,6 +65,7 @@ the engine, but they are not what the program is made for.
 | Grammar proposals | **Works, a few rules** | Punctuation and spacing |
 | `לשון הספר` proposals | **Not implemented** | The module exists, is switched off, and says so; see `docs/SUGGESTIONS.md` |
 | Accepting and refusing proposals | **Works** | Every proposal is shown first and is accepted or refused on its own; every accepted change is logged and can be undone |
+| Working on many proposals at once | **Works** | Accept or refuse all of them, or only the ones that were checked; change one word in all its places; keep a word in the word list of the user; take the last group of changes back as one action; go back to the text that the recognition gave.  Nothing is applied without the press of the user - there is no button that applies the corrections it judges to be safe |
 | Plugins (engines and word lists) | **Works** | The engines and the modules of proposals are plugins; they are installed, removed, switched on and off, and chosen in `Settings > Plugins and engines`; see `docs/PLUGINS.md` |
 | Text search inside the document | **Not implemented** | Planned |
 | Undoing a correction of the style guide | **Not implemented** | The style module has no rules yet |

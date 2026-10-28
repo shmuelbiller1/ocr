@@ -75,6 +75,9 @@ class DocumentEntry:
     path: str
     added_at: str = field(default_factory=_now)
     transcription: str = ""
+    #: The text as the recognition gave it, before any correction.  It
+    #: is kept so that the user can go back to it.
+    original_transcription: str = ""
     engine_name: str = ""
     notes: str = ""
     #: The corrections that the user accepted, in the order they were
@@ -98,6 +101,7 @@ class DocumentEntry:
             "path": self.path,
             "added_at": self.added_at,
             "transcription": self.transcription,
+            "original_transcription": self.original_transcription,
             "engine_name": self.engine_name,
             "notes": self.notes,
             "changes": list(self.changes),
@@ -109,6 +113,7 @@ class DocumentEntry:
             path=str(data.get("path", "")),
             added_at=str(data.get("added_at", _now())),
             transcription=str(data.get("transcription", "")),
+            original_transcription=str(data.get("original_transcription", "")),
             engine_name=str(data.get("engine_name", "")),
             notes=str(data.get("notes", "")),
             changes=_read_changes(data.get("changes", [])),

@@ -102,6 +102,44 @@ class SpellingModule(SuggestionModule):
     def dictionary_path(self) -> Path | None:
         return self._path
 
+    def keep_word(self, word: str) -> bool:
+        """Take the word as it is written, and do not propose to change it.
+
+        The word is added to the list of the user.  The list is written
+        back to its file when the file can be written, so that the word
+        is still known the next time the program starts; when the file
+        cannot be written the word is known only in this session, and
+        ``False`` is returned.
+
+        The file of the user is never rewritten: the word is added as a
+        line of its own, and the rest of the file is left as it is.
+        """
+        word = word.strip()
+        if not word:
+            return False
+        already = word in self._words
+        if not already:
+            self._words[word] = []
+            self._spellings = build_spellings(self._words)
+        return self._write_word(word, already)
+
+    def _write_word(self, word: str, already: bool) -> bool:
+        """Write the word to the file of the list of the user."""
+        if already:
+            # The word is already in the list, and the list is not
+            # written again.
+            return True
+        path = self._path
+        if path is None:
+            # There is no list of the user to write the word in.
+            return False
+        try:
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(f"{word}\n")
+        except OSError:
+            return False
+        return True
+
     @property
     def word_count(self) -> int:
         return len(self._words)

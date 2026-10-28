@@ -20,6 +20,18 @@ __all__ = ["SuggestionSession", "AcceptedChange"]
 CONTEXT_SIZE = 40
 
 
+def _is_word_letter(character: str) -> bool:
+    """Is this character a part of a word?
+
+    A letter or a digit is a part of a word, and a space or a mark of
+    punctuation is not.  It is used to find a word as a whole word and
+    not as a part of a longer one.
+    """
+    if not character:
+        return False
+    return character.isalnum() or character == "_"
+
+
 def _place_of_change(change: "AcceptedChange", text: str) -> int | None:
     """Where the correction is in the text.
 
@@ -71,6 +83,7 @@ class AcceptedChange:
         message: str = "",
         before: str = "",
         after: str = "",
+        batch: int = 0,
     ) -> None:
         self.module = module
         self.original = original
@@ -81,6 +94,10 @@ class AcceptedChange:
         # found again in a text that was written by hand after it.
         self.before = before
         self.after = after
+        # The number of the group of changes that this change is part
+        # of.  Zero means that it was accepted on its own.  A group can
+        # be taken back as one action.
+        self.batch = batch
         # Is the text around the change still the text that was kept?
         # It is not when another correction was accepted later and
         # touched it.
@@ -98,6 +115,7 @@ class AcceptedChange:
             "message": self.message,
             "before": self.before,
             "after": self.after,
+            "batch": self.batch,
         }
 
     @classmethod
@@ -110,6 +128,7 @@ class AcceptedChange:
             message=str(data.get("message", "")),
             before=str(data.get("before", "")),
             after=str(data.get("after", "")),
+            batch=int(data.get("batch", 0) or 0),
         )
 
 
@@ -129,6 +148,10 @@ class SuggestionSession:
         # The proposals keep the places they had when the round began,
         # so only the corrections of this round may move them.
         self._round_shifts: list[tuple[int, int]] = []
+        # The number of the last group of changes that the user made at
+        # once.  Every group has a number of its own, so that a group
+        # can be taken back as one action.
+        self._batch_number = 0
 
     # -- the proposals -----------------------------------------------------
     def set_suggestions(self, suggestions: list[Suggestion], text: str | None = None) -> None:
@@ -196,12 +219,18 @@ class SuggestionSession:
         return start, end
 
     # -- accepting and refusing --------------------------------------------
-    def accept(self, suggestion: Suggestion) -> tuple[str, int] | None:
+    def accept(
+        self, suggestion: Suggestion, batch: int = 0
+    ) -> tuple[str, int] | None:
         """Accept a proposal.
 
         Returns the new text of the document and the place of the change
         in it, or ``None`` when the proposal does not fit the text any
         more (because another change was made in the same place).
+
+        The number of the group of changes is given, so that several
+        changes that the user made at once can be taken back as one
+        action.
         """
         place = self.place_of(suggestion)
         if place is None:
@@ -236,6 +265,7 @@ class SuggestionSession:
                     + len(suggestion.replacement)
                     + CONTEXT_SIZE
                 ],
+                batch=batch,
             )
         )
         self.current_text = new_text
@@ -251,6 +281,136 @@ class SuggestionSession:
         self.remove(suggestion)
         self.refused = [item for item in self.refused if item is not suggestion]
         return new_text, start
+
+    # -- several proposals at once ----------------------------------------
+    def accept_many(
+        self, suggestions: list[Suggestion]
+    ) -> tuple[str, list[AcceptedChange]] | None:
+        """Accept several proposals as one action.
+
+        The proposals that do not fit the text any more - because
+        another proposal was applied to the same place - are refused,
+        so that they do not stay in the list of the proposals that are
+        waiting for an answer.
+
+        The ones that are accepted are remembered as one group, so
+        that the user can take them back as one action.
+
+        Returns the new text and the changes that were made, or
+        ``None`` when not one proposal could be applied.
+        """
+        wanted = list(suggestions)
+        if not wanted:
+            return None
+        self._batch_number += 1
+        batch = self._batch_number
+        changes: list[AcceptedChange] = []
+        applied: set[int] = set()
+        for suggestion in wanted:
+            before = len(self.accepted)
+            outcome = self.accept(suggestion, batch=batch)
+            if outcome is None:
+                continue
+            if len(self.accepted) > before:
+                changes.append(self.accepted[-1])
+                applied.add(id(suggestion))
+        for suggestion in wanted:
+            if id(suggestion) not in applied:
+                # The proposal was overtaken by another one in the same
+                # place, and it cannot be applied any more.
+                self.refuse(suggestion)
+        if not changes:
+            # Nothing was applied: the group is empty, and it is not
+            # remembered.
+            self._batch_number -= 1
+            return None
+        return self.current_text, changes
+
+    def accept_every_occurrence(
+        self, suggestion: Suggestion
+    ) -> tuple[str, list[AcceptedChange]] | None:
+        """Accept a proposal in every place where its word appears.
+
+        The word is looked for as a whole word, so that a word that is
+        a part of another word is not changed.  Every place is changed
+        as one group, and the group can be taken back as one action.
+        """
+        word = suggestion.original
+        if not word:
+            return None
+        text = self.current_text
+        places = []
+        start = text.find(word)
+        while start >= 0:
+            before = text[start - 1] if start > 0 else " "
+            after = text[start + len(word)] if start + len(word) < len(text) else " "
+            if not _is_word_letter(before) and not _is_word_letter(after):
+                places.append(start)
+            start = text.find(word, start + 1)
+        if not places:
+            return None
+        proposals = [
+            Suggestion(
+                module=suggestion.module,
+                original=word,
+                replacement=suggestion.replacement,
+                message=suggestion.message,
+                start=place,
+                end=place + len(word),
+                kind=suggestion.kind,
+                alternatives=suggestion.alternatives,
+            )
+            for place in places
+        ]
+        return self.accept_many(proposals)
+
+    @property
+    def has_batch(self) -> bool:
+        """Is there a group of changes that can be taken back as one?"""
+        return any(change.batch for change in self.accepted)
+
+    def undo_last_batch(self, text: str | None = None) -> str | None:
+        """Take back the last group of changes, as one action.
+
+        The group is taken back in the order the changes were accepted,
+        the last one first, so that a change that was made on the text
+        of another one is taken back after it.
+
+        ``None`` is returned when there is no group to take back.
+        """
+        batches = [change.batch for change in self.accepted if change.batch]
+        if not batches:
+            return None
+        last = max(batches)
+        result = self.current_text if text is None else text
+        self.last_undo_skipped = []
+        for change in reversed(list(self.accepted)):
+            if change.batch != last:
+                continue
+            place = _place_of_change(change, result)
+            if place is None:
+                self.last_undo_skipped.append(change)
+                continue
+            result = (
+                result[:place]
+                + change.original
+                + result[place + len(change.replacement) :]
+            )
+            shift = len(change.original) - len(change.replacement)
+            for other in self.accepted:
+                if other is not change and other.position >= place:
+                    other.position += shift
+        self.current_text = result
+        self.accepted = [
+            change for change in self.accepted if change.batch != last
+        ]
+        self._round_shifts = []
+        # The proposals of the last round have the places of the text
+        # as it was before the changes were taken back, and they are of
+        # no use now.
+        self.suggestions = []
+        self.refused = []
+        return result
 
     def undo_all(self, text: str | None = None) -> str:
         """Take back every change that was accepted, and return the text.

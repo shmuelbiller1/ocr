@@ -82,3 +82,28 @@ class ProjectTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OriginalTranscriptionTests(unittest.TestCase):
+    """The text as the recognition gave it is kept, so it can be found again."""
+
+    def test_the_original_text_is_saved_and_loaded(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            scan = Path(folder) / "scan.png"
+            scan.write_bytes(b"png")
+            project = Project()
+            project.add(scan).transcription = "הטקסט אחרי תיקון"
+            project[0].original_transcription = "הטקסט של הזיהוי"
+            target = project.save(Path(folder) / "session")
+
+            loaded = Project.load(target)
+            self.assertEqual(loaded[0].original_transcription, "הטקסט של הזיהוי")
+            self.assertEqual(loaded[0].transcription, "הטקסט אחרי תיקון")
+
+    def test_a_document_without_an_original_text_has_none(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            scan = Path(folder) / "scan.png"
+            scan.write_bytes(b"png")
+            project = Project()
+            project.add(scan).transcription = "רק תיקון"
+            self.assertEqual(project[0].original_transcription, "")

@@ -201,3 +201,110 @@ class DocumentTextTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OriginalTextTests(unittest.TestCase):
+    """The text as the recognition gave it is kept, so it can be found again."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        self.home = temporary_home()
+        self.window = MainWindow()
+
+    def tearDown(self) -> None:
+        self.window.close()
+        self.window.deleteLater()
+        self.app.processEvents()
+        self.home.cleanup()
+
+    def add_document(self):
+        from hebrew_workbench.resources import samples_directory
+
+        samples = samples_directory()
+        if samples is None:
+            self.skipTest("the sample pages are not available here")
+        pages = sorted(samples.glob("scan_page_*.png"))
+        if not pages:
+            self.skipTest("the sample pages are not available here")
+        self.window.project.add(pages[0])
+        self.window._sync_document_list()
+        self.window.doc_list.setCurrentRow(0)
+        return self.window.project[0]
+
+    @staticmethod
+    def yes() -> object:
+        from PySide6.QtWidgets import QMessageBox
+
+        return QMessageBox.Yes
+
+    @staticmethod
+    def no() -> object:
+        from PySide6.QtWidgets import QMessageBox
+
+        return QMessageBox.No
+
+    def answer_the_question(self, answer) -> list:
+        """Answer the question of the program without a window of its own."""
+        from PySide6.QtWidgets import QMessageBox
+
+        asked = []
+
+        def question(*args, **kwargs):
+            asked.append(args[1] if len(args) > 1 else "")
+            return answer
+
+        original = QMessageBox.question
+        QMessageBox.question = staticmethod(question)
+        self.addCleanup(lambda: setattr(QMessageBox, "question", original))
+        return asked
+
+    def test_the_recognition_keeps_the_text_it_gave(self) -> None:
+        entry = self.add_document()
+
+        class Result:
+            text = "תוצאת הזיהוי"
+            engine_name = "מנוע הבדיקה"
+            duration_seconds = 1.5
+
+        self.window._on_ocr_done(Result(), entry)
+        self.assertEqual(entry.original_transcription, "תוצאת הזיהוי")
+
+    def test_the_text_can_go_back_to_what_the_recognition_gave(self) -> None:
+        entry = self.add_document()
+
+        class Result:
+            text = "תוצאת הזיהוי"
+            engine_name = "מנוע הבדיקה"
+            duration_seconds = 1.5
+
+        self.window._on_ocr_done(Result(), entry)
+        # The user changes the text in the editor.
+        self.window.editor.setPlainText("תוצאת הזיהוי עם תיקון של המשתמש")
+        self.answer_the_question(self.yes())
+        self.window.restore_original_text()
+        self.assertEqual(self.window.editor.toPlainText(), "תוצאת הזיהוי")
+
+    def test_the_user_is_asked_before_the_text_he_wrote_is_thrown_away(self) -> None:
+        """Going back to the original text takes away what was typed."""
+        entry = self.add_document()
+
+        class Result:
+            text = "תוצאת הזיהוי"
+            engine_name = "מנוע הבדיקה"
+            duration_seconds = 1.5
+
+        self.window._on_ocr_done(Result(), entry)
+        self.window.editor.setPlainText("מה שהמשתמש הקליד")
+        asked = self.answer_the_question(self.no())
+        self.window.restore_original_text()
+        # The user refused, and the text of the editor is as it was.
+        self.assertTrue(asked)
+        self.assertEqual(self.window.editor.toPlainText(), "מה שהמשתמש הקליד")
+
+    def test_there_is_nothing_to_go_back_to_before_the_recognition(self) -> None:
+        self.add_document()
+        self.window.editor.setPlainText("טקסט שהמשתמש הקליד")
+        self.window.restore_original_text()
+        # The text of the editor is not changed, because there is no
+        # original text yet.
+        self.assertEqual(self.window.editor.toPlainText(), "טקסט שהמשתמש הקליד")

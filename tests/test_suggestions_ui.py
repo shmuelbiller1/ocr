@@ -273,3 +273,180 @@ class WindowSuggestionsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BulkActionsTests(unittest.TestCase):
+    """The proposals of the document as a whole, and not one by one."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        from hebrew_workbench.ui.main_window import MainWindow
+
+        self.home = temporary_home()
+        self.window = MainWindow()
+
+    def tearDown(self) -> None:
+        self.window.close()
+        self.window.deleteLater()
+        self.app.processEvents()
+        self.home.cleanup()
+
+    def add_document(self) -> None:
+        from hebrew_workbench.resources import samples_directory
+
+        samples = samples_directory()
+        if samples is None:
+            self.skipTest("the sample pages are not available here")
+        pages = sorted(samples.glob("scan_page_*.png"))
+        if not pages:
+            self.skipTest("the sample pages are not available here")
+        self.window.project.add(pages[0])
+        self.window._sync_document_list()
+        self.window.doc_list.setCurrentRow(0)
+
+    def make_suggestions(self) -> None:
+        """Two proposals in the text of the document."""
+        self.add_document()
+        self.window.editor.setPlainText("שלום ,עולם ועוד ,דבר")
+        self.window.check_suggestions()
+        self.assertGreaterEqual(len(self.window.suggestions.pending()), 2)
+
+    def test_all_the_proposals_are_accepted_at_once(self) -> None:
+        self.make_suggestions()
+        before = len(self.window.suggestions.pending())
+        self.window.accept_all_suggestions()
+        self.assertEqual(self.window.suggestions.pending(), [])
+        self.assertEqual(self.window.editor.toPlainText(), "שלום,עולם ועוד,דבר")
+        self.assertGreater(before, 1)
+
+    def test_all_the_proposals_are_refused_at_once(self) -> None:
+        self.make_suggestions()
+        self.window.refuse_all_suggestions()
+        self.assertEqual(self.window.suggestions.pending(), [])
+        self.assertEqual(self.window.editor.toPlainText(), "שלום ,עולם ועוד ,דבר")
+
+    def test_the_proposals_that_were_marked_are_accepted(self) -> None:
+        self.make_suggestions()
+        rows = self.window.suggestions_pane._rows
+        rows[0].checkbox.setChecked(True)
+        marked = self.window.suggestions_pane.checked_suggestions()
+        self.assertEqual(len(marked), 1)
+        before = len(self.window.suggestions.pending())
+        self.window.accept_selected_suggestions(marked)
+        after = self.window.suggestions.pending()
+        # The one that was marked is not waiting any more.
+        self.assertNotIn(marked[0], after)
+        self.assertLess(len(after), before)
+
+    def test_the_proposals_that_were_marked_are_refused(self) -> None:
+        self.make_suggestions()
+        rows = self.window.suggestions_pane._rows
+        rows[0].checkbox.setChecked(True)
+        marked = self.window.suggestions_pane.checked_suggestions()
+        before = len(self.window.suggestions.pending())
+        self.window.refuse_selected_suggestions(marked)
+        after = self.window.suggestions.pending()
+        self.assertNotIn(marked[0], after)
+        self.assertLess(len(after), before)
+
+    def test_the_last_group_is_taken_back_as_one_action(self) -> None:
+        self.make_suggestions()
+        self.window.accept_all_suggestions()
+        self.assertTrue(self.window.suggestions.has_batch)
+        self.window.undo_last_batch()
+        self.assertEqual(self.window.editor.toPlainText(), "שלום ,עולם ועוד ,דבר")
+        self.assertFalse(self.window.suggestions.has_batch)
+
+    def test_the_text_goes_back_to_what_the_recognition_gave(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        # The user is asked before the text he wrote is thrown away.
+        original = QMessageBox.question
+        QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
+        self.addCleanup(lambda: setattr(QMessageBox, "question", original))
+
+        self.add_document()
+        self.window.editor.setPlainText("הטקסט של הזיהוי")
+        self.window.project[0].original_transcription = "הטקסט של הזיהוי"
+        self.window.editor.setPlainText("הטקסט של הזיהוי עם תיקון")
+        self.window.restore_original_text()
+        self.assertEqual(self.window.editor.toPlainText(), "הטקסט של הזיהוי")
+
+
+class WordActionsTests(unittest.TestCase):
+    """The actions that are done on one word in all its places."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        from hebrew_workbench.ui.main_window import MainWindow
+
+        self.home = temporary_home()
+        self.window = MainWindow()
+
+    def tearDown(self) -> None:
+        self.window.close()
+        self.window.deleteLater()
+        self.app.processEvents()
+        self.home.cleanup()
+
+    def add_document(self) -> None:
+        from hebrew_workbench.resources import samples_directory
+
+        samples = samples_directory()
+        if samples is None:
+            self.skipTest("the sample pages are not available here")
+        pages = sorted(samples.glob("scan_page_*.png"))
+        if not pages:
+            self.skipTest("the sample pages are not available here")
+        self.window.project.add(pages[0])
+        self.window._sync_document_list()
+        self.window.doc_list.setCurrentRow(0)
+
+    def make_word_suggestion(self, text: str, word: str):
+        from hebrew_workbench.suggestions import Suggestion
+
+        self.add_document()
+        self.window.editor.setPlainText(text)
+        self.window.check_suggestions()
+        start = text.find(word)
+        return Suggestion(
+            module="spelling",
+            original=word,
+            replacement=word + "ים",
+            message="אפשרות נוספת למילה",
+            start=start,
+            end=start + len(word),
+            kind="word",
+        )
+
+    def test_the_word_is_changed_in_every_place_it_appears(self) -> None:
+        suggestion = self.make_word_suggestion("ספר טוב ספר", "ספר")
+        self.window.accept_every_occurrence(suggestion)
+        self.assertEqual(self.window.editor.toPlainText(), "ספרים טוב ספרים")
+
+    def test_the_places_can_be_taken_back_as_one_action(self) -> None:
+        suggestion = self.make_word_suggestion("ספר טוב ספר", "ספר")
+        self.window.accept_every_occurrence(suggestion)
+        self.window.undo_last_batch()
+        self.assertEqual(self.window.editor.toPlainText(), "ספר טוב ספר")
+
+    def test_a_word_that_the_user_keeps_is_not_proposed_any_more(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        suggestion = self.make_word_suggestion("מילה טובה", "מילה")
+        module = self.window.suggestion_modules.module("spelling")
+        if module is None:
+            self.skipTest("the spelling module is not available here")
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "words.txt"
+            path.write_text("טובה\n", encoding="utf-8")
+            module.set_dictionary(path)
+            self.window.keep_word(suggestion)
+            # The word is in the list of the user, and it is not
+            # proposed again.
+            self.assertIn("מילה", path.read_text(encoding="utf-8"))
+            self.assertNotIn(
+                "מילה",
+                [item.original for item in self.window.suggestions.pending()],
+            )
