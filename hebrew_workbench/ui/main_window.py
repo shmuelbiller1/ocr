@@ -1457,8 +1457,18 @@ class MainWindow(QMainWindow):
             # still in place, and the user is told why.
             reason = self.plugins.get(self._spelling_plugin_id())
             message = "התוסף לא קיבל את המילון הזה."
+            broken = False
             if reason is not None and (reason.rejection or reason.error):
                 message = f"{message}\n{reason.rejection or reason.error}"
+                broken = bool(reason.error)
+            # The modules of the proposals are looked at again: a
+            # plugin that is in a fatal mistake is not used any more,
+            # and the window must not keep calling it.
+            self._refresh_suggestion_modules()
+            if broken:
+                # The module that made the proposals is not the one
+                # that is used now, and the proposals are cleared.
+                self._clear_the_proposals()
             QMessageBox.warning(self, "בחירת מילון", message)
             return
         # The plugin is built again with the new setting, so that a
@@ -1466,19 +1476,26 @@ class MainWindow(QMainWindow):
         self.refresh_engines()
         module = self.suggestion_modules.module("spelling")
         # The proposals of the old word list are not good any more.
-        # They are cleared in every document, and not only in the one
-        # that is shown, because every document has its own session.
+        self._clear_the_proposals()
+        words = getattr(module, "word_count", "?") if module else "?"
+        self.statusBar().showMessage(
+            f"המילון של מודל האיות הוא עכשיו: {path} ({words} מילים)",
+            8000,
+        )
+
+    def _clear_the_proposals(self) -> None:
+        """Take away the proposals of every document.
+
+        The proposals of the old word list are not good any more.  They
+        are cleared in every document, and not only in the one that is
+        shown, because every document has its own session.
+        """
         sessions = list(self._sessions.values())
         if self.suggestions not in sessions:
             sessions.append(self.suggestions)
         for session in sessions:
             session.set_suggestions([])
         self._refresh_suggestions(self.suggestions)
-        words = getattr(module, "word_count", "?") if module else "?"
-        self.statusBar().showMessage(
-            f"המילון של מודל האיות הוא עכשיו: {path} ({words} מילים)",
-            8000,
-        )
 
     def show_about(self) -> None:
         QMessageBox.about(

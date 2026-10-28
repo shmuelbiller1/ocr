@@ -450,3 +450,69 @@ class WordActionsTests(unittest.TestCase):
                 "מילה",
                 [item.original for item in self.window.suggestions.pending()],
             )
+
+
+class BrokenPluginTests(unittest.TestCase):
+    """A plugin that is in a fatal mistake is not used any more."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        from hebrew_workbench.ui.main_window import MainWindow
+
+        self.home = temporary_home()
+        self.window = MainWindow()
+
+    def tearDown(self) -> None:
+        self.window.close()
+        self.window.deleteLater()
+        self.app.processEvents()
+        self.home.cleanup()
+
+    def add_document(self) -> None:
+        from hebrew_workbench.resources import samples_directory
+
+        samples = samples_directory()
+        if samples is None:
+            self.skipTest("the sample pages are not available here")
+        pages = sorted(samples.glob("scan_page_*.png"))
+        if not pages:
+            self.skipTest("the sample pages are not available here")
+        self.window.project.add(pages[0])
+        self.window._sync_document_list()
+        self.window.doc_list.setCurrentRow(0)
+
+    def test_a_plugin_that_failed_is_not_called_any_more(self) -> None:
+        """The window refreshes its modules when the setting was refused.
+
+        The registry of the plugins does not use a plugin that is in a
+        fatal mistake, and the window must not keep the old object of
+        that plugin and call it.
+        """
+        self.add_document()
+        self.window.editor.setPlainText("שלום , עולם")
+        self.window.check_suggestions()
+        self.assertTrue(self.window.suggestions.pending())
+
+        # The plugin refuses the word list, and the old setting cannot
+        # be put back either: the plugin is in a fatal mistake.
+        plugin_id = self.window._spelling_plugin_id()
+        plugin = self.window.plugins.get(plugin_id)
+        self.assertIsNotNone(plugin)
+        plugin.error = "the settings of the plugin could not be used"
+        with tempfile.TemporaryDirectory() as folder:
+            words = Path(folder) / "words.txt"
+            words.write_text("שלום\n", encoding="utf-8")
+            with mock.patch.object(
+                self.window.plugins, "set_option", return_value=False
+            ), mock.patch(
+                "hebrew_workbench.ui.main_window.QMessageBox.warning"
+            ), mock.patch(
+                "hebrew_workbench.ui.main_window.QFileDialog.getOpenFileName",
+                return_value=(str(words), ""),
+            ):
+                self.window.choose_dictionary()
+
+        # The module of the broken plugin is not in the window any more,
+        # and the proposals that it made are gone.
+        self.assertIsNone(self.window.suggestion_modules.module("spelling"))
+        self.assertEqual(self.window.suggestions.pending(), [])
