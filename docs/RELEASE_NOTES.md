@@ -13,6 +13,8 @@ Windows, that works without an internet connection and without Python.
   ייצוא ל-TXT ול-DOCX, הדפסה ותצוגה מקדימה לפני ההדפסה.
 * הצעות תיקון של איות ושל ניסוח, כל הצעה מתקבלת או נדחית בנפרד,
   ואפשר לבטל את כל השינויים.
+* התוכנה שואלת לפני שהיא סוגרת חלון שיש בו עבודה שלא נשמרה, ולפני
+  שהיא מחליפה קובץ שכבר קיים.
 * עבודה על ההצעות של דף ביחד: "קבל הכל", "דחה הכל", קבל או דחה רק
   את ההצעות שסומנו, שינוי מילה בכל המקומות שבהם היא מופיעה, שמירת
   מילה במילון של המשתמש, ביטול הפעולה האחרונה כמעשה אחד, וחזרה לטקסט
@@ -39,6 +41,9 @@ recognition engine and its model are installed only when the user asks for
 it, and the model file is checked against the digest published by its
 authors.  Nothing is uploaded anywhere.  The licence texts of every bundled
 component are in the folder LICENCES.
+
+The program asks before it closes a window with work that was not saved,
+and before it replaces a file that is already there.
 
 The proposals of a page can be worked on together: accept all of them,
 refuse all of them, accept or refuse only the ones that were checked,
