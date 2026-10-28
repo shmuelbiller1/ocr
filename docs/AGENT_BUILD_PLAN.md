@@ -75,7 +75,7 @@ The rules that follow from this:
 | Comparing several engines on the same pages | **Works** | `tools/benchmark_ocr.py --engines ...` measures every engine on the same pages and writes the rate of each of them |
 | Diagnostic measurement on the old handwriting | **Works** | the Pinkas pages are measured on every build; the numbers are in `docs/OCR_ACCURACY.md` |
 | A release that a user can download | **Works** | a tag that starts with `v` makes the build publish the archive that was built and checked, with its digest and with the notes of the release |
-| The release of a tag that is already there | **Works** | GitHub may make a release the moment the tag is pushed; the build writes the archive, the digest and the notes into the release that is already there, and does not stop |
+| The release of a tag that is already there | **Works** | GitHub may make a release the moment the tag is pushed; the build writes the archive, the digest and the notes into the release that is already there, and does not stop. A file that was published before is taken away only when the new one is there, so that a failure in between leaves the user with the file he had |
 
 ## First milestone (current scaffold)
 - Runnable Windows desktop interface with batch file selection, RTL editor, TXT export and explicit adapter status.

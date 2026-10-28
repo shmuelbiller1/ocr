@@ -361,7 +361,40 @@ class PublishTheReleaseTests(unittest.TestCase):
         leave a release without an archive, and the build must fill it."""
         self.assertIn('select(.tag_name == ', self.script)
         self.assertIn("gh release upload", self.script)
-        self.assertIn("--clobber", self.script)
+
+    def test_the_draft_flag_is_sent_as_a_boolean(self) -> None:
+        """The release API wants a boolean and not a text, and it refuses
+        a text with an error.  The step would stop before the files are
+        put there, and the release would stay without them."""
+        self.assertIn("-F draft=false", self.script)
+        self.assertNotIn("-f draft=false", self.script)
+
+    def test_the_file_of_the_user_is_not_replaced_with_a_clobber(self) -> None:
+        """`gh release upload --clobber` deletes the file that was
+        published before it puts the new one, and a failure in between
+        leaves the user with nothing.  The new file goes up under a
+        temporary name, and the old one is taken away afterwards."""
+        calls, _ = self._run_the_script(a_release_is_already_there=True)
+        lines = [line for line in calls.splitlines() if line]
+        uploads = [
+            index for index, line in enumerate(lines) if "release upload" in line
+        ]
+        self.assertTrue(uploads, "nothing was uploaded")
+        for index in uploads:
+            self.assertIn(".new", lines[index])
+        delete = next(
+            index for index, line in enumerate(lines) if "-X DELETE" in line
+        )
+        rename = next(
+            index
+            for index, line in enumerate(lines)
+            if "-X PATCH" in line and "/assets/" in line
+        )
+        # The new file is uploaded before the file that was published
+        # is taken away, and the new file gets the name of the old one
+        # afterwards.
+        self.assertLess(min(uploads), delete)
+        self.assertLess(delete, rename)
 
     def test_the_release_is_made_only_when_there_is_none(self) -> None:
         self.assertIn("gh release create", self.script)
