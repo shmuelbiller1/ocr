@@ -525,6 +525,7 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
           set -o pipefail
           cd release
@@ -534,10 +535,25 @@ jobs:
             name="$(basename "$archive")"
             sha256sum "$name" > "${name}.sha256"
           done
-          # --verify-tag: the release is made for the tag that was
-          # pushed, and not for a new tag that the tool would make.
-          gh release create "$TAG" \
-            ./*.zip ./*.sha256 \
-            --verify-tag \
-            --title "Hebrew Notes Workbench $TAG" \
-            --notes-file ../release-notes.md
+          # A release with this tag may already be there: the tag may
+          # have been pushed before the build had made the archive.  The
+          # release is then written again - with the archive, with the
+          # digest and with the notes - and the build does not stop.
+          existing="$(gh api "repos/${{ github.repository }}/releases" --paginate \
+            --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n 1)"
+          if [ -n "$existing" ]; then
+            gh api "repos/${{ github.repository }}/releases/$existing" -X PATCH \
+              -f tag_name="$TAG" \
+              -f name="Hebrew Notes Workbench $TAG" \
+              -f draft=false \
+              -F body=@../release-notes.md
+            gh release upload "$TAG" ./*.zip ./*.sha256 --clobber
+          else
+            # --verify-tag: the release is made for the tag that was
+            # pushed, and not for a new tag that the tool would make.
+            gh release create "$TAG" \
+              ./*.zip ./*.sha256 \
+              --verify-tag \
+              --title "Hebrew Notes Workbench $TAG" \
+              --notes-file ../release-notes.md
+          fi

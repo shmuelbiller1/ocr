@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 import tempfile
 import unittest
 import zipfile
@@ -275,6 +277,127 @@ class ReleaseWorkflowTests(unittest.TestCase):
         """The build writes its own manifest to another place, and the
         measurement is checked against the manifest of the repository."""
         self.assertIn("--output build/manifest-of-the-build.json", self.text)
+
+
+class PublishTheReleaseTests(unittest.TestCase):
+    """The step of the build that gives the archive to the user."""
+
+    def setUp(self) -> None:
+        self.workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "windows.yml"
+        )
+        self.text = self.workflow.read_text(encoding="utf-8")
+        self.script = self._the_script_of_the_step()
+
+    def _the_script_of_the_step(self) -> str:
+        """The commands of the step, as the runner of GitHub sees them."""
+        lines = self.text.splitlines()
+        start = None
+        for index, line in enumerate(lines):
+            if line.strip() == "- name: Publish the release":
+                start = index
+                break
+        self.assertIsNotNone(start, "the step of the release is not in the file")
+        body: list[str] = []
+        inside = False
+        for line in lines[start:]:
+            if not inside:
+                if line.strip() == "run: |":
+                    inside = True
+                continue
+            if line.strip() and not line.startswith(" " * 10):
+                break
+            body.append(line[10:])
+        self.assertTrue(body, "the step of the release has no commands")
+        return "\n".join(body)
+
+    def test_the_step_looks_for_a_release_that_is_already_there(self) -> None:
+        """A tag that was pushed before the build had made the archive may
+        leave a release without an archive, and the build must fill it."""
+        self.assertIn('select(.tag_name == ', self.script)
+        self.assertIn("gh release upload", self.script)
+        self.assertIn("--clobber", self.script)
+
+    def test_the_release_is_made_only_when_there_is_none(self) -> None:
+        self.assertIn("gh release create", self.script)
+        self.assertIn("--verify-tag", self.script)
+
+    @unittest.skipIf(
+        os.name == "nt",
+        "the release is made by the runner of Linux, and the shell of the "
+        "Windows runner is not the shell of that runner",
+    )
+    def test_the_step_writes_the_release_that_is_already_there(self) -> None:
+        """Run the step as the runner of GitHub runs it, with a tool of
+        GitHub that only writes what it does."""
+        calls, _ = self._run_the_script(a_release_is_already_there=True)
+        self.assertNotIn("release create", calls)
+        self.assertIn("release upload v0.2.0", calls)
+        self.assertIn("--clobber", calls)
+        self.assertIn("PATCH", calls)
+
+    @unittest.skipIf(
+        os.name == "nt",
+        "the release is made by the runner of Linux, and the shell of the "
+        "Windows runner is not the shell of that runner",
+    )
+    def test_the_step_makes_the_release_when_there_is_none(self) -> None:
+        calls, digest = self._run_the_script(a_release_is_already_there=False)
+        self.assertIn("release create v0.2.0", calls)
+        self.assertIn("--verify-tag", calls)
+        self.assertIn("app.zip", digest)
+        self.assertRegex(digest, r"^[0-9a-f]{64} ")
+
+    def _run_the_script(self, a_release_is_already_there: bool) -> tuple[str, str]:
+        """Run the step with a tool of GitHub that only writes what it does."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "release").mkdir()
+            (root / "release" / "app.zip").write_bytes(b"zip")
+            (root / "release-notes.md").write_text("the notes\n", encoding="utf-8")
+            tools = root / "bin"
+            tools.mkdir()
+            fake = tools / "gh"
+            log = root / "calls.log"
+            fake.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo "$*" >> "{log.as_posix()}"\n'
+                + ("echo 4242\n" if a_release_is_already_there else "")
+                + "exit 0\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            fake.chmod(0o755)
+            script = root / "run.sh"
+            script.write_text(
+                self.script.replace("${{ github.repository }}", "owner/repo"),
+                encoding="utf-8",
+                newline="\n",
+            )
+            environment = dict(os.environ)
+            environment["PATH"] = f"{tools}{os.pathsep}{environment['PATH']}"
+            environment["TAG"] = "v0.2.0"
+            result = subprocess.run(
+                ["bash", script.as_posix()],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout: {result.stdout}\nstderr: {result.stderr}",
+            )
+            calls = log.read_text(encoding="utf-8") if log.exists() else ""
+            digest = root / "release" / "app.zip.sha256"
+            digest_text = (
+                digest.read_text(encoding="utf-8") if digest.exists() else ""
+            )
+            return calls, digest_text
 
 
 class ReleaseNotesTests(unittest.TestCase):
