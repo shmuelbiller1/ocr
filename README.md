@@ -3,6 +3,17 @@
 A Windows-first, offline desktop application for turning scanned handwritten
 Hebrew-script notes into editable, printable documents.
 
+**The material it is made for is the handwriting of today:** the notes
+that students write in class, with a pen, in a notebook or on a sheet
+of paper.  The program reads the Hebrew letters of those notes, and it
+does not care whether the words are Hebrew, Yiddish, Aramaic,
+abbreviations or the terms of the subject: the spelling, the
+abbreviations and the order of the lines of the writer are kept, and
+the text is never changed by the program itself.
+
+The pages of old handwriting are measured as well, as a diagnostic of
+the engine, but they are not what the program is made for.
+
 > **Status: the engine works.** The Windows executable builds and starts on
 > the CI build machine, the interface is right-to-left and Hebrew-capable,
 > and the recognition engine reads real handwritten pages with kraken and
@@ -45,7 +56,10 @@ Hebrew-script notes into editable, printable documents.
 | Print | **Works** | Print dialog with the Windows printers, print preview, and "save as PDF" |
 | Sample pages | **Works** | `File > Open samples` loads the synthetic pages from `samples/` |
 | OCR engine slot | **Works** | The engine is found by itself: the worker of the recognition is in the folder `ocr-worker` of the program |
-| Handwriting recognition with a real model | **Works, needs the model** | kraken + PP-OCRv6 (Apache-2.0); the model is installed by the user and checked against two digests; the accuracy is measured in `docs/OCR_ACCURACY.md` and is 61.5% character error rate on early modern cursive (7 of the 8 pages whose ground truth is complete) - the result has to be read line by line |
+| Handwriting recognition with a real model | **Works, needs the model** | kraken + PP-OCRv6 (Apache-2.0); the model is installed by the user and checked against two digests; the result has to be read line by line |
+| Accuracy on the handwriting of today | **Not verified** | The corpus of the modern school handwriting is empty: the tools that build it and that measure the engines on it are ready, and the pages with a verified transcript have to be added by the school; see `docs/MODERN_SCHOOL_BENCHMARK.md` |
+| Accuracy on the handwriting of old times (a diagnostic) | **Works** | 61.5% character error rate on early modern cursive (7 of the 8 pages whose ground truth is complete) - the numbers are in `docs/OCR_ACCURACY.md` |
+| Comparing several engines on the same pages | **Works** | Every engine is measured on the same pages; the default engine is the one with the best measurement, and the user can choose another one in the settings screen |
 | Spelling proposals | **Works, needs a word list** | The word list of the user; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
 | Grammar proposals | **Works, a few rules** | Punctuation and spacing |
 | `לשון הספר` proposals | **Not implemented** | The module exists, is switched off, and says so; see `docs/SUGGESTIONS.md` |
@@ -139,6 +153,7 @@ samples/                      synthetic test pages (no real documents)
 tests/                        unit tests (standard library unittest)
 tools/make_samples.py         regenerates the sample pages
 docs/                         build plan, licenses, accuracy reports
+benchmark/modern_school/       the corpus of the handwriting of today
 ```
 
 ## Documents
@@ -146,7 +161,11 @@ docs/                         build plan, licenses, accuracy reports
 - `docs/AGENT_BUILD_PLAN.md` - the staged implementation plan and its rules.
 - `docs/THIRD_PARTY.md` - every bundled component with its license, and the
   obligations that are still open.
-- `docs/OCR_ACCURACY.md` - measured accuracy of the handwriting engine
+- `docs/OCR_ACCURACY.md` - measured accuracy of the handwriting engine,
+  on the material of the program and on the diagnostic corpus
+- `docs/MODERN_SCHOOL_BENCHMARK.md` - the benchmark of the modern school
+  handwriting: the rules of the corpus, the verification of the
+  transcripts, and how the engines are compared
   (filled in when the engine lands).
 - `docs/SUGGESTIONS.md` - the modules that propose corrections, and how a
   proposal is accepted, refused and undone.

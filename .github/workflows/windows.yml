@@ -313,17 +313,39 @@ jobs:
         run: |
           set -o pipefail
           python tools/check_engine.py 2>&1 | tee check-engine.log
-      - name: Download and check the recognition model
+      - name: Download and check the recognition models
         run: |
           set -o pipefail
           python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | tee model-download.log
           if [ "$?" -ne 0 ]; then throw 'the model could not be downloaded'; fi
-      - name: Measure the accuracy on real handwritten pages
+          # The second model of the same family, so that the engines can
+          # be compared with one another on the same pages.
+          python tools/download_model.py --model kraken-ppocrv6-medium --target .cache/models 2>&1 | tee model-download-medium.log
+          if [ "$?" -ne 0 ]; then throw 'the second model could not be downloaded'; fi
+      - name: Check the corpus of the modern school handwriting
         run: |
           set -o pipefail
+          python tools/build_benchmark.py --corpus benchmark/modern_school 2>&1 | tee benchmark-corpus.log
+      - name: Measure the accuracy on the modern school handwriting
+        run: |
+          set -o pipefail
+          # The material the program is made for.  The corpus has no
+          # verified page yet, so the report says that the accuracy on
+          # this material is not verified - and that is the truth.
           python tools/benchmark_ocr.py \
-            --model .cache/models/small.safetensors \
-            --download --cache .cache/pinkas --pages 10 --output ocr-accuracy.json 2>&1 | tee benchmark.log
+            --corpus benchmark/modern_school \
+            --engines kraken-ppocrv6-small kraken-ppocrv6-medium \
+            --output ocr-accuracy-modern.json 2>&1 | tee benchmark-modern.log
+          if [ "$?" -ne 0 ]; then throw 'the measurement of the modern corpus failed'; fi
+      - name: Measure the accuracy on the diagnostic corpus of the old handwriting
+        run: |
+          set -o pipefail
+          # Every engine is measured on the same pages, so that they can
+          # be compared with one another.
+          python tools/benchmark_ocr.py \
+            --pinkas --download --cache .cache/pinkas --pages 5 \
+            --engines kraken-ppocrv6-small kraken-ppocrv6-medium \
+            --output ocr-accuracy.json 2>&1 | tee benchmark.log
           if [ "$?" -ne 0 ]; then throw 'the measurement failed'; fi
       - name: Look at the corpus
         if: always()
@@ -334,8 +356,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
+          if [ -f ocr-accuracy-modern.json ]; then
+            python tools/write_accuracy_results.py --report ocr-accuracy-modern.json --document docs/OCR_ACCURACY.md
+          fi
           if [ -f ocr-accuracy.json ]; then
-            python tools/write_accuracy_results.py --report ocr-accuracy.json --document docs/OCR_ACCURACY.md
+            python tools/write_accuracy_results.py --report ocr-accuracy.json --document docs/OCR_ACCURACY.md --begin '<!-- DIAGNOSTIC:BEGIN -->' --end '<!-- DIAGNOSTIC:END -->'
           fi
       - name: Upload the documentation with the results
         if: always()
@@ -347,6 +372,10 @@ jobs:
       - name: Publish the accuracy report
         if: always()
         run: |
+          if [ -f ocr-accuracy-modern.json ]; then
+            cat ocr-accuracy-modern.json
+            python tools/accuracy_notice.py --report ocr-accuracy-modern.json
+          fi
           if [ -f ocr-accuracy.json ]; then
             cat ocr-accuracy.json
             python tools/accuracy_notice.py --report ocr-accuracy.json
@@ -358,10 +387,17 @@ jobs:
           name: ocr-accuracy-report
           path: ocr-accuracy.json
           if-no-files-found: warn
+      - name: Upload the report of the modern school handwriting
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-accuracy-modern-report
+          path: ocr-accuracy-modern.json
+          if-no-files-found: warn
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log benchmark.log corpus-structure.log ocr-accuracy.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json
 
   ocr-worker-windows:
     name: OCR worker (Windows)
