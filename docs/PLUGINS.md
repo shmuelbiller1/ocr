@@ -63,10 +63,18 @@ A plugin is a folder with a file `plugin.json` in it:
 | `enabled_by_default` | Whether the plugin starts switched on (`true` by default). |
 | `options` | The settings of the plugin. They are given to the plugin when it starts. |
 
-The folder of the plugin is added to the end of the search path of
+The folder of the plugin is added at the end of the search path of
 Python, and the module of the plugin is read from that folder under a
-name of its own.  A file of a plugin therefore cannot take the place of
-a module of the program, and two plugins cannot take each other's place.
+package of its own, whose name is built from a digest of the
+identifier of the plugin.  The entry point of the plugin therefore
+cannot take the place of a module of the program, and two plugins
+cannot take each other's place.
+
+What is **not** isolated is the folder of the plugin itself: it is on
+the search path of Python, so a plugin that imports a helper by a plain
+name (`import helper`) may get the helper of another plugin.  A plugin
+that wants to be sure of its own files should import them as part of
+its package (`from . import helper`).
 
 ### The trust of the user
 
@@ -75,8 +83,11 @@ program does not check signatures, and it does not run a plugin in a
 sandbox.  A plugin can do whatever its code does.
 
 Therefore a plugin may only be installed from a source the user trusts,
-and the licence of the plugin is shown in the settings screen before it
-is used.  The program itself never downloads a plugin.
+and the licence of the plugin is shown in the settings screen.  The
+licence is read from the manifest of the plugin and is shown as
+information; it is not a promise that the code was examined, because
+the code of the plugin runs as soon as the plugin is loaded.  The
+program itself never downloads a plugin.
 
 ### An engine plugin
 
