@@ -45,7 +45,10 @@ def relative_to_the_corpus(corpus, path) -> str:
     if folder is None:
         return Path(path).name
     try:
-        return str(Path(path).resolve().relative_to(Path(folder).resolve()))
+        # The path is written with slashes and not with the separator
+        # of the system, so that the manifest of a corpus is the same
+        # everywhere.
+        return Path(path).resolve().relative_to(Path(folder).resolve()).as_posix()
     except ValueError:
         return Path(path).name
 

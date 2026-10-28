@@ -376,7 +376,10 @@ def _name_in_the_corpus(corpus_folder: Path, image: Path) -> str:
     """
     folder = Path(corpus_folder)
     try:
-        return str(Path(image).resolve().relative_to(folder.resolve()))
+        # The path is written with slashes and not with the separator
+        # of the system, so that the manifest of a corpus is the same
+        # everywhere.
+        return Path(image).resolve().relative_to(folder.resolve()).as_posix()
     except ValueError:
         return Path(image).name
 
