@@ -327,6 +327,26 @@ class PageNamesTests(unittest.TestCase):
                 [item["page"] for item in report["results"]], ["class_a/page.jpg"]
             )
 
+    def test_a_corpus_that_is_a_link_keeps_the_names_of_its_pages(self) -> None:
+        """The folder of the corpus may be a link, and the pages of the
+        corpus keep their names."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            real = root / "the-real-corpus"
+            real.mkdir()
+            link = root / "the-corpus"
+            try:
+                link.symlink_to(real)
+            except (OSError, NotImplementedError):
+                self.skipTest("the machine cannot make a link")
+            page = self.make_page(real, "page.jpg", "שלום")
+            report = benchmark.run_engine(
+                self.Engine(), [page], corpus_folder=link
+            )
+            self.assertEqual(
+                [item["page"] for item in report["results"]], ["page.jpg"]
+            )
+
     def test_the_comparison_of_two_engines_is_of_the_same_pages(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

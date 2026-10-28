@@ -44,19 +44,20 @@ def relative_to_the_corpus(corpus, path) -> str:
     folder = getattr(corpus, "folder", None)
     if folder is None:
         return Path(path).name
-    try:
-        # The path is written with slashes and not with the separator
-        # of the system, so that the manifest of a corpus is the same
-        # everywhere.
-        # The links of the file are not followed: a page that is
-        # linked from outside of the corpus keeps the place it has in
-        # the corpus, and two pages that are linked from two folders
-        # are two pages.
-        return (
-            Path(path).absolute().relative_to(Path(folder).absolute()).as_posix()
-        )
-    except ValueError:
-        return Path(path).name
+    # The path is written with slashes and not with the separator of
+    # the system, so that the manifest of a corpus is the same
+    # everywhere.
+    # The links of the file are not followed: a page that is linked
+    # from outside of the corpus keeps the place it has in the corpus,
+    # and two pages that are linked from two folders are two pages.
+    # The folder of the corpus may itself be a link, and then the page
+    # is found under the folder that the link points at.
+    for root in (Path(folder).absolute(), Path(folder).resolve()):
+        try:
+            return Path(path).absolute().relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return Path(path).name
 
 
 def build_manifest(corpus) -> dict:

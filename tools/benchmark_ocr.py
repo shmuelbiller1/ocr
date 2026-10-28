@@ -388,17 +388,20 @@ def _name_in_the_corpus(corpus_folder: Path, image: Path) -> str:
     folders, and the manifest tells them apart by their path.
     """
     folder = Path(corpus_folder)
-    try:
-        # The path is written with slashes and not with the separator
-        # of the system, so that the manifest of a corpus is the same
-        # everywhere.
-        # The links of the file are not followed: a page that is
-        # linked from outside of the corpus keeps the place it has in
-        # the corpus, and two pages that are linked from two folders
-        # are two pages.
-        return Path(image).absolute().relative_to(folder.absolute()).as_posix()
-    except ValueError:
-        return Path(image).name
+    # The path is written with slashes and not with the separator of
+    # the system, so that the manifest of a corpus is the same
+    # everywhere.
+    # The links of the file are not followed: a page that is linked
+    # from outside of the corpus keeps the place it has in the corpus,
+    # and two pages that are linked from two folders are two pages.
+    # The folder of the corpus may itself be a link, and then the page
+    # is found under the folder that the link points at.
+    for root in (folder.absolute(), folder.resolve()):
+        try:
+            return Path(image).absolute().relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return Path(image).name
 
 
 def check_against_the_manifest(corpus_folder: Path, pages: list[Page]) -> list[str]:

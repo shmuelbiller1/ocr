@@ -261,6 +261,27 @@ class UnsavedWorkTests(unittest.TestCase):
         self.window.close()
         self.assertTrue(asked)
 
+    def test_the_text_without_a_document_is_not_in_the_project(self) -> None:
+        """The text that the user typed without choosing a document is
+        not in the file of the project, and the program asks about it."""
+        from PySide6.QtWidgets import QFileDialog
+
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder) / "the-project.hwb"
+            original = QFileDialog.getSaveFileName
+            QFileDialog.getSaveFileName = staticmethod(
+                lambda *args, **kwargs: (str(target), "")
+            )
+            self.addCleanup(
+                lambda: setattr(QFileDialog, "getSaveFileName", original)
+            )
+            self.window.editor.setPlainText("מה שהמשתמש הקליד")
+            self.window.save_project()
+        self.assertTrue(self.window.project.dirty)
+        asked = self.answer_the_question(self.no())
+        self.window.close()
+        self.assertTrue(asked)
+
     def test_nothing_is_asked_when_the_work_was_saved(self) -> None:
         """The text is in a project file, and there is nothing to lose."""
         with tempfile.TemporaryDirectory() as folder:
@@ -356,6 +377,48 @@ class ExportOverwriteTests(unittest.TestCase):
         self.assertEqual(
             target.read_text(encoding="utf-8"), "the text of another transcription"
         )
+
+
+class ExportToPdfTests(unittest.TestCase):
+    """The PDF is written to the file that is really written."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        self.home = temporary_home()
+        self.window = MainWindow()
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+
+    def tearDown(self) -> None:
+        self.window.close()
+
+    def test_the_user_is_asked_before_a_pdf_that_is_there_is_replaced(self) -> None:
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+        target = Path(self.folder.name) / "notes.pdf"
+        target.write_bytes(b"the old pdf")
+        chosen = Path(self.folder.name) / "notes"
+        original_dialog = QFileDialog.getSaveFileName
+        QFileDialog.getSaveFileName = staticmethod(
+            lambda *args, **kwargs: (str(chosen), "")
+        )
+        self.addCleanup(
+            lambda: setattr(QFileDialog, "getSaveFileName", original_dialog)
+        )
+        asked = []
+
+        def question(*args, **kwargs):
+            asked.append(args[1] if len(args) > 1 else "")
+            return QMessageBox.No
+
+        original_question = QMessageBox.question
+        QMessageBox.question = staticmethod(question)
+        self.addCleanup(lambda: setattr(QMessageBox, "question", original_question))
+        self.window.editor.setPlainText("מה שהמשתמש הקליד")
+        self.window.print_to_pdf()
+        self.assertTrue(asked)
+        # The file that was there is as it was.
+        self.assertEqual(target.read_bytes(), b"the old pdf")
 
 
 class OriginalTextTests(unittest.TestCase):

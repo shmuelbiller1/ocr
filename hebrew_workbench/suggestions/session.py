@@ -84,6 +84,7 @@ class AcceptedChange:
         before: str = "",
         after: str = "",
         batch: int = 0,
+        identifier: int = 0,
     ) -> None:
         self.module = module
         self.original = original
@@ -102,11 +103,15 @@ class AcceptedChange:
         # It is not when another correction was accepted later and
         # touched it.
         self.context_stale = False
-        # Was the text of this change covered by a correction that was
-        # accepted later?  The place of a covered change is the place
-        # it had before the covering correction, and it is not moved
-        # when the covering correction is taken back.
-        self.covered = False
+        # The number of this change, so that the change that covered it
+        # can be told apart from the other changes.
+        self.identifier: int = identifier
+        # The number of the change that covered this one, when the text
+        # of this change was inside the text of a change that was
+        # accepted later.  The place of a covered change is the place
+        # it had before the covering change, and it is kept as it is
+        # while the covering change is taken back.
+        self.covered_by: int | None = None
 
     def describe(self) -> str:
         return f"{self.original} → {self.replacement}"
@@ -121,7 +126,8 @@ class AcceptedChange:
             "before": self.before,
             "after": self.after,
             "batch": self.batch,
-            "covered": self.covered,
+            "identifier": self.identifier,
+            "covered_by": self.covered_by,
         }
 
     @classmethod
@@ -138,7 +144,9 @@ class AcceptedChange:
         )
         # The place of a covered change is the place it had before the
         # correction that covered it, and it is kept as it is.
-        change.covered = bool(data.get("covered", False))
+        change.identifier = int(data.get("identifier", 0) or 0)
+        covered_by = data.get("covered_by")
+        change.covered_by = int(covered_by) if covered_by else None
         return change
 
 
@@ -162,6 +170,10 @@ class SuggestionSession:
         # once.  Every group has a number of its own, so that a group
         # can be taken back as one action.
         self._batch_number = 0
+        # The number of the last change that was accepted.  Every change
+        # has a number of its own, so that the change that covered it
+        # can be told apart from the other changes.
+        self._change_number = 0
 
     # -- the proposals -----------------------------------------------------
     def set_suggestions(self, suggestions: list[Suggestion], text: str | None = None) -> None:
@@ -227,17 +239,21 @@ class SuggestionSession:
         has to be changed back into the place of the round, or the
         change of the round would be applied to it a second time.
         """
+        if not self._round_shifts:
+            return position
+        # The place in the round is the place in the text as it is now
+        # without the changes that are to the left of it.  The place
+        # that is looked for is the one that says which changes are to
+        # the left of it, and the place is therefore looked for again
+        # and again, until it does not change any more.
+        ordered = sorted(self._round_shifts, key=lambda item: item[0])
         result = position
-        # The changes are taken in the order of their places and not in
-        # the order they were accepted: a change that was accepted
-        # after a change that is to its right does not move it.
-        shift = 0
-        for end, change in sorted(self._round_shifts, key=lambda item: item[0]):
-            # The end of the change in the places of the text as it is
-            # now: the changes that are to the left of it moved it.
-            if result >= end + shift:
-                result -= change
-                shift += change
+        for _ in range(len(ordered) + 1):
+            shift = sum(change for end, change in ordered if end <= result)
+            found = position - shift
+            if found == result:
+                break
+            result = found
         return result
 
     def place_of(self, suggestion: Suggestion) -> tuple[int, int] | None:
@@ -276,6 +292,10 @@ class SuggestionSession:
         stop = start + len(suggestion.replacement)
         # The end of the text that this change replaces.
         was = start + len(suggestion.original)
+        # The number of this change, so that the changes it covers can
+        # be told apart from the other changes.
+        self._change_number += 1
+        identifier = self._change_number
         for change in self.accepted:
             # A change that was inside the text that this change
             # replaces keeps its place: its own text is gone, and the
@@ -285,7 +305,7 @@ class SuggestionSession:
                 # The text of the change is inside the text that this
                 # change replaces: the change is covered by it, and
                 # its place is the place it had before.
-                change.covered = True
+                change.covered_by = identifier
             if change.position >= was:
                 change.position += shift
             # The text around the change is not the text that was kept
@@ -309,6 +329,7 @@ class SuggestionSession:
                     + CONTEXT_SIZE
                 ],
                 batch=batch,
+                identifier=identifier,
             )
         )
         self.current_text = new_text
@@ -534,7 +555,10 @@ class SuggestionSession:
                 # A change that was covered by this one keeps its
                 # place: its own text is inside the text that this
                 # change replaces.
-                if other.covered:
+                if other.covered_by == change.identifier:
+                    # The text of this change was inside the text that
+                    # this change replaces: its place is the place it
+                    # had before, and it is not moved.
                     continue
                 if other is not change and other.position >= was:
                     other.position += shift
@@ -545,7 +569,12 @@ class SuggestionSession:
         # The change that was taken back is not covering anything any
         # more: the text of the changes that it covered is back.
         for change in self.accepted:
-            change.covered = False
+            if change.covered_by == change.identifier:
+                change.covered_by = None
+            elif change.covered_by is not None:
+                # The change that covered this one was taken back in
+                # another group: the text of this change is back.
+                change.covered_by = None
         # The text around the changes that were not taken back may be a
         # different text now.  The text that was kept with them is not
         # the text that is there, and they are found by their place
@@ -615,7 +644,8 @@ class SuggestionSession:
                 # A change that was covered by this one keeps its
                 # place: its own text is inside the text that this
                 # change replaces.
-                if other.covered:
+                if other.covered_by == change.identifier:
+                    other.covered_by = None
                     continue
                 if other is not change and other.position >= was:
                     other.position += shift
@@ -644,6 +674,11 @@ class SuggestionSession:
         # groups with the same number would be taken back together.
         self._batch_number = max(
             (change.batch for change in self.accepted), default=0
+        )
+        # The numbers of the changes of the saved project are kept, and
+        # the next change that the user makes has a number of its own.
+        self._change_number = max(
+            (change.identifier for change in self.accepted), default=0
         )
         self._round_shifts = []
 

@@ -864,6 +864,20 @@ class OverlappingChangesTests(unittest.TestCase):
         # The place of "dog" in the round was 4.
         self.assertEqual(session.unshift(12), 4)
 
+    def test_a_change_that_is_covered_and_a_change_before_it(self) -> None:
+        """A change that was covered by a later change keeps its place,
+        and a change that is before it and that is not related to it
+        does not break it."""
+        session = self.make_session("a red cat")
+        session.set_suggestions([self.a_suggestion("cat", "dog", 6)])
+        session.accept(session.pending()[0])
+        session.set_suggestions([self.a_suggestion("red dog", "fox", 2)])
+        session.accept(session.pending()[0])
+        session.set_suggestions([self.a_suggestion("a", "longlong", 0)])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "longlong fox")
+        self.assertEqual(session.undo_all(), "a red cat")
+
     def test_two_proposals_whose_text_is_one_inside_the_other(self) -> None:
         """Two proposals of the same text, one of them inside the other,
         are two proposals about the same text."""
@@ -930,6 +944,22 @@ class OverlappingChangesTests(unittest.TestCase):
         self.assertIsNotNone(outcome)
         text, _ = outcome
         self.assertEqual(text, "aa bbs zzzzzzzzz")
+
+    def test_a_word_is_changed_after_two_changes_to_the_left(self) -> None:
+        """Two changes to the left of a word move it twice, and the place
+        of the word in the round has to be found through both of them."""
+        session = self.make_session("cat dog fox")
+        session.set_suggestions(
+            [
+                self.a_suggestion("cat", "caterpillar", 0),
+                self.a_suggestion("dog", "dogs", 4),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "caterpillar dogs fox")
+        # The place of "fox" in the round was 8.
+        self.assertEqual(session.unshift(17), 8)
 
     def test_a_change_that_is_covered_is_taken_back(self) -> None:
         """A correction that was made on the text of another correction
