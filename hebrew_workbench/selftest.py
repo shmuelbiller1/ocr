@@ -235,6 +235,69 @@ def _check_preview(report: _Report) -> None:
     )
 
 
+def _check_plugins(report: _Report) -> None:
+    """Make sure the plugin system works in this build.
+
+    The check installs a small plugin into a temporary folder, loads it,
+    and takes it away again.  A build in which the plugin system does
+    not work is a build in which another engine cannot be added.
+    """
+    import json
+    import tempfile
+
+    try:
+        from .plugins import PluginInstaller, PluginRegistry
+    except Exception as exc:  # pragma: no cover - defensive
+        report.add("plugins", False, f"the plugin system could not be imported: {exc}")
+        return
+
+    problems: list[str] = []
+    try:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "plugins"
+            registry = PluginRegistry(root=root)
+            ids = {plugin.id for plugin in registry.plugins}
+            if "kraken" not in ids:
+                problems.append("the built-in plugins were not found")
+
+            source = Path(folder) / "example"
+            source.mkdir()
+            (source / "plugin.json").write_text(
+                json.dumps(
+                    {
+                        "id": "selftest-engine",
+                        "name": "Selftest engine",
+                        "version": "0.0.1",
+                        "kind": "ocr",
+                        "entry": "selftest_engine:SelftestEngine",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (source / "selftest_engine.py").write_text(
+                "class SelftestEngine:\n"
+                "    name = 'Selftest engine'\n"
+                "    def available(self):\n"
+                "        return True\n",
+                encoding="utf-8",
+            )
+            installer = PluginInstaller(root)
+            installer.install_folder(source)
+            registry = PluginRegistry(root=root)
+            plugin = registry.get("selftest-engine")
+            if plugin is None or plugin.object is None:
+                problems.append("an installed plugin was not loaded")
+            installer.remove("selftest-engine")
+    except Exception as exc:  # pragma: no cover - defensive
+        problems.append(f"the plugin system failed: {exc!r}")
+
+    report.add(
+        "plugins",
+        not problems,
+        "; ".join(problems) if problems else "plugins are installed and loaded",
+    )
+
+
 def run_checks() -> list[CheckResult]:
     """Run every staged check and return the individual results."""
     report = _Report()
@@ -247,6 +310,7 @@ def run_checks() -> list[CheckResult]:
         ("core-imports", _check_imports),
         ("engine-contract", _check_engine_contract),
         ("preview", _check_preview),
+        ("plugins", _check_plugins),
         ("gui-startup", _check_gui),
     ):
         try:

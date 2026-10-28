@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .base import OCREngine
 from .models import MODEL_ARTIFACTS, models_directory
-from .worker import WorkerEngine
+from .worker import WorkerEngine, worker_path
 
 __all__ = ["installed_model_path", "detect_engines", "worker_path"]
 
@@ -24,32 +24,27 @@ def installed_model_path(artifact_id: str = "kraken-ppocrv6-small") -> Path | No
     return models_directory() / artifact.filename
 
 
-def worker_path() -> Path | None:
-    """The optional OCR worker executable, if it has been installed."""
-    import os
-    import sys
-
-    candidates = []
-    bundle = getattr(sys, "_MEIPASS", None)
-    if bundle:
-        candidates.append(Path(bundle) / "ocr-worker.exe")
-        candidates.append(Path(bundle) / "ocr-worker")
-    candidates.append(models_directory().parent / "ocr-worker.exe")
-    candidates.append(models_directory().parent / "ocr-worker")
-    program_folder = Path(sys.executable).resolve().parent
-    candidates.append(program_folder / "ocr-worker.exe")
-    # The worker that comes with the program is a folder of its own,
-    # with its own libraries beside it.
-    candidates.append(program_folder / "ocr-worker" / "ocr-worker.exe")
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    return None
-
 
 def detect_engines() -> list[OCREngine]:
-    """Return every engine that could run right now, best first."""
+    """Return every engine that could run right now, best first.
+
+    The engines are the OCR plugins of the program.  A user who adds
+    another engine gets it here, without a change in this file.
+    """
     engines: list[OCREngine] = []
+
+    try:
+        from ..plugins import PluginRegistry
+
+        for plugin in PluginRegistry().ocr_engines():
+            if plugin.object is not None:
+                engines.append(plugin.object)
+    except Exception:
+        # A broken plugin must not stop the program from starting.
+        engines = []
+
+    if engines:
+        return engines
 
     worker = worker_path()
     if worker is not None:

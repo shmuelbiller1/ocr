@@ -14,7 +14,7 @@ if sys.platform.startswith("linux"):
 
 from hebrew_workbench.suggestions.session import AcceptedChange  # noqa: E402
 from hebrew_workbench.ui.main_window import MainWindow  # noqa: E402
-from tests.qt_app import application  # noqa: E402
+from tests.qt_app import application, temporary_home  # noqa: E402
 
 
 class DocumentTextTests(unittest.TestCase):
@@ -22,6 +22,7 @@ class DocumentTextTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.app = application()
+        self.home = temporary_home()
         self.window = MainWindow()
         self.pages = self.sample_pages()
 
@@ -29,6 +30,7 @@ class DocumentTextTests(unittest.TestCase):
         self.window.close()
         self.window.deleteLater()
         self.app.processEvents()
+        self.home.cleanup()
 
     def sample_pages(self) -> list:
         from hebrew_workbench.resources import samples_directory

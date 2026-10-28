@@ -229,5 +229,18 @@ class WorkerTests(unittest.TestCase):
             engine.recognize("does-not-exist.png")
 
 
+class WorkerManifestTests(unittest.TestCase):
+    """The manifest of the worker names the model that it uses."""
+
+    def test_the_model_of_the_manifest_is_the_model_that_was_chosen(self) -> None:
+        engine = WorkerEngine(
+            "does-not-exist.exe",
+            "does-not-exist.safetensors",
+            artifact_id="kraken-ppocrv6-medium",
+        )
+        manifest = engine.manifest()
+        self.assertEqual(manifest.model_id, "kraken-ppocrv6-medium")
+
+
 if __name__ == "__main__":
     unittest.main()

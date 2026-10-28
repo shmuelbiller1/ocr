@@ -29,7 +29,52 @@ from .base import (
     PageResult,
 )
 
-__all__ = ["WorkerEngine"]
+__all__ = ["WorkerEngine", "worker_path", "make_worker_engine"]
+
+
+def worker_path() -> Path | None:
+    """The optional OCR worker executable, if it has been installed."""
+    import sys
+
+    candidates = []
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle:
+        candidates.append(Path(bundle) / "ocr-worker.exe")
+        candidates.append(Path(bundle) / "ocr-worker")
+    from .models import models_directory
+
+    candidates.append(models_directory().parent / "ocr-worker.exe")
+    candidates.append(models_directory().parent / "ocr-worker")
+    program_folder = Path(sys.executable).resolve().parent
+    candidates.append(program_folder / "ocr-worker.exe")
+    candidates.append(program_folder / "ocr-worker")
+    # The worker that comes with the program is a folder of its own,
+    # with its own libraries beside it.
+    candidates.append(program_folder / "ocr-worker" / "ocr-worker.exe")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def make_worker_engine(options: dict | None = None) -> "WorkerEngine":
+    """Build the worker engine for the plugin system."""
+    from .models import MODEL_ARTIFACTS, models_directory
+
+    settings = dict(options or {})
+    artifact_id = str(settings.get("model_id", "kraken-ppocrv6-small"))
+    artifact = MODEL_ARTIFACTS.get(artifact_id)
+    model_path = None
+    if artifact is not None:
+        candidate = models_directory() / artifact.filename
+        if candidate.is_file():
+            model_path = candidate
+    worker = worker_path()
+    if worker is None or model_path is None:
+        return None
+    # The identity of the model is kept, so that the manifest of the
+    # engine says which model it is and not always the small one.
+    return WorkerEngine(worker, model_path, artifact_id=artifact_id)
 
 
 class WorkerEngine:
@@ -42,15 +87,18 @@ class WorkerEngine:
         worker: str | Path,
         model_path: str | Path,
         timeout_seconds: float = 1800.0,
+        artifact_id: str = "kraken-ppocrv6-small",
     ) -> None:
         self.worker = Path(worker)
         self.model_path = Path(model_path)
         self.timeout_seconds = timeout_seconds
+        #: The model that this engine uses, for the manifest.
+        self.artifact_id = artifact_id
 
     def manifest(self) -> EngineManifest:
         from .kraken_local import build_manifest
 
-        return build_manifest(self.model_path)
+        return build_manifest(self.model_path, self.artifact_id)
 
     def available(self) -> bool:
         return self.worker.is_file() and self.model_path.is_file()

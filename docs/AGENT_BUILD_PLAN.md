@@ -23,6 +23,22 @@ reviewed corrections -> print. Keep all engine components replaceable.
 | Every engine, model file and dictionary is described in a manifest with a license and a checksum | Makes "did we check the rights?" a testable question instead of a habit. |
 | The packaged executable is verified by *starting it* | Producing a `.exe` file is not evidence that it runs. The build job runs `app.exe --selftest`, which creates the real main window. |
 
+## Where the work stands
+
+| Part | State | Where |
+| --- | --- | --- |
+| Windows executable that starts | **Works** | `.github/workflows/windows.yml` builds it and starts it; the self-test creates the real window |
+| Preview of PDF and image pages | **Works** | `hebrew_workbench/preview/` |
+| Project file, export, print | **Works** | `hebrew_workbench/project.py`, `hebrew_workbench/exporting.py` |
+| OCR engine contract, fail-closed default | **Works** | `hebrew_workbench/engine/` |
+| One pretrained Hebrew engine (kraken + PP-OCRv6, Apache-2.0) | **Works, needs the model** | the model is downloaded by the user and checked against two digests; the accuracy is in `docs/OCR_ACCURACY.md` |
+| Spelling proposals | **Works, needs a word list** | `hebrew_workbench/suggestions/spelling.py`; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
+| Grammar proposals | **Works, a few rules** | `hebrew_workbench/suggestions/grammar.py` |
+| לשון הספר proposals | **Not implemented** | the module is a frame, it is switched off, and it says so |
+| Plugins: install, remove, switch on and off, choose | **Works** | `hebrew_workbench/plugins/`, `hebrew_workbench/ui/settings_dialog.py`, `docs/PLUGINS.md` |
+| Text search inside the document | **Not implemented** | Planned |
+| Real school pages | **Not tested here** | the accuracy job measures the published Pinkas pages; real school material needs the user's own pages |
+
 ## First milestone (current scaffold)
 - Runnable Windows desktop interface with batch file selection, RTL editor, TXT export and explicit adapter status.
 - A proper OCR adapter interface with a fail-closed default.

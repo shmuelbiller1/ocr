@@ -120,6 +120,19 @@ class SpellingModule(SuggestionModule):
                     return ""
         return ""
 
+    def configure(self, options: dict) -> None:
+        """Use the word list of the settings, when there is one."""
+        path = (options or {}).get("dictionary")
+        if not path:
+            return
+        try:
+            self.set_dictionary(path)
+        except (OSError, ValueError):
+            # A word list that cannot be read is not a reason to stop
+            # the program; the module stays without one and says so.
+            self._path = None
+            self._words = {}
+
     # -- the module itself ------------------------------------------------
     def available(self) -> bool:
         return self._path is not None and bool(self._words)

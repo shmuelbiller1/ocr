@@ -7,11 +7,12 @@ Hebrew-script notes into editable, printable documents.
 > the CI build machine, the interface is right-to-left and Hebrew-capable,
 > and the recognition engine reads real handwritten pages with kraken and
 > PP-OCRv6 (both Apache-2.0).  The measured accuracy on early modern
-> Hebrew cursive is a character error rate of 56.3%, so the result of a
-> recognition is a **starting point that has to be read by a person**, and
-> the program says so after every recognition.  The numbers and what they
-> mean are in `docs/OCR_ACCURACY.md`; the table below says what is real
-> and what is not.
+> Hebrew cursive is a character error rate of 61.5% over the pages whose
+> ground truth is complete, so the result of a recognition is a **starting
+> point that has to be read by a person**, and the program says so after
+> every recognition.  The numbers and what they mean are in
+> `docs/OCR_ACCURACY.md`; the table below says what is real and what is
+> not.
 
 ## Design principles
 
@@ -44,15 +45,16 @@ Hebrew-script notes into editable, printable documents.
 | Print | **Works** | Print dialog with the Windows printers, print preview, and "save as PDF" |
 | Sample pages | **Works** | `File > Open samples` loads the synthetic pages from `samples/` |
 | OCR engine slot | **Works** | The engine is found by itself: the worker of the recognition is in the folder `ocr-worker` of the program |
-| Handwriting recognition with a real model | **Works, needs the model** | kraken + PP-OCRv6 (Apache-2.0); the model is installed by the user and checked against two digests; the accuracy is measured in `docs/OCR_ACCURACY.md` and is 56.3% character error rate on early modern cursive - the result has to be read line by line |
+| Handwriting recognition with a real model | **Works, needs the model** | kraken + PP-OCRv6 (Apache-2.0); the model is installed by the user and checked against two digests; the accuracy is measured in `docs/OCR_ACCURACY.md` and is 61.5% character error rate on early modern cursive (7 of the 8 pages whose ground truth is complete) - the result has to be read line by line |
 | Spelling proposals | **Works, needs a word list** | The word list of the user; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
 | Grammar proposals | **Works, a few rules** | Punctuation and spacing |
 | `לשון הספר` proposals | **Not implemented** | The module exists, is switched off, and says so; see `docs/SUGGESTIONS.md` |
 | Accepting and refusing proposals | **Works** | Every proposal is shown first and is accepted or refused on its own; every accepted change is logged and can be undone |
+| Plugins (engines and word lists) | **Works** | The engines and the modules of proposals are plugins; they are installed, removed, switched on and off, and chosen in `Settings > Plugins and engines`; see `docs/PLUGINS.md` |
 | Text search inside the document | **Not implemented** | Planned |
 | Undoing a correction of the style guide | **Not implemented** | The style module has no rules yet |
 | Reading a page of a PDF at the resolution of the scan | **Works** | The pages of a PDF are given to the engine at 300 dots per inch |
-| Installing the engine as a plugin | **Not in this pull request** | The plugin system is in the next pull request |
+| Installing and removing an engine or a word list | **Works** | They are plugins: they are installed, removed, switched on and off, and chosen in the settings screen; see `docs/PLUGINS.md` |
 
 ### What is not there yet
 
@@ -124,9 +126,11 @@ text is missing.
 app.py                        launcher (--selftest, --version)
 hebrew_workbench/
     engine/                   replaceable OCR adapters (base contract + registry)
+    plugins/                  the plugin system: manifests, installer, registry
     suggestions/              the spelling, grammar and style modules (proposals only)
     preview/                  offline rendering of PDF pages and images
-    ui/                       the Qt main window, the preview pane, the proposals pane
+    ui/                       the Qt main window, the preview pane, the proposals pane,
+                              the settings screen of the plugins
     exporting.py              TXT, DOCX and printing helpers
     project.py                workspace model: documents + their transcriptions
     resources.py              finding the files that ship with the application
@@ -144,3 +148,7 @@ docs/                         build plan, licenses, accuracy reports
   obligations that are still open.
 - `docs/OCR_ACCURACY.md` - measured accuracy of the handwriting engine
   (filled in when the engine lands).
+- `docs/SUGGESTIONS.md` - the modules that propose corrections, and how a
+  proposal is accepted, refused and undone.
+- `docs/PLUGINS.md` - how to add another engine or another word list, and
+  what the program does with a plugin that does not work.
