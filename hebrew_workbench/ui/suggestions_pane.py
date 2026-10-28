@@ -12,6 +12,8 @@ one action.  Nothing is applied without the user pressing something.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -123,6 +125,18 @@ class SuggestionRow(QFrame):
     def checked(self) -> bool:
         """Did the user mark this proposal?"""
         return self.checkbox.isChecked()
+
+    def chosen_suggestion(self) -> Suggestion:
+        """The proposal with the wording that the user chose in the box.
+
+        The wording that is in the box is the one that the user wants
+        for this proposal, and a group of proposals that the user
+        marked has to use it.
+        """
+        text = self.alternatives.currentText() if self.alternatives else ""
+        if not text or text == self.suggestion.replacement:
+            return self.suggestion
+        return replace(self.suggestion, replacement=text)
 
 
 class SuggestionsPane(QWidget):
@@ -253,8 +267,13 @@ class SuggestionsPane(QWidget):
         self.refuse_selected_button.setEnabled(enabled)
 
     def checked_suggestions(self) -> list[Suggestion]:
-        """The proposals that the user marked."""
-        return [row.suggestion for row in self._rows if row.checked]
+        """The proposals that the user marked.
+
+        A proposal that the user marked after choosing another wording
+        in its box keeps that wording: the change that is made has to
+        be the change that is shown.
+        """
+        return [row.chosen_suggestion() for row in self._rows if row.checked]
 
     def visible_suggestions(self) -> list[Suggestion]:
         """The proposals that are shown now."""

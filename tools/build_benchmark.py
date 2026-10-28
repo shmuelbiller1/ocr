@@ -112,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="fail when the corpus has an error or no verified page",
+        help="fail when the corpus has no verified page",
     )
     args = parser.parse_args(argv)
 
@@ -143,7 +143,11 @@ def main(argv: list[str] | None = None) -> int:
     print(manifest["note"])
     print(f"manifest written to {target}")
 
-    if args.strict and (corpus.errors or not manifest["verified"]):
+    if corpus.errors:
+        # A corpus with an error is a corpus that is broken, and the
+        # build that measures it would measure less than it thinks.
+        return 1
+    if args.strict and not manifest["verified"]:
         return 1
     return 0
 

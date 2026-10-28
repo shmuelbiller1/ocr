@@ -23,11 +23,16 @@ class ReleaseTests(unittest.TestCase):
         (app / "_internal" / "Qt6Core.dll").write_bytes(b"the library")
         return app
 
-    def make_packages(self, root: Path) -> Path:
+    def make_packages(
+        self, root: Path, with_worker: bool = True
+    ) -> Path:
         """A folder with the licence texts of the packages of the program."""
         packages = root / "packages"
-        for name in release.REQUIRED_LICENCE_PACKAGES:
-            info = packages / f"{name}-1.0.dist-info"
+        names = list(release.REQUIRED_LICENCE_PACKAGES)
+        if with_worker:
+            names += list(release.REQUIRED_LICENCE_PACKAGES_OF_THE_WORKER)
+        for name in names:
+            info = packages / f"{release.distribution_name(name)}-1.0.dist-info"
             info.mkdir(parents=True, exist_ok=True)
             (info / "LICENSE").write_text(f"the licence of {name}", encoding="utf-8")
         return packages
@@ -163,6 +168,43 @@ class ReleaseTests(unittest.TestCase):
                 names = archive.namelist()
             self.assertIn("HebrewNotesWorkbench/ocr-worker/ocr-worker.exe", names)
             self.assertIn("HebrewNotesWorkbench/ocr-worker/_internal/torch.dll", names)
+
+    def test_the_packages_that_the_worker_needs_are_in_the_release(self) -> None:
+        """The worker collects kraken, and kraken needs other packages.
+        Their licences go into the release as well."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            packages = root / "packages"
+            kraken = packages / "kraken-1.0.dist-info"
+            kraken.mkdir(parents=True)
+            (kraken / "LICENSE").write_text("the licence of kraken", encoding="utf-8")
+            (kraken / "METADATA").write_text(
+                "Name: kraken\nRequires-Dist: numpy\n"
+                "Requires-Dist: mypy ; extra == 'dev'\n",
+                encoding="utf-8",
+            )
+            numpy = packages / "numpy-1.0.dist-info"
+            numpy.mkdir(parents=True)
+            (numpy / "LICENSE").write_text("the licence of numpy", encoding="utf-8")
+            (packages / "mypy-1.0.dist-info").mkdir()
+            (packages / "mypy-1.0.dist-info" / "LICENSE").write_text(
+                "the licence of mypy", encoding="utf-8"
+            )
+            found = {name for name, _ in release.licence_files(packages)}
+            self.assertIn("numpy-1.0.dist-info", found)
+            # An extra of a package is not installed with it.
+            self.assertNotIn("mypy-1.0.dist-info", found)
+
+    def test_the_release_without_the_worker_does_not_need_its_licences(self) -> None:
+        """The worker is not in the release, and the licences of the
+        worker are not needed."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            app = self.make_application(root)
+            output = root / "release.zip"
+            packages = self.make_packages(root, with_worker=False)
+            archive = self.build(app, output, packages)
+            self.assertTrue(archive.exists())
 
     def test_the_release_is_not_made_when_a_licence_text_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

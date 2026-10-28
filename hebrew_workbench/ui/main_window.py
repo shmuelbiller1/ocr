@@ -1319,6 +1319,11 @@ class MainWindow(QMainWindow):
                 f"המילה {suggestion.original} נשמרה להפעלה הזאת בלבד, כי אי אפשר לכתוב למילון.",
                 8000,
             )
+        # The word is in the word list of the user, and the proposals
+        # of the other documents about it are not good any more: they
+        # are taken away as well, and not only the ones of this
+        # document.
+        self._clear_the_proposals()
         # The proposals are made again, so that the word is not proposed
         # any more.
         self.check_suggestions()
@@ -1382,6 +1387,9 @@ class MainWindow(QMainWindow):
         # so that the undo of the editor keeps working.
         self._replace_editor_text(original)
         self._loading = False
+        # The text of the user is gone, and the document is not marked
+        # as written by hand any more.
+        entry.edited = False
         self._store_editor_text()
         session.undo_all(self.editor.toPlainText())
         self.suggestions = session

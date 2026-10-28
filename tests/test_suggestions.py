@@ -827,3 +827,124 @@ class UndoBatchContextTests(unittest.TestCase):
         self.assertEqual(session.undo_last_batch(), "a B")
         # The change that was not taken back can still be taken back.
         self.assertEqual(session.undo_all(), "a b")
+
+
+class OverlappingChangesTests(unittest.TestCase):
+    """Changes that cover the same word, and the places of a round."""
+
+    def make_session(self, text: str) -> SuggestionSession:
+        return SuggestionSession(text)
+
+    def a_suggestion(
+        self, original: str, replacement: str, start: int
+    ) -> Suggestion:
+        return Suggestion(
+            module=KIND_GRAMMAR,
+            original=original,
+            replacement=replacement,
+            message="",
+            start=start,
+            end=start + len(original),
+        )
+
+    def test_the_place_of_a_word_is_found_after_two_changes(self) -> None:
+        """Two changes that changed the length of the text move the place
+        of a word in two ways, and the place of the round has to be
+        found through both of them."""
+        session = self.make_session("cat dog fox")
+        session.set_suggestions(
+            [
+                self.a_suggestion("cat", "caterpillar", 0),
+                self.a_suggestion("fox", "foxy", 8),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "caterpillar dog foxy")
+        # The place of "dog" in the round was 4.
+        self.assertEqual(session.unshift(12), 4)
+
+    def test_a_word_is_changed_after_two_changes_in_the_same_round(self) -> None:
+        session = self.make_session("cat dog fox")
+        session.set_suggestions(
+            [
+                self.a_suggestion("cat", "caterpillar", 0),
+                self.a_suggestion("fox", "foxy", 8),
+            ]
+        )
+        session.accept(session.pending()[0])
+        session.accept(session.pending()[0])
+        outcome = session.accept_every_occurrence(
+            self.a_suggestion("dog", "dogs", 4)
+        )
+        self.assertIsNotNone(outcome)
+        text, _ = outcome
+        self.assertEqual(text, "caterpillar dogs foxy")
+
+    def test_two_proposals_of_the_same_word_are_not_applied_together(self) -> None:
+        """Two proposals of the same word would make a word that nobody
+        proposed."""
+        session = self.make_session("the cats sat")
+        session.set_suggestions(
+            [
+                self.a_suggestion("cats", "catsup", 4),
+                self.a_suggestion("cats", "catfish", 4),
+            ]
+        )
+        outcome = session.accept_many(session.pending())
+        self.assertIsNotNone(outcome)
+        text, changes = outcome
+        self.assertEqual(len(changes), 1)
+        self.assertIn(text, ("the catsup sat", "the catfish sat"))
+
+    def test_a_change_that_was_touched_can_be_taken_back(self) -> None:
+        """Two changes that cover the same place: when the second one is
+        taken back, the first one is found again."""
+        session = self.make_session("a  ,b")
+        session.set_suggestions(
+            [self.a_suggestion("  ", " ", 1)],
+        )
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "a ,b")
+        # The suggestions are looked at again, and a new change is
+        # accepted on the text that is now.
+        session.set_suggestions(
+            [self.a_suggestion(" ,", ",", 1)],
+        )
+        session.accept(session.pending()[0])
+        self.assertEqual(session.current_text, "a,b")
+        text = session.undo_all()
+        self.assertEqual(text, "a  ,b")
+        self.assertEqual(session.last_undo_skipped, [])
+
+
+class ContextOfTheChangesTests(unittest.TestCase):
+    """The text that was kept around a change."""
+
+    def a_suggestion(
+        self, original: str, replacement: str, start: int
+    ) -> Suggestion:
+        return Suggestion(
+            module=KIND_GRAMMAR,
+            original=original,
+            replacement=replacement,
+            message="",
+            start=start,
+            end=start + len(original),
+        )
+
+    def test_a_change_that_is_not_at_the_start_is_not_made_stale(self) -> None:
+        """The text that was kept begins before the place of the change,
+        and the comparison has to begin there too."""
+        session = SuggestionSession("the cat sat")
+        session.set_suggestions([self.a_suggestion("cat", "dog", 4)])
+        session.accept(session.pending()[0])
+        change = session.accepted[0]
+        self.assertTrue(change.before)
+        # A group of changes that is taken back, and the change that
+        # was not in it is left.
+        session.set_suggestions([self.a_suggestion("sat", "stood", 8)])
+        session.accept_many(session.pending())
+        session.undo_last_batch()
+        self.assertEqual(len(session.accepted), 1)
+        self.assertFalse(session.accepted[0].context_stale)

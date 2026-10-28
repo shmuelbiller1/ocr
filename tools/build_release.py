@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import shutil
 import sys
 import zipfile
@@ -95,15 +96,21 @@ PACKAGES_IN_THE_APP = (
 
 #: The packages that are inside the worker of the recognition.  The
 #: worker goes with the program, and the licence of every part of it
-#: has to be in the release as well.
+#: has to be in the release as well.  The packages that these need -
+#: numpy, scipy and scikit-image of kraken - are found from the
+#: installed packages themselves, and they are in the release too.
 PACKAGES_IN_THE_WORKER = (
     "kraken",
     "torch",
     "torchvision",
+    # The packages that kraken and torch need, and that are inside the
+    # worker as well.  The rest of the tree is found from the
+    # installed packages themselves.
+    "numpy",
+    "scipy",
+    "scikit-image",
+    "click",
 )
-
-#: Every package whose licence text goes into the release.
-PACKAGES_WITH_LICENCES = PACKAGES_IN_THE_APP + PACKAGES_IN_THE_WORKER
 
 #: The packages whose licence text has to be inside the installed
 #: package.  The release is not made when one of them is missing.  The
@@ -114,9 +121,17 @@ REQUIRED_LICENCE_PACKAGES = (
     "pypdfium2",
     "python_docx",
     "lxml",
+)
+
+#: The packages of the worker whose licence text has to be there as
+#: well.  They are needed only when the worker goes with the program.
+REQUIRED_LICENCE_PACKAGES_OF_THE_WORKER = (
     "kraken",
     "torch",
     "torchvision",
+    "numpy",
+    "scipy",
+    "scikit-image",
 )
 
 #: The files of an installed package that are not licence texts.
@@ -210,24 +225,100 @@ def default_site_packages() -> Path:
     return Path(REPO_ROOT / ".venv" / "lib")
 
 
+def distribution_name(name: str) -> str:
+    """The name of a distribution, without its version.
+
+    The name of the folder of an installed package is the name of the
+    distribution with its version, e.g. ``torchvision-0.29.0.dist-info``.
+    The name of the distribution is the same in every place, with a
+    dash between the words: ``scikit-image`` and not ``scikit_image``.
+    """
+    name = name.lower()
+    for suffix in (".dist-info", ".egg-info"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+    parts = name.rsplit("-", 1)
+    if len(parts) == 2 and parts[1][:1].isdigit():
+        name = parts[0]
+    return name.replace("_", "-")
+
+
+def installed_distributions(site_packages: Path) -> dict[str, Path]:
+    """Every installed distribution, by its name."""
+    found: dict[str, Path] = {}
+    if not site_packages.is_dir():
+        return found
+    for info in sorted(site_packages.glob("*.dist-info")):
+        found.setdefault(distribution_name(info.name), info)
+    return found
+
+
+def _needs_of(info: Path) -> list[str]:
+    """The distributions that this package needs."""
+    metadata = info / "METADATA"
+    if not metadata.is_file():
+        return []
+    names: list[str] = []
+    text = metadata.read_text(encoding="utf-8", errors="replace")
+    for line in text.splitlines():
+        if not line.startswith("Requires-Dist:"):
+            continue
+        value = line[len("Requires-Dist:") :].strip()
+        if "extra ==" in value:
+            # An extra of the package is not installed with it.
+            continue
+        name = re.split(r"[<>=!~;\[ ]", value, maxsplit=1)[0].strip()
+        if name:
+            names.append(distribution_name(name))
+    return names
+
+
+def packages_of_the_worker(site_packages: Path) -> set[str]:
+    """Every distribution that goes into the worker of the recognition.
+
+    The worker collects kraken and torch, and they need other packages
+    - numpy, scipy and scikit-image - that are inside the worker as
+    well.  The list is found from the installed packages themselves, so
+    that a new version of kraken does not bring a package whose
+    licence is not in the release.
+    """
+    installed = installed_distributions(site_packages)
+    found: set[str] = set()
+    queue = [distribution_name(name) for name in PACKAGES_IN_THE_WORKER]
+    while queue:
+        name = queue.pop()
+        if name in found:
+            continue
+        info = installed.get(name)
+        if info is None:
+            continue
+        found.add(name)
+        queue.extend(_needs_of(info))
+    return found
+
+
 def licence_files(site_packages: Path) -> list[tuple[str, Path]]:
     """Every licence text that is inside the installed packages.
 
     Only the packages that are inside the application and inside the
-    worker of the recognition are looked at.
-    The name of the file of a licence is not the same in every
-    package: some use ``LICENSE``, some ``LICENSE.txt``, some
-    ``licenses/LICENSE`` and some the name of the licence itself, like
-    ``Apache-2.0.txt``.  Every text file of the package that is not
-    one of the known files of the format is taken, so that no licence
-    is left out.
+    worker of the recognition are looked at.  The name of the file of a
+    licence is not the same in every package: some use ``LICENSE``,
+    some ``LICENSE.txt``, some ``licenses/LICENSE`` and some the name
+    of the licence itself, like ``Apache-2.0.txt``.  Every text file
+    of the package that is not one of the known files of the format is
+    taken, so that no licence is left out.
     """
     found: list[tuple[str, Path]] = []
     if not site_packages.is_dir():
         return found
+    wanted = {
+        distribution_name(name)
+        for name in PACKAGES_IN_THE_APP + PACKAGES_IN_THE_WORKER
+    }
+    wanted |= packages_of_the_worker(site_packages)
     for info in sorted(site_packages.glob("*.dist-info")):
-        name = info.name.lower()
-        if not any(name.startswith(package) for package in PACKAGES_WITH_LICENCES):
+        name = distribution_name(info.name)
+        if name not in wanted:
             continue
         for path in sorted(info.iterdir()):
             if not path.is_file():
@@ -270,17 +361,23 @@ def licence_name(package: str, path: Path, info: Path) -> str:
     return f"{package}-{path.name}"
 
 
-def missing_licence_packages(site_packages: Path) -> list[str]:
+def missing_licence_packages(
+    site_packages: Path, with_worker: bool = True
+) -> list[str]:
     """The packages whose licence text was not found.
 
     A program that is given to somebody has to carry the licence of
     every part of it, so the release is not made when one of them is
-    missing.
+    missing.  The licences of the worker are needed only when the
+    worker goes with the program.
     """
-    found = {package.lower() for package, _ in licence_files(site_packages)}
+    found = {distribution_name(package) for package, _ in licence_files(site_packages)}
+    required = list(REQUIRED_LICENCE_PACKAGES)
+    if with_worker:
+        required += list(REQUIRED_LICENCE_PACKAGES_OF_THE_WORKER)
     missing = []
-    for package in REQUIRED_LICENCE_PACKAGES:
-        if not any(name.startswith(package) for name in found):
+    for package in required:
+        if distribution_name(package) not in found:
             missing.append(package)
     return missing
 
@@ -402,7 +499,9 @@ def build_release(
     if not app.is_dir():
         raise SystemExit(f"the application was not found: {app}")
 
-    missing_packages = missing_licence_packages(site_packages)
+    missing_packages = missing_licence_packages(
+        site_packages, with_worker=worker is not None
+    )
     if missing_packages:
         raise SystemExit(
             "the licence texts of these packages were not found, so the "

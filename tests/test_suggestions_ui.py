@@ -217,6 +217,40 @@ class WindowSuggestionsTests(unittest.TestCase):
         self.assertEqual(first.pending(), [])
         self.assertEqual(other.pending(), [])
 
+    def test_the_other_documents_stop_proposing_a_word_that_was_kept(self) -> None:
+        """The word is in the word list of the user, and every document
+        has to stop proposing to change it."""
+        self.add_two_documents()
+        module = self.window.suggestion_modules.module("spelling")
+        with tempfile.TemporaryDirectory() as folder:
+            words = Path(folder) / "words.txt"
+            words.write_text("שלום\n", encoding="utf-8")
+            module.set_dictionary(words)
+
+        # The first document has a proposal about a word that is not in
+        # the word list.
+        self.window.doc_list.setCurrentRow(0)
+        self.app.processEvents()
+        self.window.editor.setPlainText("שלום עולם")
+        self.window.check_suggestions()
+        first = self.window.suggestions
+        self.assertEqual(len(first.pending()), 1)
+
+        # The second document has the same proposal.
+        self.window.doc_list.setCurrentRow(1)
+        self.app.processEvents()
+        self.window.editor.setPlainText("שלום עולם")
+        self.window.check_suggestions()
+        other = self.window.suggestions
+        self.assertEqual(len(other.pending()), 1)
+
+        # The user keeps the word.
+        self.window.keep_word(other.pending()[0])
+
+        # The proposal of the other document is gone as well.
+        self.assertEqual(first.pending(), [])
+        self.assertEqual(other.pending(), [])
+
     def test_a_proposal_is_not_applied_when_the_text_was_changed_after_the_check(
         self,
     ) -> None:
@@ -271,8 +305,46 @@ class WindowSuggestionsTests(unittest.TestCase):
                 self.app.processEvents()
 
 
-if __name__ == "__main__":
-    unittest.main()
+class ChosenWordingTests(unittest.TestCase):
+    """The wording that the user chose in the box of a proposal."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        self.pane = SuggestionsPane()
+
+    def tearDown(self) -> None:
+        self.pane.deleteLater()
+        self.app.processEvents()
+
+    def make_suggestion(self) -> Suggestion:
+        return Suggestion(
+            module=KIND_GRAMMAR,
+            original="word",
+            replacement="word2",
+            message="",
+            start=0,
+            end=4,
+            alternatives=("word3",),
+        )
+
+    def test_the_wording_that_is_chosen_is_used(self) -> None:
+        self.pane.show_suggestions([self.make_suggestion()])
+        row = self.pane._rows[0]
+        row.checkbox.setChecked(True)
+        row.alternatives.setCurrentText("word3")
+        chosen = self.pane.checked_suggestions()
+        self.assertEqual(len(chosen), 1)
+        self.assertEqual(chosen[0].replacement, "word3")
+        self.assertEqual(chosen[0].original, "word")
+
+    def test_the_wording_of_the_proposal_is_kept_when_nothing_is_chosen(
+        self,
+    ) -> None:
+        self.pane.show_suggestions([self.make_suggestion()])
+        row = self.pane._rows[0]
+        row.checkbox.setChecked(True)
+        chosen = self.pane.checked_suggestions()
+        self.assertEqual(chosen[0].replacement, "word2")
 
 
 class BulkActionsTests(unittest.TestCase):
@@ -717,3 +789,29 @@ class ManualEditTests(unittest.TestCase):
             self.window.project.save(path)
             project = Project.load(path)
             self.assertTrue(project[0].edited)
+
+    def test_the_document_is_not_marked_after_going_back_to_the_recognition(
+        self,
+    ) -> None:
+        """After going back to the text of the recognition there is
+        nothing of the user in the text any more."""
+        from PySide6.QtWidgets import QMessageBox
+
+        self.add_document()
+        self.window.project[0].original_transcription = "הטקסט של הזיהוי"
+        self.window.editor.setPlainText("הטקסט של הזיהוי עם תיקון")
+        self.assertTrue(self.window.project[0].edited)
+
+        original = QMessageBox.question
+        QMessageBox.question = staticmethod(
+            lambda *args, **kwargs: QMessageBox.Yes
+        )
+        self.addCleanup(lambda: setattr(QMessageBox, "question", original))
+
+        self.window.restore_original_text()
+        self.assertEqual(self.window.editor.toPlainText(), "הטקסט של הזיהוי")
+        self.assertFalse(self.window.project[0].edited)
+
+
+if __name__ == "__main__":
+    unittest.main()

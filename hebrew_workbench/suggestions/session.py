@@ -218,9 +218,18 @@ class SuggestionSession:
         change of the round would be applied to it a second time.
         """
         result = position
+        # The changes that were accepted before the one that is looked
+        # at moved every place that was after it.  Their places are
+        # the places of the round, and the place that is changed back
+        # is in the places of the text as it is now.
+        before = 0
+        for _, change in self._round_shifts:
+            before += change
         for end, change in reversed(self._round_shifts):
-            # The change moved every place that was after it.
-            if result - change >= end:
+            before -= change
+            # The end of the change in the places of the text as it is
+            # now: the changes that came before it moved it.
+            if result >= end + before:
                 result -= change
         return result
 
@@ -258,8 +267,14 @@ class SuggestionSession:
         # every change is the place it has in the text as it is now.
         shift = len(suggestion.replacement) - len(suggestion.original)
         stop = start + len(suggestion.replacement)
+        # The end of the text that this change replaces.
+        was = start + len(suggestion.original)
         for change in self.accepted:
-            if change.position >= start:
+            # A change that was inside the text that this change
+            # replaces keeps its place: its own text is gone, and the
+            # place of the change that is made on it is not the place
+            # it had.
+            if change.position >= was:
                 change.position += shift
             # The text around the change is not the text that was kept
             # when the new correction touches it.
@@ -330,6 +345,14 @@ class SuggestionSession:
         changes: list[AcceptedChange] = []
         applied: set[int] = set()
         for suggestion in wanted:
+            place = self.place_of(suggestion)
+            if place is None:
+                continue
+            if self._a_change_of_the_batch_covers(self.accepted, batch, place):
+                # Another proposal of this group already changed this
+                # word: applying this one would make a word that
+                # nobody proposed.
+                continue
             before = len(self.accepted)
             outcome = self.accept(suggestion, batch=batch)
             if outcome is None:
@@ -348,6 +371,28 @@ class SuggestionSession:
             self._batch_number -= 1
             return None
         return self.current_text, changes
+
+    def _a_change_of_the_batch_covers(
+        self,
+        changes: list["AcceptedChange"],
+        batch: int,
+        place: tuple[int, int],
+    ) -> bool:
+        """Does a change of this group already cover this place?
+
+        The place is the place of the text as it is now, and the
+        changes of the group keep their places in the text as it is
+        now too.
+        """
+        start, end = place
+        for change in changes:
+            if change.batch != batch:
+                continue
+            first = change.position
+            last = change.position + len(change.replacement)
+            if start < last and first < end:
+                return True
+        return False
 
     def accept_every_occurrence(
         self, suggestion: Suggestion
@@ -412,6 +457,22 @@ class SuggestionSession:
         """Is there a group of changes that can be taken back as one?"""
         return any(change.batch for change in self.accepted)
 
+    def _refresh_the_context_of_the_changes(self, text: str) -> None:
+        """Look again at the text that surrounds the changes that are left.
+
+        A change whose text was touched by a change that was taken back
+        may be found again, and it can be taken back too.
+        """
+        for change in self.accepted:
+            if not change.context_stale:
+                continue
+            piece = change.before + change.replacement + change.after
+            if not piece:
+                continue
+            start = max(0, change.position - len(change.before))
+            if text[start : start + len(piece)] == piece:
+                change.context_stale = False
+
     def undo_last_batch(self, text: str | None = None) -> str | None:
         """Take back the last group of changes, as one action.
 
@@ -440,8 +501,11 @@ class SuggestionSession:
                 + result[place + len(change.replacement) :]
             )
             shift = len(change.original) - len(change.replacement)
+            # The end of the text that this change replaces: a change
+            # that was inside it keeps its place.
+            was = place + len(change.replacement)
             for other in self.accepted:
-                if other is not change and other.position >= place:
+                if other is not change and other.position >= was:
                     other.position += shift
         self.current_text = result
         self.accepted = [
@@ -457,10 +521,15 @@ class SuggestionSession:
             piece = change.before + change.replacement + change.after
             if not piece:
                 continue
-            start = change.position
+            # The text that was kept begins before the place of the
+            # change: the place of the change is the place of the
+            # replacement, and the text that was kept is in front of
+            # it.
+            start = max(0, change.position - len(change.before))
             if result[start : start + len(piece)] != piece:
                 change.context_stale = True
         self._round_shifts = []
+        self._refresh_the_context_of_the_changes(result)
         # The proposals of the last round have the places of the text
         # as it was before the changes were taken back, and they are of
         # no use now.
@@ -504,8 +573,11 @@ class SuggestionSession:
             # the left, so that the place of every change is the place
             # it has in the text as it is now.
             shift = len(change.original) - len(change.replacement)
+            # The end of the text that this change replaces: a change
+            # that was inside it keeps its place.
+            was = place + len(change.replacement)
             for other in self.accepted:
-                if other is not change and other.position >= place:
+                if other is not change and other.position >= was:
                     other.position += shift
         self.current_text = result
         self.accepted = []
