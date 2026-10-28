@@ -251,3 +251,67 @@ class AccuracyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MeasuredPagesTests(unittest.TestCase):
+    """The number of the pages that may be measured is not the number of
+    the pages of the corpus."""
+
+    def _page(self, name: str, complete: bool, verified: bool) -> benchmark.Page:
+        page = benchmark.Page(image=Path(name))
+        page.report = {"complete": complete}
+        page.verified_by = ["a teacher"] if verified else []
+        return page
+
+    def test_a_page_that_is_complete_and_verified_is_measured(self) -> None:
+        pages = [self._page("a.jpg", True, True)]
+        self.assertEqual(benchmark.pages_that_may_be_measured(pages), 1)
+
+    def test_a_page_whose_ground_truth_is_not_complete_is_not_measured(self) -> None:
+        pages = [self._page("a.jpg", False, True)]
+        self.assertEqual(benchmark.pages_that_may_be_measured(pages), 0)
+
+    def test_a_page_that_was_not_verified_is_not_measured(self) -> None:
+        pages = [self._page("a.jpg", True, False)]
+        self.assertEqual(benchmark.pages_that_may_be_measured(pages), 0)
+
+    def test_the_pages_of_the_corpus_are_not_all_measured(self) -> None:
+        pages = [
+            self._page("a.jpg", True, True),
+            self._page("b.jpg", False, True),
+            self._page("c.jpg", True, False),
+        ]
+        self.assertEqual(benchmark.pages_that_may_be_measured(pages), 1)
+
+
+class ConsoleTests(unittest.TestCase):
+    """The console of Windows writes in a code page of the system, and
+    Hebrew is not in it."""
+
+    def test_the_console_can_write_hebrew(self) -> None:
+        import io
+        import sys
+
+        from hebrew_workbench.console import use_utf8
+
+        stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+        original = sys.stdout
+        sys.stdout = stream
+        try:
+            use_utf8()
+            print("שלום עולם")
+            stream.flush()
+            written = stream.buffer.getvalue()
+        finally:
+            sys.stdout = original
+        self.assertIn("שלום עולם", written.decode("utf-8"))
+
+    def test_a_stream_that_cannot_be_changed_is_not_an_error(self) -> None:
+        from hebrew_workbench.console import use_utf8
+
+        class Stream:
+            """A stream without the way to change it."""
+
+        # The function does nothing with the streams of the program, and
+        # it does not stop when a stream cannot be changed.
+        use_utf8()

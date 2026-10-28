@@ -16,9 +16,14 @@ from xml.etree import ElementTree
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from tools.benchmark_ocr import (  # noqa: E402
+from hebrew_workbench.console import use_utf8  # noqa: E402
+
+from hebrew_workbench.benchmark.corpus import (  # noqa: E402
     _line_text,
     _word_text,
+)
+
+from tools.benchmark_ocr import (  # noqa: E402
     download_dataset,
     extract_dataset,
     find_pages,
@@ -63,6 +68,10 @@ def _top(points: list[tuple[float, float]]) -> float | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The console of Windows cannot write Hebrew in the code page
+    # of the system, and the program would stop in the middle of a
+    # report because of a letter.
+    use_utf8()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", help="folder with an extracted corpus")
     parser.add_argument("--cache", default=".cache/pinkas", help="download cache")

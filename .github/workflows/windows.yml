@@ -3,6 +3,9 @@ name: Windows desktop build
 on:
   push:
     branches: [main]
+    # A tag that starts with "v" is a release: the build makes the
+    # program for Windows and publishes it.
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -313,17 +316,51 @@ jobs:
         run: |
           set -o pipefail
           python tools/check_engine.py 2>&1 | tee check-engine.log
-      - name: Download and check the recognition model
+      - name: Download and check the recognition models
         run: |
           set -o pipefail
           python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | tee model-download.log
           if [ "$?" -ne 0 ]; then throw 'the model could not be downloaded'; fi
-      - name: Measure the accuracy on real handwritten pages
+          # The second model of the same family, so that the engines can
+          # be compared with one another on the same pages.
+          python tools/download_model.py --model kraken-ppocrv6-medium --target .cache/models 2>&1 | tee model-download-medium.log
+          if [ "$?" -ne 0 ]; then throw 'the second model could not be downloaded'; fi
+      - name: Check the corpus of the modern school handwriting
         run: |
           set -o pipefail
+          # The manifest that is in the repository is the one that says
+          # which pages are measured every time.  The build writes its
+          # own manifest to another place, and the measurement is
+          # checked against the manifest of the repository: a page that
+          # was replaced without the manifest being written again stops
+          # the build.
+          python tools/build_benchmark.py \
+            --corpus benchmark/modern_school \
+            --output build/manifest-of-the-build.json \
+            2>&1 | tee benchmark-corpus.log
+      - name: Measure the accuracy on the modern school handwriting
+        run: |
+          set -o pipefail
+          # The material the program is made for.  The corpus has no
+          # verified page yet, so the report says that the accuracy on
+          # this material is not verified - and that is the truth.
           python tools/benchmark_ocr.py \
-            --model .cache/models/small.safetensors \
-            --download --cache .cache/pinkas --pages 10 --output ocr-accuracy.json 2>&1 | tee benchmark.log
+            --corpus benchmark/modern_school \
+            --models .cache/models \
+            --engines kraken-ppocrv6-small kraken-ppocrv6-medium \
+            --output ocr-accuracy-modern.json 2>&1 | tee benchmark-modern.log
+          if [ "$?" -ne 0 ]; then throw 'the measurement of the modern corpus failed'; fi
+      - name: Measure the accuracy on the diagnostic corpus of the old handwriting
+        run: |
+          set -o pipefail
+          # Every engine is measured on the same pages, so that they can
+          # be compared with one another.  The models are the ones that
+          # were downloaded above, and not the ones of the program.
+          python tools/benchmark_ocr.py \
+            --pinkas --download --cache .cache/pinkas --pages 5 \
+            --models .cache/models \
+            --engines kraken-ppocrv6-small kraken-ppocrv6-medium \
+            --output ocr-accuracy.json 2>&1 | tee benchmark.log
           if [ "$?" -ne 0 ]; then throw 'the measurement failed'; fi
       - name: Look at the corpus
         if: always()
@@ -334,8 +371,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
+          if [ -f ocr-accuracy-modern.json ]; then
+            python tools/write_accuracy_results.py --report ocr-accuracy-modern.json --document docs/OCR_ACCURACY.md
+          fi
           if [ -f ocr-accuracy.json ]; then
-            python tools/write_accuracy_results.py --report ocr-accuracy.json --document docs/OCR_ACCURACY.md
+            python tools/write_accuracy_results.py --report ocr-accuracy.json --document docs/OCR_ACCURACY.md --begin '<!-- DIAGNOSTIC:BEGIN -->' --end '<!-- DIAGNOSTIC:END -->'
           fi
       - name: Upload the documentation with the results
         if: always()
@@ -347,6 +387,10 @@ jobs:
       - name: Publish the accuracy report
         if: always()
         run: |
+          if [ -f ocr-accuracy-modern.json ]; then
+            cat ocr-accuracy-modern.json
+            python tools/accuracy_notice.py --report ocr-accuracy-modern.json
+          fi
           if [ -f ocr-accuracy.json ]; then
             cat ocr-accuracy.json
             python tools/accuracy_notice.py --report ocr-accuracy.json
@@ -358,10 +402,17 @@ jobs:
           name: ocr-accuracy-report
           path: ocr-accuracy.json
           if-no-files-found: warn
+      - name: Upload the report of the modern school handwriting
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-accuracy-modern-report
+          path: ocr-accuracy-modern.json
+          if-no-files-found: warn
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log benchmark.log corpus-structure.log ocr-accuracy.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json
 
   ocr-worker-windows:
     name: OCR worker (Windows)
@@ -435,3 +486,58 @@ jobs:
         if: always()
         continue-on-error: true
         run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log check-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json
+
+  release:
+    name: Publish the release
+    # The release is made of the program that the Windows job built and
+    # checked, and not of anything else: the archive of the user is the
+    # one that was unpacked and started.
+    needs: [test-and-package]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Take the archive that was built and checked
+        uses: actions/download-artifact@v4
+        with:
+          name: HebrewNotesWorkbench-release
+          path: release
+      - name: Write the notes of the release
+        env:
+          TAG: ${{ github.ref_name }}
+          # The notes of the release are written by the tool of GitHub,
+          # and it needs the token to ask for them.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          cp docs/RELEASE_NOTES.md release-notes.md
+          {
+            echo ""
+            echo "## The changes of this version"
+            echo ""
+            gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              -f tag_name="$TAG" -f target_commitish="${{ github.sha }}" \
+              --jq .body || echo ""
+          } >> release-notes.md
+      - name: Publish the release
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          cd release
+          # One digest file for every archive, with the name of the
+          # archive inside it.
+          for archive in ./*.zip; do
+            name="$(basename "$archive")"
+            sha256sum "$name" > "${name}.sha256"
+          done
+          # --verify-tag: the release is made for the tag that was
+          # pushed, and not for a new tag that the tool would make.
+          gh release create "$TAG" \
+            ./*.zip ./*.sha256 \
+            --verify-tag \
+            --title "Hebrew Notes Workbench $TAG" \
+            --notes-file ../release-notes.md

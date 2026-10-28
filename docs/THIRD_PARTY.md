@@ -16,7 +16,26 @@ SHA-256 checksum that is verified before the file is used.
 | CPython | 3.12 | PSF License 2.0 | python.org | Runtime of the packaged executable |
 | PySide6-Essentials | 6.9.1 | LGPL-3.0-only | PyPI (`PySide6-Essentials`) | Qt 6 for Python: user interface, printing |
 | shiboken6 | 6.9.1 | LGPL-3.0-only | PyPI (`shiboken6`) | Binding generator, pulled in by PySide6 |
+| Pillow | 11.3.0 | MIT-CMU | PyPI (`pillow`) | Image handling for the preview |
+| pypdfium2 | 4.30.0 | BSD-3-Clause / Apache-2.0 | PyPI (`pypdfium2`) | Rasterising PDF pages (PDFium, Apache-2.0/BSD-3) |
+| python-docx | 1.2.0 | MIT | PyPI (`python-docx`) | Writing the DOCX file |
+| lxml | 6.0.2 | BSD-3-Clause | PyPI (`lxml`) | Reading the corpus and the manifests |
 | PyInstaller | 6.16.0 | GPL-2.0-or-later **with a bundling exception** | PyPI (`pyinstaller`) | Build-time only; the exception permits shipping the result under any license |
+
+## Bundled in the worker of the recognition
+
+The worker (`ocr-worker`) goes with the program in the archive of the
+user, so that the program can read handwriting without anything else.
+
+| Component | Version | License | Source | Notes |
+| --- | --- | --- | --- | --- |
+| kraken | 7.1.1 | Apache-2.0 | PyPI (`kraken`) | The engine that reads the handwriting |
+| PyTorch | 2.14.0 | BSD-3-Clause | PyPI (`torch`) | The library that kraken runs on |
+| torchvision | 0.29.0 | BSD-3-Clause | PyPI (`torchvision`) | The library that kraken asks for |
+
+The licence texts of these three are inside their own packages, and
+`tools/build_release.py` copies them into the folder `LICENCES` of the
+archive.  The release is not made when one of them is missing.
 
 `PySide6-Essentials` is used instead of the full `PySide6` package on
 purpose: the Essentials package contains only modules that are available
@@ -35,8 +54,8 @@ open work:
    explaining that the DLLs are in the folder of the application, next
    to `HebrewNotesWorkbench.exe`.
 2. The release package must include the licence texts of CPython,
-   PySide6/Qt, shiboken6, Pillow, PDFium and python-docx in a `LICENCES/`
-   folder.  `tools/build_release.py` does this: it copies the licence
+   PySide6/Qt, shiboken6, Pillow, PDFium, python-docx, lxml, kraken,
+   PyTorch and torchvision in a `LICENCES/` folder.  `tools/build_release.py` does this: it copies the licence
    texts that are inside the installed packages, copies the texts of
    the LGPL, of the GPL and of the PSF licence from `docs/licences/`,
    and writes a notice that says what every component is and where its
@@ -49,13 +68,10 @@ open work:
 3. The PyInstaller exception only covers the bundling of the executable;
    the licences of the bundled libraries keep applying.
 
-## Planned, not bundled yet
+## Downloaded on request, not bundled
 
-| Component | Version | License | Where it will be used |
+| Component | Version | License | Where it is used |
 | --- | --- | --- | --- |
-| Pillow | 11.3.0 | MIT-CMU | Image handling for the preview |
-| pypdfium2 | 4.30.0 | BSD-3-Clause / Apache-2.0 | Rasterising PDF pages (PDFium, Apache-2.0/BSD-3) |
-| kraken | 7.1.1 | Apache-2.0 | Handwritten text recognition engine (optional adapter) |
 | kraken PP-OCRv6 model | see `docs/OCR_ACCURACY.md` | Apache-2.0 | Recognition weights, downloaded on request with a checksum check |
 
 ## Test material

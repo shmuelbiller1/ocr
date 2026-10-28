@@ -220,5 +220,86 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn("HebrewNotesWorkbench/LICENCES/PSF-LICENSE.txt", names)
 
 
+class ReleaseWorkflowTests(unittest.TestCase):
+    """The build that makes a release for the user."""
+
+    def setUp(self) -> None:
+        self.workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "windows.yml"
+        )
+        self.text = self.workflow.read_text(encoding="utf-8")
+
+    def test_a_tag_makes_the_build(self) -> None:
+        self.assertIn("tags: ['v*']", self.text)
+
+    def test_the_release_is_published_only_for_a_tag(self) -> None:
+        self.assertIn("if: startsWith(github.ref, 'refs/tags/v')", self.text)
+
+    def test_the_release_is_made_of_the_program_that_was_checked(self) -> None:
+        """The archive of the user is the one that was unpacked and started."""
+        self.assertIn("needs: [test-and-package]", self.text)
+        self.assertIn("name: HebrewNotesWorkbench-release", self.text)
+
+    def test_the_release_may_write_to_the_repository(self) -> None:
+        self.assertIn("gh release create", self.text)
+        self.assertIn("contents: write", self.text)
+
+    def test_the_digest_of_the_archive_is_published_with_it(self) -> None:
+        self.assertIn("sha256sum", self.text)
+        self.assertIn(".sha256", self.text)
+
+    def test_the_release_is_made_for_the_tag_that_was_pushed(self) -> None:
+        self.assertIn("--verify-tag", self.text)
+
+    def test_the_release_has_the_token_that_it_needs(self) -> None:
+        self.assertIn("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}", self.text)
+
+    def test_the_notes_of_the_release_have_the_token_that_they_need(self) -> None:
+        self.assertGreaterEqual(
+            self.text.count("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}"), 2
+        )
+
+    def test_the_notes_of_the_release_are_the_notes_of_the_repository(self) -> None:
+        self.assertIn("docs/RELEASE_NOTES.md", self.text)
+
+    def test_every_archive_has_a_digest_file_of_its_own(self) -> None:
+        """A digest file that is written with a glob in its name is a
+        file whose name is the glob itself."""
+        self.assertIn('sha256sum "$name" > "${name}.sha256"', self.text)
+        self.assertNotIn("sha256sum ./*.zip > ./*.sha256", self.text)
+
+    def test_the_manifest_of_the_repository_is_the_one_that_is_checked(self) -> None:
+        """The build writes its own manifest to another place, and the
+        measurement is checked against the manifest of the repository."""
+        self.assertIn("--output build/manifest-of-the-build.json", self.text)
+
+
+class ReleaseNotesTests(unittest.TestCase):
+    """The notes of the release say what works and what does not."""
+
+    def setUp(self) -> None:
+        self.notes = (
+            Path(__file__).resolve().parents[1] / "docs" / "RELEASE_NOTES.md"
+        ).read_text(encoding="utf-8")
+
+    def test_the_notes_say_what_does_not_work(self) -> None:
+        # The text is written in lines, and the words of a sentence may
+        # be on two lines: the text is made one line before it is read.
+        text = " ".join(self.notes.split())
+        self.assertIn("not verified", text)
+        self.assertIn("לשון הספר", text)
+
+    def test_the_notes_say_what_the_program_needs_from_the_user(self) -> None:
+        text = " ".join(self.notes.split())
+        self.assertIn("the model file is checked against the digest", text)
+
+    def test_the_notes_say_that_nothing_is_uploaded(self) -> None:
+        text = " ".join(self.notes.split())
+        self.assertIn("Nothing is uploaded anywhere", text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -63,12 +63,21 @@ def build_spellings(words: dict[str, list[str]]) -> dict[str, list[str]]:
 
     The first spelling of a word is the one that the list prefers, and
     the others are the ways the word is also written.
+
+    A word that has a line of its own in the list keeps that line: it
+    is the way the user writes it, and the line of another word does
+    not take it away from the user.  This is what the action "לשמור
+    את המילה" does - the word is given a line of its own, and it is
+    not proposed any more.
     """
     spellings: dict[str, list[str]] = {}
     for word, alternatives in words.items():
         group = [word] + [item for item in alternatives if item != word]
         for member in group:
             spellings.setdefault(member, group)
+    for word, alternatives in words.items():
+        group = [word] + [item for item in alternatives if item != word]
+        spellings[word] = group
     return spellings
 
 
@@ -101,6 +110,54 @@ class SpellingModule(SuggestionModule):
     @property
     def dictionary_path(self) -> Path | None:
         return self._path
+
+    def keep_word(self, word: str) -> bool:
+        """Take the word as it is written, and do not propose to change it.
+
+        The word is added to the list of the user.  The list is written
+        back to its file when the file can be written, so that the word
+        is still known the next time the program starts; when the file
+        cannot be written the word is known only in this session, and
+        ``False`` is returned.
+
+        The file of the user is never rewritten: the word is added as a
+        line of its own, and the rest of the file is left as it is.
+        """
+        word = word.strip()
+        if not word:
+            return False
+        already = word in self._words
+        if not already:
+            self._words[word] = []
+            self._spellings = build_spellings(self._words)
+        return self._write_word(word, already)
+
+    def _write_word(self, word: str, already: bool) -> bool:
+        """Write the word to the file of the list of the user."""
+        if already:
+            # The word is already in the list, and the list is not
+            # written again.
+            return True
+        path = self._path
+        if path is None:
+            # There is no list of the user to write the word in.
+            return False
+        try:
+            # The word is added as a line of its own.  When the file
+            # does not end with a line, the new word is put on a line
+            # of its own, and the last word of the file is not spoiled.
+            with path.open("a+b") as handle:
+                handle.seek(0, 2)
+                prefix = ""
+                if handle.tell() > 0:
+                    handle.seek(-1, 2)
+                    if handle.read(1) not in (b"\n", b"\r"):
+                        prefix = "\n"
+                    handle.seek(0, 2)
+                handle.write(f"{prefix}{word}\n".encode("utf-8"))
+        except OSError:
+            return False
+        return True
 
     @property
     def word_count(self) -> int:

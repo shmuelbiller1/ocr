@@ -34,6 +34,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from hebrew_workbench import __version__  # noqa: E402
 
+from hebrew_workbench.console import use_utf8  # noqa: E402
+
 #: The components that end up inside the application, and where the
 #: text of their licence is found.
 COMPONENTS = [
@@ -47,6 +49,17 @@ COMPONENTS = [
         "https://github.com/pypdfium2-team/pypdfium2/blob/master/LICENSE.txt",
     ),
     ("python-docx", "MIT", "https://github.com/python-openxml/python-docx/blob/master/LICENSE"),
+    (
+        "kraken",
+        "Apache-2.0",
+        "https://github.com/mittagessen/kraken/blob/master/LICENSE",
+    ),
+    ("PyTorch", "BSD-3-Clause", "https://github.com/pytorch/pytorch/blob/main/LICENSE"),
+    (
+        "torchvision",
+        "BSD-3-Clause",
+        "https://github.com/pytorch/vision/blob/main/LICENSE",
+    ),
 ]
 
 #: The licence texts that are not inside the packages, with the place
@@ -80,6 +93,18 @@ PACKAGES_IN_THE_APP = (
     "lxml",
 )
 
+#: The packages that are inside the worker of the recognition.  The
+#: worker goes with the program, and the licence of every part of it
+#: has to be in the release as well.
+PACKAGES_IN_THE_WORKER = (
+    "kraken",
+    "torch",
+    "torchvision",
+)
+
+#: Every package whose licence text goes into the release.
+PACKAGES_WITH_LICENCES = PACKAGES_IN_THE_APP + PACKAGES_IN_THE_WORKER
+
 #: The packages whose licence text has to be inside the installed
 #: package.  The release is not made when one of them is missing.  The
 #: Qt packages are not among them: their licence is the LGPL, and its
@@ -89,6 +114,9 @@ REQUIRED_LICENCE_PACKAGES = (
     "pypdfium2",
     "python_docx",
     "lxml",
+    "kraken",
+    "torch",
+    "torchvision",
 )
 
 #: The files of an installed package that are not licence texts.
@@ -185,7 +213,8 @@ def default_site_packages() -> Path:
 def licence_files(site_packages: Path) -> list[tuple[str, Path]]:
     """Every licence text that is inside the installed packages.
 
-    Only the packages that are inside the application are looked at.
+    Only the packages that are inside the application and inside the
+    worker of the recognition are looked at.
     The name of the file of a licence is not the same in every
     package: some use ``LICENSE``, some ``LICENSE.txt``, some
     ``licenses/LICENSE`` and some the name of the licence itself, like
@@ -198,7 +227,7 @@ def licence_files(site_packages: Path) -> list[tuple[str, Path]]:
         return found
     for info in sorted(site_packages.glob("*.dist-info")):
         name = info.name.lower()
-        if not any(name.startswith(package) for package in PACKAGES_IN_THE_APP):
+        if not any(name.startswith(package) for package in PACKAGES_WITH_LICENCES):
             continue
         for path in sorted(info.iterdir()):
             if not path.is_file():
@@ -458,6 +487,10 @@ def sha256_of(path: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The console of Windows cannot write Hebrew in the code page
+    # of the system, and the program would stop in the middle of a
+    # report because of a letter.
+    use_utf8()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app", default="dist/HebrewNotesWorkbench")
     parser.add_argument("--output")
