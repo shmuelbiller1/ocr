@@ -72,8 +72,13 @@ class SuggestionRow(QFrame):
         if len(choices) > 1:
             self.alternatives = QComboBox()
             self.alternatives.addItems(choices)
-            self.alternatives.setToolTip("אפשר לבחור ניסוח אחר לפני שמקבלים")
-            self.alternatives.currentTextChanged.connect(self._alternative_changed)
+            self.alternatives.setToolTip(
+                "אפשר לבחור ניסוח אחר, ואז ללחוץ על 'קבל'"
+            )
+            # The wheel of the mouse and the arrow keys change the
+            # choice of the box, and the choice is not applied by
+            # itself: it is applied when the user presses "קבל".
+            self.alternatives.setFocusPolicy(Qt.StrongFocus)
             row = QHBoxLayout()
             row.addWidget(QLabel("אפשרות:"))
             row.addWidget(self.alternatives, 1)
@@ -81,7 +86,7 @@ class SuggestionRow(QFrame):
 
         buttons = QHBoxLayout()
         accept = QPushButton("קבל")
-        accept.clicked.connect(lambda: self.accept_requested.emit(self.suggestion))
+        accept.clicked.connect(self._accept_clicked)
         refuse = QPushButton("דחה")
         refuse.clicked.connect(lambda: self.refuse_requested.emit(self.suggestion))
         buttons.addWidget(accept)
@@ -100,9 +105,19 @@ class SuggestionRow(QFrame):
         buttons.addStretch(1)
         layout.addLayout(buttons)
 
-    def _alternative_changed(self, text: str) -> None:
+    def _accept_clicked(self) -> None:
+        """Accept the proposal, with the wording that the user chose.
+
+        The wording that is chosen in the box is applied only when the
+        user presses the button, and not when the choice in the box is
+        changed: a change that is applied by itself is a change the
+        user did not ask for.
+        """
+        text = self.alternatives.currentText() if self.alternatives else ""
         if text and text != self.suggestion.replacement:
             self.alternative_chosen_requested.emit(self.suggestion, text)
+        else:
+            self.accept_requested.emit(self.suggestion)
 
     @property
     def checked(self) -> bool:

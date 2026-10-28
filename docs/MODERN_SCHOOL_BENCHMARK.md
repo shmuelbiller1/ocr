@@ -105,10 +105,12 @@ both of them have to be measured:
 * the time that a teacher needs to correct the text of the engine.
 
 The second half is a measurement of people, and it belongs to the
-school.  Until it is made, the default is the engine with the fewest
-errors in the measurement, and the user can choose another engine in
-the settings screen at any time - the engines are plugins, the choice
-is remembered, and a choice of the user is never overridden.
+school.  Until both of them are measured, the program does not choose
+by itself: it restores the engine that the user chose, and when there
+is no such choice it takes the first engine that it finds.  The user
+can choose another engine in the settings screen at any time - the
+engines are plugins, the choice is remembered, and a choice of a user
+is never overridden.
 
 ## How the corpus is filled
 
@@ -130,11 +132,25 @@ python tools/build_benchmark.py --corpus benchmark/modern_school
 ```
 
 The command checks every page, writes the digest of every image into
-the manifest of the corpus and says which pages are not verified.  The
-measurement checks the images against that manifest before it measures
-anything: when an image was changed, the measurement is of a different
-corpus than the one that was built, and it is not published, so that
-the same pages are measured every time.
+the manifest of the corpus and says which pages are not verified.
+
+**The manifest is part of the corpus and it is in the repository.**  It
+holds the digest of every image and the path of every page, and the
+measurement checks the images against the manifest of the repository
+before it measures anything:
+
+* when an image was changed, the measurement is of a different corpus
+  than the one that was built, and it is not published;
+* when a page was added, or when it was replaced under another name,
+  the page is not in the manifest, and the measurement is not published;
+* when a page of the manifest is not in the corpus any more, the
+  measurement is not published either.
+
+So the same pages are measured every time, and a change in the corpus
+has to be written down in the manifest: run the command above and
+commit the manifest together with the page.  The build writes its own
+manifest to another place, and it never overwrites the one of the
+repository.
 
 Before a page is put in the corpus, the school has to agree to it in
 writing, and the agreement has to allow the use of the page for

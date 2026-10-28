@@ -14,6 +14,12 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import sys
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from hebrew_workbench.console import use_utf8  # noqa: E402
 
 
 def summarise(report: dict) -> str:
@@ -60,6 +66,10 @@ def summarise(report: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The console of Windows cannot write Hebrew in the code page of
+    # the system, and the program would stop in the middle of a report
+    # because of a letter.
+    use_utf8()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default="ocr-accuracy.json", help="report file")
     args = parser.parse_args(argv)

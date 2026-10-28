@@ -422,7 +422,8 @@ class SharedPagesTests(unittest.TestCase):
             self.assertEqual(engine["summary"]["cer"], 0.2 if "small" in engine["model"] else 0.1)
         # The page that one of the engines did not read is named.
         self.assertEqual(
-            comparison["pages_outside_the_comparison"]["the small model"], ["p2.png"]
+            comparison["pages_outside_the_comparison"]["kraken-ppocrv6-small"],
+            ["p2.png"],
         )
 
     def test_a_page_that_was_not_verified_is_not_a_measurement(self) -> None:
@@ -500,7 +501,7 @@ class ManifestTests(unittest.TestCase):
                     {
                         "pages": [
                             {
-                                "image": "p1.png",
+                                "image": "pages/p1.png",
                                 "sha256": corpus.pages[0].digest(),
                             }
                         ]
@@ -521,7 +522,7 @@ class ManifestTests(unittest.TestCase):
                     {
                         "pages": [
                             {
-                                "image": "p1.png",
+                                "image": "pages/p1.png",
                                 "sha256": "the digest of another image",
                             }
                         ]
@@ -532,6 +533,113 @@ class ManifestTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as caught:
                 check_against_the_manifest(root, corpus.pages)
             self.assertIn("p1.png", str(caught.exception))
+
+
+class ManifestCompletenessTests(unittest.TestCase):
+    """The manifest has to hold every page of the corpus, and every page
+    of the manifest has to be in the corpus."""
+
+    def make_corpus(self, folder: Path) -> Path:
+        root = Path(folder)
+        (root / "pages").mkdir(parents=True)
+        (root / "transcripts").mkdir()
+        (root / "pages" / "p1.png").write_bytes(b"the image of the page")
+        (root / "transcripts" / "p1.txt").write_text(
+            "שלום עולם\n", encoding="utf-8"
+        )
+        write_corpus(
+            root,
+            [
+                {
+                    "image": "pages/p1.png",
+                    "transcript": "transcripts/p1.txt",
+                    "verified_by": ["teacher"],
+                }
+            ],
+        )
+        return root
+
+    def test_a_page_that_is_not_in_the_manifest_is_not_measured(self) -> None:
+        from tools.benchmark_ocr import check_against_the_manifest
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.make_corpus(Path(folder))
+            corpus = load_corpus(root)
+            (root / "manifest.json").write_text(
+                json.dumps({"pages": []}), encoding="utf-8"
+            )
+            with self.assertRaises(SystemExit) as caught:
+                check_against_the_manifest(root, corpus.pages)
+            self.assertIn("not in the manifest", str(caught.exception))
+
+    def test_a_page_that_is_not_in_the_corpus_any_more_is_not_measured(self) -> None:
+        from tools.benchmark_ocr import check_against_the_manifest
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.make_corpus(Path(folder))
+            corpus = load_corpus(root)
+            (root / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "pages": [
+                            {
+                                "image": "pages/p1.png",
+                                "sha256": corpus.pages[0].digest(),
+                            },
+                            {
+                                "image": "pages/p2.png",
+                                "sha256": "the digest of a page that is gone",
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(SystemExit) as caught:
+                check_against_the_manifest(root, corpus.pages)
+            self.assertIn("not in the corpus any more", str(caught.exception))
+
+    def test_two_pages_with_the_same_name_are_told_apart(self) -> None:
+        from tools.benchmark_ocr import check_against_the_manifest
+        from tools.build_benchmark import build_manifest
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name in ("class_a", "class_b"):
+                (root / "pages" / name).mkdir(parents=True)
+                (root / "transcripts" / name).mkdir(parents=True)
+                (root / "pages" / name / "page.png").write_bytes(
+                    f"the image of {name}".encode("utf-8")
+                )
+                (root / "transcripts" / name / "page.txt").write_text(
+                    "שלום עולם\n", encoding="utf-8"
+                )
+            write_corpus(
+                root,
+                [
+                    {
+                        "image": "pages/class_a/page.png",
+                        "transcript": "transcripts/class_a/page.txt",
+                        "verified_by": ["teacher"],
+                    },
+                    {
+                        "image": "pages/class_b/page.png",
+                        "transcript": "transcripts/class_b/page.txt",
+                        "verified_by": ["teacher"],
+                    },
+                ],
+            )
+            corpus = load_corpus(root)
+            manifest = build_manifest(corpus)
+            names = [entry["image"] for entry in manifest["pages"]]
+            self.assertEqual(
+                names, ["pages/class_a/page.png", "pages/class_b/page.png"]
+            )
+            (root / "manifest.json").write_text(
+                json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+            )
+            # The corpus that was just built passes the check.
+            self.assertEqual(check_against_the_manifest(root, corpus.pages), [])
 
 
 class EmptyXmlTests(unittest.TestCase):
@@ -622,3 +730,42 @@ class LeftOutPageTests(unittest.TestCase):
         self.assertEqual(report["left_out"][0]["page"], "empty.png")
         self.assertIn("ground truth", report["left_out"][0]["reason"])
         self.assertEqual(report["failures"], [])
+
+
+class SameEngineNameTests(unittest.TestCase):
+    """Two models of the same engine have the same name, and the
+    comparison keeps them apart."""
+
+    def test_two_models_of_the_same_engine_are_compared_on_the_same_pages(self) -> None:
+        from tools.benchmark_ocr import compare_on_the_same_pages
+
+        first = {
+            "engine": "kraken PP-OCRv6 (Apache-2.0)",
+            "model": "kraken-ppocrv6-small",
+            "results": [
+                make_result("p1.png", cer=0.2, characters=100, words=20, word_errors=4),
+                make_result("p2.png", cer=0.6, characters=100, words=20, word_errors=12),
+            ],
+        }
+        second = {
+            "engine": "kraken PP-OCRv6 (Apache-2.0)",
+            "model": "kraken-ppocrv6-medium",
+            "results": [
+                make_result("p1.png", cer=0.1, characters=100, words=20, word_errors=2),
+            ],
+        }
+        comparison = compare_on_the_same_pages([first, second])
+
+        # The pages of the comparison are the pages that both models
+        # measured, and not the pages of the last model.
+        self.assertEqual(comparison["pages"], ["p1.png"])
+        for engine in comparison["engines"]:
+            self.assertEqual(engine["summary"]["pages_measured"], 1)
+        # The page that one of the models did not read is named.
+        self.assertEqual(
+            comparison["pages_outside_the_comparison"]["kraken-ppocrv6-small"],
+            ["p2.png"],
+        )
+        self.assertEqual(
+            comparison["pages_outside_the_comparison"]["kraken-ppocrv6-medium"], []
+        )

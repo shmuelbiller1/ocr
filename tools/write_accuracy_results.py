@@ -27,6 +27,9 @@ BEGIN = "<!-- RESULTS:BEGIN -->"
 END = "<!-- RESULTS:END -->"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from hebrew_workbench.console import use_utf8  # noqa: E402
 
 
 def percent(value) -> str:
@@ -124,6 +127,20 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
                 " measure, and no rate is published here.",
                 "",
             ]
+        # The engines that failed are named: a failure of an engine is
+        # a fact about that engine, and it is not hidden by the fact
+        # that there is no rate.
+        for engine in engines:
+            failures = engine.get("failures") or []
+            if not failures:
+                continue
+            names = ", ".join(str(item.get("page", "?")) for item in failures)
+            lines += [
+                f"> **{engine.get('model') or engine.get('engine', 'the engine')}"
+                f" failed on {len(failures)} of the pages it was given:**"
+                f" {names}.",
+                "",
+            ]
         if report.get("note"):
             lines += [f"> {report['note']}", ""]
         lines += [
@@ -156,10 +173,11 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
     # the report says which is which.
     if pages_seen and measured_corpus and measured_corpus < pages_seen:
         lines += [
-            f"The corpus holds {pages_seen} pages.  The build read"
+            f"The corpus holds {pages_seen} pages.  The build chose"
             f" {report.get('pages_read', measured_corpus)} of them, and"
             f" {measured_corpus} of them could be measured.  The rate above"
-            " is of those pages, and it is not a rate of the whole corpus.",
+            f" is of the {first.get('pages', 0)} pages that were measured, and it"
+            " is not a rate of the whole corpus.",
             "",
         ]
 
@@ -361,6 +379,10 @@ def update_document(
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The console of Windows cannot write Hebrew in the code page of
+    # the system, and the program would stop in the middle of a report
+    # because of a letter.
+    use_utf8()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default="ocr-accuracy.json")
     parser.add_argument(

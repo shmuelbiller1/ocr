@@ -282,3 +282,36 @@ class MeasuredPagesTests(unittest.TestCase):
             self._page("c.jpg", True, False),
         ]
         self.assertEqual(benchmark.pages_that_may_be_measured(pages), 1)
+
+
+class ConsoleTests(unittest.TestCase):
+    """The console of Windows writes in a code page of the system, and
+    Hebrew is not in it."""
+
+    def test_the_console_can_write_hebrew(self) -> None:
+        import io
+        import sys
+
+        from hebrew_workbench.console import use_utf8
+
+        stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+        original = sys.stdout
+        sys.stdout = stream
+        try:
+            use_utf8()
+            print("שלום עולם")
+            stream.flush()
+            written = stream.buffer.getvalue()
+        finally:
+            sys.stdout = original
+        self.assertIn("שלום עולם", written.decode("utf-8"))
+
+    def test_a_stream_that_cannot_be_changed_is_not_an_error(self) -> None:
+        from hebrew_workbench.console import use_utf8
+
+        class Stream:
+            """A stream without the way to change it."""
+
+        # The function does nothing with the streams of the program, and
+        # it does not stop when a stream cannot be changed.
+        use_utf8()

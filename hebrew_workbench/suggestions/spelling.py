@@ -63,12 +63,21 @@ def build_spellings(words: dict[str, list[str]]) -> dict[str, list[str]]:
 
     The first spelling of a word is the one that the list prefers, and
     the others are the ways the word is also written.
+
+    A word that has a line of its own in the list keeps that line: it
+    is the way the user writes it, and the line of another word does
+    not take it away from the user.  This is what the action "לשמור
+    את המילה" does - the word is given a line of its own, and it is
+    not proposed any more.
     """
     spellings: dict[str, list[str]] = {}
     for word, alternatives in words.items():
         group = [word] + [item for item in alternatives if item != word]
         for member in group:
             spellings.setdefault(member, group)
+    for word, alternatives in words.items():
+        group = [word] + [item for item in alternatives if item != word]
+        spellings[word] = group
     return spellings
 
 
@@ -134,8 +143,18 @@ class SpellingModule(SuggestionModule):
             # There is no list of the user to write the word in.
             return False
         try:
-            with path.open("a", encoding="utf-8") as handle:
-                handle.write(f"{word}\n")
+            # The word is added as a line of its own.  When the file
+            # does not end with a line, the new word is put on a line
+            # of its own, and the last word of the file is not spoiled.
+            with path.open("a+b") as handle:
+                handle.seek(0, 2)
+                prefix = ""
+                if handle.tell() > 0:
+                    handle.seek(-1, 2)
+                    if handle.read(1) not in (b"\n", b"\r"):
+                        prefix = "\n"
+                    handle.seek(0, 2)
+                handle.write(f"{prefix}{word}\n".encode("utf-8"))
         except OSError:
             return False
         return True

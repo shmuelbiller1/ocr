@@ -580,6 +580,13 @@ class MainWindow(QMainWindow):
         if self._loading:
             return
         self._store_editor_text()
+        # The user wrote something in this document.  It is remembered
+        # with the document, so that the program knows that going back
+        # to the text of the recognition would take it away, and it
+        # asks the user first.
+        entry = self._shown_entry
+        if entry is not None:
+            entry.edited = True
 
     def _store_editor_text(self) -> None:
         """Save the text of the document that is in the editor.
@@ -707,6 +714,9 @@ class MainWindow(QMainWindow):
             # looked for in the new text could be found in a place that
             # was never corrected.
             entry.changes = []
+            # The text is new: what the user wrote in the old text is
+            # not in it any more.
+            entry.edited = False
             self._sessions.pop(str(entry.path), None)
         if entry is not None and entry is self._shown_entry:
             # The document that was recognised is still the one that is
@@ -1329,7 +1339,17 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("אין פעולה אחרונה לביטול.", 5000)
             return
         self._apply_the_changes(text, session)
-        self.statusBar().showMessage("הפעולה האחרונה בוטלה.", 6000)
+        # The changes that could not be taken back are told to the
+        # user: the text around them was changed, and they are still in
+        # the text.
+        skipped = len(session.last_undo_skipped)
+        if skipped:
+            self.statusBar().showMessage(
+                f"{skipped} שינויים לא ניתן לבטל, כי הטקסט שסביבם שונה.",
+                8000,
+            )
+        else:
+            self.statusBar().showMessage("הפעולה האחרונה בוטלה.", 6000)
 
     def restore_original_text(self) -> None:
         """Go back to the text that the recognition gave."""
@@ -1344,7 +1364,7 @@ class MainWindow(QMainWindow):
             )
             return
         session = self._session_for(entry)
-        if self.editor.toPlainText() != session.current_text:
+        if entry.edited or self.editor.toPlainText() != session.current_text:
             # The user wrote something after the last correction, and
             # going back to the text of the recognition takes it away.
             # The user is asked first.

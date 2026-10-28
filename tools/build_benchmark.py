@@ -26,11 +26,28 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from hebrew_workbench.console import use_utf8
 from hebrew_workbench.benchmark.corpus import load_corpus  # noqa: E402
 
 __all__ = ["build_manifest", "main"]
 
 MANIFEST_FILE = "manifest.json"
+
+
+def relative_to_the_corpus(corpus, path) -> str:
+    """The path of a file of the corpus, as the corpus itself writes it.
+
+    The path of the file and not only its name: two pages of the
+    corpus may have the same name in two different folders, and a
+    manifest that keeps only the name cannot tell them apart.
+    """
+    folder = getattr(corpus, "folder", None)
+    if folder is None:
+        return Path(path).name
+    try:
+        return str(Path(path).resolve().relative_to(Path(folder).resolve()))
+    except ValueError:
+        return Path(path).name
 
 
 def build_manifest(corpus) -> dict:
@@ -39,8 +56,12 @@ def build_manifest(corpus) -> dict:
     for page in corpus.pages:
         pages.append(
             {
-                "image": str(page.image.name),
-                "transcript": str(page.transcript.name) if page.transcript else "",
+                "image": relative_to_the_corpus(corpus, page.image),
+                "transcript": (
+                    relative_to_the_corpus(corpus, page.transcript)
+                    if page.transcript
+                    else ""
+                ),
                 "sha256": page.digest(),
                 "writer": page.writer,
                 "date": page.date,
@@ -71,6 +92,10 @@ def build_manifest(corpus) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The console of Windows cannot write Hebrew in the code page
+    # of the system, and the program would stop in the middle of a
+    # report because of a letter.
+    use_utf8()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--corpus",

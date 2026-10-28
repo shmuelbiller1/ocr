@@ -516,3 +516,204 @@ class BrokenPluginTests(unittest.TestCase):
         # and the proposals that it made are gone.
         self.assertIsNone(self.window.suggestion_modules.module("spelling"))
         self.assertEqual(self.window.suggestions.pending(), [])
+
+
+class AlternativeTests(unittest.TestCase):
+    """A wording that is chosen in the box is applied only when the
+    user presses the button."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        from hebrew_workbench.ui.main_window import MainWindow
+
+        self.home = temporary_home()
+        self.window = MainWindow()
+
+    def tearDown(self) -> None:
+        self.window.close()
+        self.window.deleteLater()
+        self.app.processEvents()
+        self.home.cleanup()
+
+    def add_document(self) -> None:
+        from hebrew_workbench.resources import samples_directory
+
+        samples = samples_directory()
+        if samples is None:
+            self.skipTest("the sample pages are not available here")
+        pages = sorted(samples.glob("scan_page_*.png"))
+        if not pages:
+            self.skipTest("the sample pages are not available here")
+        self.window.project.add(pages[0])
+        self.window._sync_document_list()
+        self.window.doc_list.setCurrentRow(0)
+
+    def make_row(self):
+        """A proposal with two other wordings."""
+        suggestion = Suggestion(
+            module=KIND_GRAMMAR,
+            original="שלום",
+            replacement="שדי",
+            message="מילה אחרת",
+            start=0,
+            end=4,
+            alternatives=("תחתונות", "משלום"),
+        )
+        from hebrew_workbench.ui.suggestions_pane import SuggestionRow
+
+        row = SuggestionRow(suggestion)
+        self.addCleanup(row.deleteLater)
+        return row
+
+    def test_choosing_a_wording_does_not_change_anything(self) -> None:
+        row = self.make_row()
+        chosen: list[tuple] = []
+        row.alternative_chosen_requested.connect(
+            lambda suggestion, text: chosen.append((suggestion, text))
+        )
+        # The user scrolls the box and chooses another wording.
+        row.alternatives.setCurrentText("תחתונות")
+        self.assertEqual(chosen, [])
+        # The wording is applied when the button is pressed.
+        row._accept_clicked()
+        self.assertEqual(len(chosen), 1)
+        self.assertEqual(chosen[0][1], "תחתונות")
+
+    def test_the_button_accepts_the_proposal_when_no_was_chosen(self) -> None:
+        row = self.make_row()
+        accepted: list = []
+        row.accept_requested.connect(lambda suggestion: accepted.append(suggestion))
+        row._accept_clicked()
+        self.assertEqual(len(accepted), 1)
+
+    def test_the_original_proposal_is_not_waiting_after_an_alternative(self) -> None:
+        self.add_document()
+        self.window.editor.setPlainText("שלום")
+        self.window.check_suggestions()
+        session = self.window.suggestions
+        suggestion = Suggestion(
+            module=KIND_GRAMMAR,
+            original="שלום",
+            replacement="שדי",
+            message="מילה אחרת",
+            start=0,
+            end=4,
+            alternatives=("תחתונות",),
+        )
+        session.set_suggestions([suggestion], "שלום")
+        self.window.accept_alternative(suggestion, "תחתונות")
+        # The proposal that was offered is not waiting any more.
+        self.assertEqual(session.pending(), [])
+
+
+class UndoReportTests(unittest.TestCase):
+    """The changes that could not be taken back are told to the user."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        from hebrew_workbench.ui.main_window import MainWindow
+
+        self.home = temporary_home()
+        self.window = MainWindow()
+
+    def tearDown(self) -> None:
+        self.window.close()
+        self.window.deleteLater()
+        self.app.processEvents()
+        self.home.cleanup()
+
+    def add_document(self) -> None:
+        from hebrew_workbench.resources import samples_directory
+
+        samples = samples_directory()
+        if samples is None:
+            self.skipTest("the sample pages are not available here")
+        pages = sorted(samples.glob("scan_page_*.png"))
+        if not pages:
+            self.skipTest("the sample pages are not available here")
+        self.window.project.add(pages[0])
+        self.window._sync_document_list()
+        self.window.doc_list.setCurrentRow(0)
+
+    def test_the_user_is_told_when_a_change_could_not_be_taken_back(self) -> None:
+        self.add_document()
+        self.window.editor.setPlainText("שלום ,עולם")
+        self.window.check_suggestions()
+        self.window.accept_all_suggestions()
+        # The user writes something around the change.
+        self.window.editor.setPlainText("שלום, עולם שלי")
+        self.window.undo_last_batch()
+        message = self.window.statusBar().currentMessage()
+        self.assertIn("לא ניתן לבטל", message)
+
+
+class ManualEditTests(unittest.TestCase):
+    """What the user wrote is not thrown away without a question."""
+
+    def setUp(self) -> None:
+        self.app = application()
+        from hebrew_workbench.ui.main_window import MainWindow
+
+        self.home = temporary_home()
+        self.window = MainWindow()
+
+    def tearDown(self) -> None:
+        self.window.close()
+        self.window.deleteLater()
+        self.app.processEvents()
+        self.home.cleanup()
+
+    def add_document(self) -> None:
+        from hebrew_workbench.resources import samples_directory
+
+        samples = samples_directory()
+        if samples is None:
+            self.skipTest("the sample pages are not available here")
+        pages = sorted(samples.glob("scan_page_*.png"))
+        if not pages:
+            self.skipTest("the sample pages are not available here")
+        self.window.project.add(pages[0])
+        self.window._sync_document_list()
+        self.window.doc_list.setCurrentRow(0)
+
+    def test_the_document_remembers_that_the_user_wrote_in_it(self) -> None:
+        self.add_document()
+        self.window.editor.setPlainText("טקסט")
+        self.assertTrue(self.window.project[0].edited)
+
+    def test_the_question_is_asked_after_the_proposals_were_checked(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        asked: list[bool] = []
+        original = QMessageBox.question
+
+        def question(*args, **kwargs):
+            asked.append(True)
+            return QMessageBox.No
+
+        QMessageBox.question = staticmethod(question)
+        self.addCleanup(lambda: setattr(QMessageBox, "question", original))
+
+        self.add_document()
+        self.window.project[0].original_transcription = "הטקסט של הזיהוי"
+        # The user writes something by hand.
+        self.window.editor.setPlainText("הטקסט של הזיהוי עם תיקון")
+        # The proposals are checked again.
+        self.window.check_suggestions()
+        # Going back to the text of the recognition asks the user.
+        self.window.restore_original_text()
+        self.assertEqual(asked, [True])
+        # The text of the user is still there.
+        self.assertEqual(self.window.editor.toPlainText(), "הטקסט של הזיהוי עם תיקון")
+
+    def test_the_project_keeps_what_the_user_wrote(self) -> None:
+        import tempfile
+        from hebrew_workbench.project import Project
+
+        self.add_document()
+        self.window.editor.setPlainText("טקסט")
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "project.hwproj"
+            self.window.project.save(path)
+            project = Project.load(path)
+            self.assertTrue(project[0].edited)

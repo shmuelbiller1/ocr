@@ -46,6 +46,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from hebrew_workbench.console import use_utf8
+
+# The console of Windows cannot write Hebrew in the code page of the
+# system, and the program would stop in the middle of a report because
+# of a letter.  The console is asked to write in UTF-8 as soon as the
+# tool is loaded, so that every place that writes text is safe.
+use_utf8()
 from hebrew_workbench.benchmark.corpus import (  # noqa: E402
     Corpus,
     Page,
@@ -308,6 +315,15 @@ def measured_pages_of(report: dict) -> set[str]:
     }
 
 
+def _key_of(report: dict) -> str:
+    """The name that tells one measurement from another.
+
+    It is the model that was measured, because two models of the same
+    engine have the same name.
+    """
+    return str(report.get("model") or report.get("engine", ""))
+
+
 def compare_on_the_same_pages(reports: list[dict]) -> dict:
     """Compare the engines on the pages that every engine measured.
 
@@ -322,8 +338,11 @@ def compare_on_the_same_pages(reports: list[dict]) -> dict:
     """
     if not reports:
         return {"pages": [], "engines": [], "pages_outside_the_comparison": {}}
+    # The reports are told apart by the model that was measured.  Two
+    # models of the same engine have the same name, and a comparison
+    # that keeps only one of them is not a comparison.
     pages_of = {
-        str(report.get("engine", "")): measured_pages_of(report) for report in reports
+        _key_of(report): measured_pages_of(report) for report in reports
     }
     common = set.intersection(*pages_of.values())
     outside = {
@@ -349,6 +368,19 @@ def compare_on_the_same_pages(reports: list[dict]) -> dict:
     }
 
 
+def _name_in_the_corpus(corpus_folder: Path, image: Path) -> str:
+    """The name of a page in the corpus: the path and not only the name.
+
+    Two pages of the corpus may have the same name in two different
+    folders, and the manifest tells them apart by their path.
+    """
+    folder = Path(corpus_folder)
+    try:
+        return str(Path(image).resolve().relative_to(folder.resolve()))
+    except ValueError:
+        return Path(image).name
+
+
 def check_against_the_manifest(corpus_folder: Path, pages: list[Page]) -> list[str]:
     """Check that the images are the ones that the manifest holds.
 
@@ -372,16 +404,40 @@ def check_against_the_manifest(corpus_folder: Path, pages: list[Page]) -> list[s
         for entry in manifest.get("pages", [])
     }
     changed = []
+    missing = []
+    names = []
     for page in pages:
-        expected = digests.get(page.image.name)
+        name = _name_in_the_corpus(corpus_folder, page.image)
+        names.append(name)
+        expected = digests.get(name)
         if not expected:
+            # The page is not in the manifest: the manifest was made
+            # for another corpus, and the measurement would not be the
+            # measurement of the corpus that was built.
+            missing.append(name)
             continue
         if page.digest() != expected:
-            changed.append(page.image.name)
-    if changed:
+            changed.append(name)
+    # The pages of the manifest that are not in the corpus any more.
+    gone = [name for name in digests if name not in names]
+    if changed or missing or gone:
+        what = []
+        if changed:
+            what.append(
+                "the image of these pages is not the one that the manifest holds: "
+                + ", ".join(sorted(changed))
+            )
+        if missing:
+            what.append(
+                "these pages are not in the manifest: " + ", ".join(sorted(missing))
+            )
+        if gone:
+            what.append(
+                "these pages of the manifest are not in the corpus any more: "
+                + ", ".join(sorted(gone))
+            )
         raise SystemExit(
-            "the image of these pages is not the one that the manifest holds: "
-            + ", ".join(sorted(changed))
+            ". ".join(what)
             + ". The measurement was not published, because it would not be "
             "the measurement of the corpus. Run tools/build_benchmark.py to "
             "write a manifest of the pages that are there now."
@@ -509,6 +565,10 @@ def resolve_engines(model_ids: list[str], models_folder: Path, timeout: float = 
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The console of Windows cannot write Hebrew in the code page
+    # of the system, and the program would stop in the middle of a
+    # report because of a letter.
+    use_utf8()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--corpus",

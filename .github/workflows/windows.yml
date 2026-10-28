@@ -328,7 +328,16 @@ jobs:
       - name: Check the corpus of the modern school handwriting
         run: |
           set -o pipefail
-          python tools/build_benchmark.py --corpus benchmark/modern_school 2>&1 | tee benchmark-corpus.log
+          # The manifest that is in the repository is the one that says
+          # which pages are measured every time.  The build writes its
+          # own manifest to another place, and the measurement is
+          # checked against the manifest of the repository: a page that
+          # was replaced without the manifest being written again stops
+          # the build.
+          python tools/build_benchmark.py \
+            --corpus benchmark/modern_school \
+            --output build/manifest-of-the-build.json \
+            2>&1 | tee benchmark-corpus.log
       - name: Measure the accuracy on the modern school handwriting
         run: |
           set -o pipefail
@@ -519,7 +528,12 @@ jobs:
         run: |
           set -o pipefail
           cd release
-          sha256sum ./*.zip > ./*.sha256
+          # One digest file for every archive, with the name of the
+          # archive inside it.
+          for archive in ./*.zip; do
+            name="$(basename "$archive")"
+            sha256sum "$name" > "${name}.sha256"
+          done
           # --verify-tag: the release is made for the tag that was
           # pushed, and not for a new tag that the tool would make.
           gh release create "$TAG" \

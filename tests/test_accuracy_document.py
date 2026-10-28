@@ -193,8 +193,6 @@ class SeveralEnginesTests(unittest.TestCase):
         self.assertIn("no dictionary", section)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class NoVerifiedPageTests(unittest.TestCase):
@@ -395,7 +393,7 @@ class CorpusSizeTests(unittest.TestCase):
     def test_the_report_says_how_much_of_the_corpus_was_read(self) -> None:
         text = writer.build_section(self._report())
         self.assertIn("The corpus holds 30 pages.", text)
-        self.assertIn("The build read 5 of them", text)
+        self.assertIn("The build chose 5 of them", text)
         self.assertIn("4 of them could be measured", text)
 
     def test_the_rate_is_not_written_as_a_rate_of_the_whole_corpus(self) -> None:
@@ -458,3 +456,89 @@ class LeftOutPagesTests(unittest.TestCase):
         report["engines"][0]["left_out"] = []
         text = writer.build_section(report)
         self.assertNotIn("left out of the measurement", text)
+
+
+class FailedEnginesTests(unittest.TestCase):
+    """The engines that failed are named, also when there is no rate."""
+
+    def _report(self) -> dict:
+        return {
+            "corpus": {
+                "name": "The Pinkas Dataset",
+                "target": "historical",
+                "pages": 30,
+                "pages_measured": 4,
+            },
+            "pages_read": 5,
+            "measured_corpus_pages": 4,
+            "engines": [
+                {
+                    "engine": "kraken PP-OCRv6 (Apache-2.0)",
+                    "model": "kraken-ppocrv6-small",
+                    "pages": 0,
+                    "pages_seen": 0,
+                    "summary": {
+                        "cer": None,
+                        "wer": None,
+                        "seconds_per_page": None,
+                        "pages_measured": 0,
+                        "measured": False,
+                    },
+                    "failures": [
+                        {"page": "Page 105_1.jpg", "error": "the model is missing"}
+                    ],
+                }
+            ],
+        }
+
+    def test_the_engine_that_failed_is_named(self) -> None:
+        text = writer.build_section(self._report())
+        self.assertIn("kraken-ppocrv6-small", text)
+        self.assertIn("Page 105_1.jpg", text)
+        self.assertIn("failed on 1", text)
+
+    def test_the_rate_is_not_published(self) -> None:
+        text = writer.build_section(self._report())
+        self.assertIn("is not verified", text)
+
+
+class SelectedAndMeasuredTests(unittest.TestCase):
+    """The pages that were chosen and the pages that were measured are
+    two numbers, and the report keeps them apart."""
+
+    def test_the_report_says_how_many_pages_were_measured(self) -> None:
+        report = {
+            "corpus": {
+                "name": "The Pinkas Dataset",
+                "target": "historical",
+                "pages": 30,
+                "pages_measured": 4,
+            },
+            "pages_read": 5,
+            "measured_corpus_pages": 4,
+            "engines": [
+                {
+                    "engine": "kraken PP-OCRv6 (Apache-2.0)",
+                    "model": "kraken-ppocrv6-small",
+                    "pages": 3,
+                    "pages_seen": 4,
+                    "summary": {
+                        "cer": 0.576,
+                        "wer": 0.9375,
+                        "seconds_per_page": 22.4,
+                        "characters_reference": 10798,
+                        "words_reference": 2176,
+                        "pages_measured": 3,
+                        "measured": True,
+                    },
+                    "failures": [],
+                }
+            ],
+        }
+        text = writer.build_section(report)
+        self.assertIn("The build chose 5 of them", text)
+        self.assertIn("The rate above is of the 3 pages that were measured", text)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -11,4 +11,3 @@ dist/
 .ruff_cache/
 selftest-*.json
 *.hwproj
-benchmark/modern_school/manifest.json

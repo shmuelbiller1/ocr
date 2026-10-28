@@ -208,6 +208,22 @@ class SuggestionSession:
                 shift += change
         return position + shift
 
+    def unshift(self, position: int) -> int:
+        """The place of the current text in the places of the round.
+
+        The proposals of a round keep the places they had when the
+        round began, and the changes that were accepted in the round
+        moved them.  A place that was found in the text as it is now
+        has to be changed back into the place of the round, or the
+        change of the round would be applied to it a second time.
+        """
+        result = position
+        for end, change in reversed(self._round_shifts):
+            # The change moved every place that was after it.
+            if result - change >= end:
+                result -= change
+        return result
+
     def place_of(self, suggestion: Suggestion) -> tuple[int, int] | None:
         """Where the text of a proposal is now, after the accepted changes."""
         start = self.shift(suggestion.start)
@@ -278,8 +294,15 @@ class SuggestionSession:
                 len(suggestion.replacement) - len(suggestion.original),
             )
         )
-        self.remove(suggestion)
-        self.refused = [item for item in self.refused if item is not suggestion]
+        # The proposal that was accepted is taken out of the list of the
+        # proposals that are waiting for an answer.  The proposal that
+        # was given may be another object with the same text - the one
+        # that the user chose in the list of the alternatives, for
+        # example - and the one that is in the list is the one that has
+        # to go.
+        matched = self.proposal(suggestion) or suggestion
+        self.remove(matched)
+        self.refused = [item for item in self.refused if item is not matched]
         return new_text, start
 
     # -- several proposals at once ----------------------------------------
@@ -355,14 +378,34 @@ class SuggestionSession:
                 original=word,
                 replacement=suggestion.replacement,
                 message=suggestion.message,
-                start=place,
-                end=place + len(word),
+                # The place is the place of the text as it is now, and
+                # it is changed back into the place of the round, or
+                # the changes of the round would be applied to it a
+                # second time.
+                start=self.unshift(place),
+                end=self.unshift(place) + len(word),
                 kind=suggestion.kind,
                 alternatives=suggestion.alternatives,
             )
             for place in places
         ]
-        return self.accept_many(proposals)
+        outcome = self.accept_many(proposals)
+        if outcome is None:
+            return None
+        # The proposals about a text that this change replaced are of
+        # no use any more, and they are taken away: a proposal that
+        # cannot be applied any more is not shown to the user.
+        self._drop_the_proposals_that_do_not_fit()
+        return outcome
+
+    def _drop_the_proposals_that_do_not_fit(self) -> None:
+        """Take away the proposals whose text is not in the text any more."""
+        self.suggestions = [
+            item for item in self.suggestions if self.place_of(item) is not None
+        ]
+        self.refused = [
+            item for item in self.refused if self.place_of(item) is not None
+        ]
 
     @property
     def has_batch(self) -> bool:
@@ -404,6 +447,19 @@ class SuggestionSession:
         self.accepted = [
             change for change in self.accepted if change.batch != last
         ]
+        # The text around the changes that were not taken back may be a
+        # different text now.  The text that was kept with them is not
+        # the text that is there, and they are found by their place
+        # alone, so that they can still be taken back.
+        for change in self.accepted:
+            if change.context_stale:
+                continue
+            piece = change.before + change.replacement + change.after
+            if not piece:
+                continue
+            start = change.position
+            if result[start : start + len(piece)] != piece:
+                change.context_stale = True
         self._round_shifts = []
         # The proposals of the last round have the places of the text
         # as it was before the changes were taken back, and they are of
@@ -471,6 +527,12 @@ class SuggestionSession:
         places of the proposals of the next round are not moved by them.
         """
         self.accepted = [AcceptedChange.from_dict(change) for change in changes]
+        # The groups of the saved project keep their numbers, and the
+        # next group that the user makes has a number of its own: two
+        # groups with the same number would be taken back together.
+        self._batch_number = max(
+            (change.batch for change in self.accepted), default=0
+        )
         self._round_shifts = []
 
     def change_log(self) -> list[dict]:

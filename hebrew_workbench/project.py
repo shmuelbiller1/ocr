@@ -83,6 +83,11 @@ class DocumentEntry:
     #: The corrections that the user accepted, in the order they were
     #: accepted.  They are kept so that they can be shown and undone.
     changes: list[dict] = field(default_factory=list)
+    #: Did the user write something in this document by hand?  It is
+    #: kept so that the program knows that going back to the text of
+    #: the recognition would take away what was written, and it asks
+    #: the user first.
+    edited: bool = False
 
     @property
     def file_path(self) -> Path:
@@ -105,6 +110,7 @@ class DocumentEntry:
             "engine_name": self.engine_name,
             "notes": self.notes,
             "changes": list(self.changes),
+            "edited": bool(self.edited),
         }
 
     @classmethod
@@ -117,6 +123,7 @@ class DocumentEntry:
             engine_name=str(data.get("engine_name", "")),
             notes=str(data.get("notes", "")),
             changes=_read_changes(data.get("changes", [])),
+            edited=bool(data.get("edited", False)),
         )
 
 

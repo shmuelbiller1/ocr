@@ -265,6 +265,17 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_the_notes_of_the_release_are_the_notes_of_the_repository(self) -> None:
         self.assertIn("docs/RELEASE_NOTES.md", self.text)
 
+    def test_every_archive_has_a_digest_file_of_its_own(self) -> None:
+        """A digest file that is written with a glob in its name is a
+        file whose name is the glob itself."""
+        self.assertIn('sha256sum "$name" > "${name}.sha256"', self.text)
+        self.assertNotIn("sha256sum ./*.zip > ./*.sha256", self.text)
+
+    def test_the_manifest_of_the_repository_is_the_one_that_is_checked(self) -> None:
+        """The build writes its own manifest to another place, and the
+        measurement is checked against the manifest of the repository."""
+        self.assertIn("--output build/manifest-of-the-build.json", self.text)
+
 
 class ReleaseNotesTests(unittest.TestCase):
     """The notes of the release say what works and what does not."""

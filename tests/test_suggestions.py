@@ -593,3 +593,237 @@ class KeepWordTests(unittest.TestCase):
     def test_without_a_list_the_word_is_known_only_in_this_session(self) -> None:
         module = SpellingModule()
         self.assertFalse(module.keep_word("עולם"))
+
+
+class KeptAlternativeTests(unittest.TestCase):
+    """A word that the user keeps is not proposed any more, even when it
+    is another spelling of another word."""
+
+    def test_keeping_an_alternative_stops_the_proposal(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "words.txt"
+            path.write_text("מקור/מקורות\n", encoding="utf-8")
+            module = SpellingModule()
+            module.set_dictionary(path)
+            # The alternative is proposed before the word is kept.
+            self.assertEqual(len(module.check("מקורות")), 1)
+            self.assertTrue(module.keep_word("מקורות"))
+            # After the word is kept, it is not proposed any more.
+            self.assertEqual(module.check("מקורות"), [])
+
+    def test_the_kept_word_is_not_proposed_after_a_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "words.txt"
+            path.write_text("מקור/מקורות\n", encoding="utf-8")
+            module = SpellingModule()
+            module.set_dictionary(path)
+            self.assertTrue(module.keep_word("מקורות"))
+            # The program starts again with the same file.
+            again = SpellingModule()
+            again.set_dictionary(path)
+            self.assertEqual(again.check("מקורות"), [])
+
+
+class WordListWithoutANewlineTests(unittest.TestCase):
+    """A word is added as a line of its own, and the last line of the
+    file of the user is not spoiled."""
+
+    def test_a_word_is_added_to_a_file_that_does_not_end_with_a_line(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "words.txt"
+            path.write_text("שלום", encoding="utf-8")
+            module = SpellingModule()
+            module.set_dictionary(path)
+            self.assertTrue(module.keep_word("עולם"))
+            self.assertEqual(path.read_text(encoding="utf-8"), "שלום\nעולם\n")
+
+    def test_the_file_of_the_user_is_read_again_the_right_way(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "words.txt"
+            path.write_text("שלום", encoding="utf-8")
+            module = SpellingModule()
+            module.set_dictionary(path)
+            self.assertTrue(module.keep_word("עולם"))
+            again = SpellingModule()
+            again.set_dictionary(path)
+            self.assertEqual(again.word_count, 2)
+            self.assertEqual(again.check("שלום עולם"), [])
+
+
+class RestoredBatchTests(unittest.TestCase):
+    """The groups of a saved project keep their numbers, and the next
+    group of the user has a number of its own."""
+
+    def test_the_next_group_has_a_number_of_its_own(self) -> None:
+        session = SuggestionSession("שלום ,עולם")
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original=" ,",
+                    replacement=",",
+                    message="אין רווח לפני הפסיק",
+                    start=4,
+                    end=6,
+                )
+            ],
+            "שלום ,עולם",
+        )
+        session.accept_many(session.pending())
+        log = session.change_log()
+        self.assertEqual(len(log), 1)
+
+        # The project is opened again.
+        again = SuggestionSession("שלום,עולם")
+        again.restore_accepted(log)
+        again.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original="עולם",
+                    replacement="תבנית",
+                    message="מילה אחרת",
+                    start=5,
+                    end=9,
+                )
+            ],
+            "שלום,עולם",
+        )
+        outcome = again.accept_many(again.pending())
+        self.assertIsNotNone(outcome)
+        _text, changes = outcome
+        # The new group is not the group of the saved project.
+        self.assertNotEqual(changes[0].batch, log[0]["batch"])
+
+    def test_taking_back_the_last_group_does_not_take_back_the_saved_one(self) -> None:
+        session = SuggestionSession("שלום ,עולם")
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original=" ,",
+                    replacement=",",
+                    message="אין רווח לפני הפסיק",
+                    start=4,
+                    end=6,
+                )
+            ],
+            "שלום ,עולם",
+        )
+        session.accept_many(session.pending())
+        log = session.change_log()
+
+        again = SuggestionSession("שלום,עולם")
+        again.restore_accepted(log)
+        again.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original="עולם",
+                    replacement="תבנית",
+                    message="מילה אחרת",
+                    start=5,
+                    end=9,
+                )
+            ],
+            "שלום,עולם",
+        )
+        again.accept_many(again.pending())
+        text = again.undo_last_batch()
+        # The saved change is still there.
+        self.assertEqual(text, "שלום,עולם")
+        self.assertEqual(len(again.accepted), 1)
+
+
+class EveryOccurrenceAfterAChangeTests(unittest.TestCase):
+    """Changing a word in every place, after another change was
+    accepted in the same round."""
+
+    def make_session(self) -> SuggestionSession:
+        text = "a cat cat"
+        session = SuggestionSession(text)
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original="a",
+                    replacement="aaaa",
+                    message="האות הראשונה",
+                    start=0,
+                    end=1,
+                ),
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original="cat",
+                    replacement="dog",
+                    message="המילה",
+                    start=2,
+                    end=5,
+                ),
+            ],
+            text,
+        )
+        return session
+
+    def test_the_word_is_changed_in_every_place(self) -> None:
+        session = self.make_session()
+        first = session.pending()[0]
+        self.assertIsNotNone(session.accept(first))
+        # The word "cat" is changed in both of its places.
+        second = session.pending()[0]
+        self.assertEqual(second.original, "cat")
+        outcome = session.accept_every_occurrence(second)
+        self.assertIsNotNone(outcome)
+        text, changes = outcome
+        self.assertEqual(text, "aaaa dog dog")
+        self.assertEqual(len(changes), 2)
+
+    def test_the_proposals_that_do_not_fit_any_more_are_taken_away(self) -> None:
+        session = self.make_session()
+        session.accept(session.pending()[0])
+        second = session.pending()[0]
+        session.accept_every_occurrence(second)
+        # Nothing is left that cannot be applied.
+        for proposal in session.pending():
+            self.assertIsNotNone(session.place_of(proposal))
+
+
+class UndoBatchContextTests(unittest.TestCase):
+    """The changes that were not taken back can still be taken back
+    after a group was taken back."""
+
+    def test_the_change_that_stayed_can_still_be_taken_back(self) -> None:
+        text = "a b"
+        session = SuggestionSession(text)
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original="a",
+                    replacement="A",
+                    message="האות הראשונה",
+                    start=0,
+                    end=1,
+                )
+            ],
+            text,
+        )
+        session.accept_many(session.pending())
+        session.set_suggestions(
+            [
+                Suggestion(
+                    module=KIND_GRAMMAR,
+                    original="b",
+                    replacement="B",
+                    message="האות השנייה",
+                    start=2,
+                    end=3,
+                )
+            ],
+            "A b",
+        )
+        session.accept(session.pending()[0])
+        # The group is taken back: the text is "a B" again.
+        self.assertEqual(session.undo_last_batch(), "a B")
+        # The change that was not taken back can still be taken back.
+        self.assertEqual(session.undo_all(), "a b")
