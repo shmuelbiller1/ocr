@@ -68,8 +68,10 @@ class OneClickTests(unittest.TestCase):
             specs[filename] = (len(data), digest, "CC-BY-NC-SA-4.0",
                                "https://example.invalid/source")
             pinned[filename] = (len(data), digest)
-        with patch.object(build_one_click, "FULL_EXTRA_SPECS", specs), \\
-             patch.object(portable_launcher, "FULL_EXTRA_HASHES", pinned):
+        with (
+            patch.object(build_one_click, "FULL_EXTRA_SPECS", specs),
+            patch.object(portable_launcher, "FULL_EXTRA_HASHES", pinned),
+        ):
             build_one_click.build(self.release, self.model, output, folder)
             with zipfile.ZipFile(output) as archive:
                 manifest = json.loads(archive.read(build_one_click.MANIFEST_NAME))
