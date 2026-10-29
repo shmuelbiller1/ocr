@@ -23,6 +23,13 @@ Windows, that works without an internet connection and without Python.
   את ההצעות שסומנו, שינוי מילה בכל המקומות שבהם היא מופיעה, שמירת
   מילה במילון של המשתמש, ביטול הפעולה האחרונה כמעשה אחד, וחזרה לטקסט
   שהזיהוי נתן.  שום הצעה אינה מוחלת בלי לחיצה של המשתמש.
+* העורך נעול בזמן הזיהוי, כדי שמה שהמשתמש כותב בינתיים לא ייעלם
+  כשתוצאת הזיהוי מחליפה את הטקסט.
+* אפשר לבטל את הורדת המודל, והורדה שבוטלה אינה משאירה קובץ מאחור.
+* דף אמיתי אחד של כתב יד עברי מודרני נמצא במאגר, וכל בנייה קוראת
+  אותו בכל המנועים ומפרסמת את מה שכל מנוע קרא.  הדיוק על חומר בית
+  הספר עדיין **לא מאומת**, כי לאף דף אין עדיין תמליל שנבדק על ידי
+  מישהו אחר.
 
 **מה עדיין לא עובד**
 
@@ -69,3 +76,14 @@ verified** yet: there is no page with a transcript that was checked by
 somebody else.  The tools that build the corpus and that measure the
 engines on it are in the repository, and `docs/MODERN_SCHOOL_BENCHMARK.md`
 says what the school has to add.
+
+One real page of contemporary handwritten Hebrew is in the repository,
+and every build reads it with every engine and publishes what each of
+them read.  No rate is calculated from it: without a transcript that
+somebody else checked, the number would be the number of the mistakes
+of the transcript and not of the engine.
+
+The editor is closed while the recognition runs, so that what the user
+writes in the meantime is not lost when the result replaces the text.
+The download of a model can be stopped, and a download that was stopped
+leaves nothing behind.

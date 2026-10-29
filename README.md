@@ -28,7 +28,11 @@ the engine, but they are not what the program is made for.
 > 55.7% (medium model) over the 4 pages whose
 > ground truth is complete, so the result of a recognition is a **starting
 > point that has to be read by a person**, and the program says so after
-> every recognition.  The numbers and what they mean are in
+> every recognition.  The second engine reads those old pages with 73.0%
+> - the segmenter that came with it cuts the lines of the old cursive in
+> two, and it was written for the modern cursive and not for these pages;
+> the whole explanation is in `docs/OCR_ACCURACY.md`.  The numbers and
+> what they mean are in
 > `docs/OCR_ACCURACY.md`; the table below says what is real and what is
 > not.
 
