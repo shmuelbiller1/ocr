@@ -14,6 +14,8 @@ class ReleaseVersionTests(unittest.TestCase):
             self.assertIn(f'HebrewNotesWorkbench-{__version__}-{suffix}', notes)
         for name in (NOTICE_NAME, MANIFEST_NAME, MISHKEFET_NOTICE_NAME):
             self.assertIn(name.removeprefix('HebrewNotesWorkbench/'), notes)
+        self.assertIn('בגרסת ZIP', notes)
+        self.assertIn('כלולים בגרסת All Models בלבד', notes)
         self.assertIn('CC-BY-NC-SA-4.0', notes)
         self.assertIn('still unverified', notes)
 

@@ -43,11 +43,13 @@ Windows, that works without an internet connection and without Python.
 
 **מה יש בגרסה הזאת**
 
-* זיהוי כתב יד עם kraken ומודל PP-OCRv6 (Apache-2.0).  המודל מותקן
-  על ידי המשתמש, ונבדק מול הטבעה שפורסמה על יד מפרסמיו.
+* זיהוי כתב יד עם kraken ומודל PP-OCRv6 (Apache-2.0). המודל הקטן כלול
+  בגרסאות Lite ו-All Models. בגרסת ZIP יש להתקין אותו בנפרד לפני עבודה
+  ללא אינטרנט. המודלים נבדקים מול הטבעות SHA-256 קבועות.
 * מנוע שני, "Mishkefet-v1", שנכתב לכתב יד עברי מודרני: הקוד שלו
   (רישיון MIT) מצורף לתוכנה, והמשקלים שלו (רישיון CC-BY-NC-SA-4.0, שימוש
-  לא מסחרי) מותקנים על ידי המשתמש ונבדקים מול טבעת SHA-256.  המנוע
+  לא מסחרי) כלולים בגרסת All Models בלבד. ב-Lite וב-ZIP אפשר להתקינם
+  בנפרד, בהסכמה לרישיון, לפני עבודה ללא אינטרנט; הם נבדקים מול SHA-256. המנוע
   קורא בלי מילון ובלי מודל שפה, כדי שהמדידה תהיה מדידה של המנוע עצמו.
 * מנוע הזיהוי ומודלי השפה הם תוספים: אפשר להתקין, להסיר ולבחור אותם
   במסך "הגדרות".
@@ -105,8 +107,9 @@ the press of the user.
 
 There is a second engine, *Mishkefet-v1*, which was written for modern
 Hebrew cursive: its code (MIT) is shipped with the program, and its
-weights (CC-BY-NC-SA-4.0, non-commercial) are installed by the user and
-checked against a SHA-256 digest.  Its default/raw benchmark profile reads with the best path alone,
+weights (CC-BY-NC-SA-4.0, non-commercial) are included in All Models only.
+Lite and ZIP users can install them separately after licence confirmation,
+before going offline. The weights are checked against a SHA-256 digest.  Its default/raw benchmark profile reads with the best path alone,
 without a dictionary and without a language model, so that a measurement
 measures the engine and not the word list.  The search that led to it and
 the models that were not used are in `docs/ENGINES.md`.
@@ -131,8 +134,9 @@ leaves nothing behind.
 ## Experimental decoding comparison
 
 Settings now exposes Raw (default), Beam + three scales, and Assisted with
-optional non-commercial character/word models, installed separately after
-licence confirmation and verified against pinned hashes. Both raw and alternative
+optional non-commercial character/word models, included in All Models and
+available separately for Lite/ZIP after licence confirmation. They are
+verified against pinned hashes. Both raw and alternative
 readings are retained and shown side by side; applying the alternative requires
 confirmation and can be undone. These profiles do not change the raw benchmark
 or establish an accuracy improvement on school notes. See `docs/ASSISTED_DECODING.md`.
