@@ -10,10 +10,13 @@
    - **Assisted**: beam width 12, three scales, character LM weight 0.4 and
      word-prior weight 0.2. This is an explicitly language-assisted pipeline,
      not a raw-model benchmark.
-3. Assisted mode also needs **Install optional language models** in Settings.
-   The confirmation displays sources, sizes and the **CC-BY-NC-SA-4.0** terms
-   before downloading. These files are not bundled, and no scan is uploaded.
-   The corresponding remove button deletes only the two optional files.
+3. **All Models — Noncommercial** already includes the character and word
+   language-model files: no additional download is needed for assisted mode.
+   **Lite / regular ZIP** users must first install Mishkefet and choose
+   **Install optional language models** in Settings. The confirmation displays
+   sources, sizes and the **CC-BY-NC-SA-4.0** terms before downloading.
+   No scan is uploaded. The remove button deletes only the two optional files;
+   if removed, they must be restored before assisted decoding can run offline.
 4. Run OCR normally. The editor and original OCR text receive **raw text**.
    The **Raw / assisted comparison** dock displays both readings side by side.
    To use the alternative, click its button and confirm. Replacement is undoable;
@@ -33,7 +36,9 @@ Model repository revision: `16380452d62839f369c36f17312c94d5d1af1768`.
 Metadata checked using the author's [file tree API](https://huggingface.co/api/models/itayinbar/Mishkefet-v1/tree/main?recursive=true&expand=false)
 and [model card](https://huggingface.co/itayinbar/Mishkefet-v1/blob/16380452d62839f369c36f17312c94d5d1af1768/README.md).
 The card's CC-BY-NC-SA-4.0 applies to the model repository; the upstream code
-is MIT. These data files are not redistributed by this project.
+is MIT. The All Models — Noncommercial EXE redistributes the unmodified data
+files with attribution and a licence link. Lite and the regular ZIP do not
+include them; their optional installation uses the download flow below.
 
 | File | Bytes | Published LFS SHA-256 |
 | --- | ---: | --- |

@@ -1,15 +1,55 @@
-# הערות הגרסה — v0.3.0
+# הערות הגרסה — v0.4.0
+
+## Download / הורדה
+
+For Windows x64, choose **one** of these downloads:
+
+| Download | What is included | Use |
+| --- | --- | --- |
+| `HebrewNotesWorkbench-0.4.0-one-click.exe` (**Lite**) | App, OCR worker and Kraken PP-OCRv6 small (Apache-2.0) | Recommended starting point; no Python, installer or separate model download. |
+| `HebrewNotesWorkbench-0.4.0-all-models-noncommercial-one-click.exe` | App, worker, Kraken small + medium, Mishkefet-v1, character LM and word LM | **Noncommercial use only** for the bundled Mishkefet assets (CC-BY-NC-SA-4.0). Includes assisted decoding offline. |
+| `HebrewNotesWorkbench-0.4.0-win64.zip` | App and worker, without recognition weights | Manual/portable folder option; install the required models before going offline. |
+
+Download the matching `.sha256` file to verify a binary's SHA-256 checksum.
+Double-click an EXE; it unpacks automatically into a per-user cache. First
+launch can take time and requires free disk space for extraction. The onefile
+payload is temporarily extracted on each launch. Additional models selected
+later require a download, but the models listed for each EXE work locally.
+Nothing is uploaded. These EXEs are not claimed to be digitally signed.
+
+The noncommercial model licence does not replace the surrounding application
+and dependency licences. Application/dependency licence texts are included in
+`LICENCES`. The Mishkefet notice includes attribution, original model sources
+and an online link to the CC-BY-NC-SA-4.0 terms; its full legal text is not
+bundled. Reading that link is not required to run OCR. See `docs/THIRD_PARTY.md`
+and use Lite if the noncommercial restrictions do not suit your intended use.
+
+## Changes in v0.4.0
+
+- Two one-click offline Windows editions, with pinned model-integrity checks.
+- Optional Raw / Beam + three scales / Assisted comparison. Raw remains the
+  default; alternatives are separate, labelled and never silently adopted.
+- Conservative worker cleanup: about 31.6 MB less unpacked and 13.5 MB less
+  compressed in the same-run worker-only comparison. No models or image codecs
+  removed, and no accuracy, speed or RAM improvement claimed.
+- Packaged Windows launch, local image/PDF recognition, all three recognition
+  checkpoints and assisted decoding checked in CI. School-note accuracy is
+  **still unverified** without independently checked transcripts.
+
+## Existing features and limitations
 
 Hebrew Notes Workbench - a program for handwritten Hebrew-script notes on
 Windows, that works without an internet connection and without Python.
 
 **מה יש בגרסה הזאת**
 
-* זיהוי כתב יד עם kraken ומודל PP-OCRv6 (Apache-2.0).  המודל מותקן
-  על ידי המשתמש, ונבדק מול הטבעה שפורסמה על יד מפרסמיו.
+* זיהוי כתב יד עם kraken ומודל PP-OCRv6 (Apache-2.0). המודל הקטן כלול
+  בגרסאות Lite ו-All Models. בגרסת ZIP יש להתקין אותו בנפרד לפני עבודה
+  ללא אינטרנט. המודלים נבדקים מול הטבעות SHA-256 קבועות.
 * מנוע שני, "Mishkefet-v1", שנכתב לכתב יד עברי מודרני: הקוד שלו
   (רישיון MIT) מצורף לתוכנה, והמשקלים שלו (רישיון CC-BY-NC-SA-4.0, שימוש
-  לא מסחרי) מותקנים על ידי המשתמש ונבדקים מול טבעת SHA-256.  המנוע
+  לא מסחרי) כלולים בגרסת All Models בלבד. ב-Lite וב-ZIP אפשר להתקינם
+  בנפרד, בהסכמה לרישיון, לפני עבודה ללא אינטרנט; הם נבדקים מול SHA-256. המנוע
   קורא בלי מילון ובלי מודל שפה, כדי שהמדידה תהיה מדידה של המנוע עצמו.
 * מנוע הזיהוי ומודלי השפה הם תוספים: אפשר להתקין, להסיר ולבחור אותם
   במסך "הגדרות".
@@ -48,10 +88,12 @@ Windows, that works without an internet connection and without Python.
 
 This is an offline Windows program for Hebrew handwriting: import a scan,
 recognise the text, correct it, and print it.  Python is not needed.  The
-recognition engine and its model are installed only when the user asks for
-it, and the model file is checked against the digest published by its
-authors.  Nothing is uploaded anywhere.  The licence texts of every bundled
-component are in the folder LICENCES.
+regular ZIP requires recognition weights to be installed when the user asks;
+the one-click editions already include the models listed above, and
+the model file is checked against the digest published by its authors.  Nothing is uploaded anywhere.  Application/dependency licence texts are in `LICENCES`. Bundled model source
+and attribution details are in `models/MODEL-SOURCE.txt` and
+`models/OFFLINE-MODELS.json`. In the all-models edition,
+`LICENCES/MISHKEFET-MODEL-NOTICE.txt` links to the full Mishkefet licence online.
 
 The program asks before it closes a window with work that was not saved,
 and before it replaces a file that is already there.
@@ -65,8 +107,9 @@ the press of the user.
 
 There is a second engine, *Mishkefet-v1*, which was written for modern
 Hebrew cursive: its code (MIT) is shipped with the program, and its
-weights (CC-BY-NC-SA-4.0, non-commercial) are installed by the user and
-checked against a SHA-256 digest.  Its default/raw benchmark profile reads with the best path alone,
+weights (CC-BY-NC-SA-4.0, non-commercial) are included in All Models only.
+Lite and ZIP users can install them separately after licence confirmation,
+before going offline. The weights are checked against a SHA-256 digest.  Its default/raw benchmark profile reads with the best path alone,
 without a dictionary and without a language model, so that a measurement
 measures the engine and not the word list.  The search that led to it and
 the models that were not used are in `docs/ENGINES.md`.
@@ -91,8 +134,9 @@ leaves nothing behind.
 ## Experimental decoding comparison
 
 Settings now exposes Raw (default), Beam + three scales, and Assisted with
-optional non-commercial character/word models, installed separately after
-licence confirmation and verified against pinned hashes. Both raw and alternative
+optional non-commercial character/word models, included in All Models and
+available separately for Lite/ZIP after licence confirmation. They are
+verified against pinned hashes. Both raw and alternative
 readings are retained and shown side by side; applying the alternative requires
 confirmation and can be undone. These profiles do not change the raw benchmark
 or establish an accuracy improvement on school notes. See `docs/ASSISTED_DECODING.md`.

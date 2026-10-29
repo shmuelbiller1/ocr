@@ -20,4 +20,4 @@ __all__ = ["APP_NAME", "APP_ID", "__version__"]
 APP_NAME = "Hebrew Notes Workbench"
 APP_ID = "hebrew-workbench"
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

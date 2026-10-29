@@ -89,16 +89,19 @@ open work:
 3. The PyInstaller exception only covers the bundling of the executable;
    the licences of the bundled libraries keep applying.
 
-## Downloaded on request, not bundled
+## Standard ZIP: downloaded on request, not bundled
+
+This section describes manual ZIP installation. The one-click editions and
+which assets they bundle are described in the next section.
 
 | Component | Version | License | Where it is used |
 | --- | --- | --- | --- |
 | kraken PP-OCRv6 model | see `docs/OCR_ACCURACY.md` | Apache-2.0 | Recognition weights, downloaded on request with a checksum check |
 | Mishkefet-v1 model | 115.3 MB (120,864,761 bytes) | **CC-BY-NC-SA-4.0 — not a commercial licence** | Recognition weights of the second engine, downloaded on request from the place where the author published them, and checked against the SHA-256 `0dfb82e4…f6fd850b88` |
 
-The weights of *Mishkefet-v1* are **not** bundled with the program and are
-not redistributed by it: the user downloads them, on request, from the
-place where the author published them.  The licence is not a commercial
+The standard ZIP does not bundle *Mishkefet-v1*: its user downloads the weights
+on request from the author's repository. The separately labelled All Models —
+Noncommercial edition redistributes the unmodified assets as described below.  The licence is not a commercial
 one, so the model may be used for non-commercial purposes only, and a
 modified file keeps the same licence.  A user who needs a commercial
 licence has to ask the author of the model.  The program shows the licence
