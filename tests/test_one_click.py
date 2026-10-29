@@ -7,6 +7,7 @@ standard PyInstaller one-file EXE.
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
 import unittest
 import zipfile
@@ -52,6 +53,44 @@ class OneClickTests(unittest.TestCase):
         self.assertTrue((first / "ocr-worker" / "ocr-worker.exe").exists())
         second = portable_launcher.unpack_once(output, self.root / "cache")
         self.assertEqual(first, second)
+
+    def test_all_five_models_are_bundled_and_verified_offline(self):
+        output = self.root / "full-offline.zip"
+        folder = self.root / "full-models"
+        folder.mkdir()
+        specs = {}
+        pinned = {}
+        for filename in ("medium.safetensors", "mishkefet-v1.pt",
+                         "hebrew_char6.pkl", "hebrew_words.pkl"):
+            data = ("synthetic fixture " + filename).encode("utf-8")
+            (folder / filename).write_bytes(data)
+            digest = hashlib.sha256(data).hexdigest()
+            specs[filename] = (len(data), digest, "CC-BY-NC-SA-4.0",
+                               "https://example.invalid/source")
+            pinned[filename] = (len(data), digest)
+        with patch.object(build_one_click, "FULL_EXTRA_SPECS", specs), \\
+             patch.object(portable_launcher, "FULL_EXTRA_HASHES", pinned):
+            build_one_click.build(self.release, self.model, output, folder)
+            with zipfile.ZipFile(output) as archive:
+                manifest = json.loads(archive.read(build_one_click.MANIFEST_NAME))
+                self.assertEqual(manifest["edition"], "full-noncommercial")
+                self.assertEqual(len(manifest["models"]), 5)
+                self.assertIn(build_one_click.MISHKEFET_NOTICE_NAME, archive.namelist())
+            extracted = portable_launcher.unpack_once(output, self.root / "all-model-cache")
+            for filename in pinned:
+                self.assertEqual((extracted / "models" / filename).read_bytes(),
+                                 (folder / filename).read_bytes())
+            # A modified or missing language model invalidates the whole edition.
+            (extracted / "models" / "hebrew_words.pkl").write_bytes(b"changed")
+            with self.assertRaisesRegex(RuntimeError, "incomplete offline cache"):
+                portable_launcher.unpack_once(output, self.root / "all-model-cache")
+
+    def test_full_model_bundle_fails_if_any_model_missing(self):
+        folder = self.root / "full-models"
+        folder.mkdir()
+        with self.assertRaisesRegex(ValueError, "failed verification"):
+            build_one_click.build(self.release, self.model, self.root / "bad-full.zip",
+                                  full_models_dir=folder)
 
     def test_rejects_wrong_model_digest_before_packaging(self):
         self.model.write_bytes(b"different weights")
