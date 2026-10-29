@@ -153,6 +153,20 @@ class SettingsDialogTests(unittest.TestCase):
         self.assertIn("grammar", self.dialog.active_boxes)
         self.assertIn("style", self.dialog.active_boxes)
 
+    def test_kraken_medium_has_its_own_selectable_engine(self) -> None:
+        """The complete offline package must expose its medium model in Settings."""
+        medium = self.registry.get("kraken-medium-worker")
+        self.assertIsNotNone(medium)
+        self.assertEqual(
+            self.registry.options_of(medium)["model_id"], "kraken-ppocrv6-medium"
+        )
+        selector = self.dialog.active_boxes["ocr"]
+        index = selector.findData("kraken-medium-worker")
+        self.assertGreaterEqual(index, 0)
+        selector.setCurrentIndex(index)
+        self.assertEqual(self.registry.settings.active["ocr"], "kraken-medium-worker")
+        self.assertIn("Medium", selector.currentText())
+
     def test_the_active_plugin_of_a_kind_can_be_chosen(self) -> None:
         box = self.dialog.active_boxes["ocr"]
         index = box.findData("kraken-worker")
