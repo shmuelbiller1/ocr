@@ -77,7 +77,8 @@ def make_worker_engine(options: dict | None = None) -> "WorkerEngine":
     # engine that reads the model is named as well, because the worker
     # can run more than one of them.
     engine = str(settings.get("engine", artifact.engine if artifact else "kraken"))
-    return WorkerEngine(worker, model_path, artifact_id=artifact_id, engine=engine)
+    return WorkerEngine(worker, model_path, artifact_id=artifact_id, engine=engine,
+                        mode=settings.get("decoding_mode", "raw"))
 
 
 def _display_name(engine: str, artifact_id: str) -> str:
@@ -108,12 +109,17 @@ class WorkerEngine:
         timeout_seconds: float = 1800.0,
         artifact_id: str = "kraken-ppocrv6-small",
         engine: str = "kraken",
+        mode: str = "raw",
     ) -> None:
         from .models import MODEL_ARTIFACTS
 
         artifact = MODEL_ARTIFACTS.get(artifact_id)
         if artifact is None or artifact.engine != engine:
             raise ValueError("The engine and model do not match")
+        from .mishkefet_decoding import decoding_mode
+        self.mode = decoding_mode({"decoding_mode": mode})
+        if engine != "mishkefet" and self.mode != "raw":
+            raise ValueError("Assisted decoding requires Mishkefet")
         self.worker = Path(worker)
         self.model_path = Path(model_path)
         self.timeout_seconds = timeout_seconds
@@ -126,11 +132,20 @@ class WorkerEngine:
         #: shown next to the name of another one.
         self.name = _display_name(engine, artifact_id)
 
+    def configure(self, options: dict) -> None:
+        from .mishkefet_decoding import decoding_mode
+        mode = decoding_mode(options)
+        if self.engine != "mishkefet" and mode != "raw":
+            raise ValueError("Assisted decoding requires Mishkefet")
+        self.mode = mode
+
     def manifest(self) -> EngineManifest:
         if self.engine == "mishkefet":
             from .mishkefet import build_manifest
 
-            return build_manifest(self.model_path, self.artifact_id)
+            from dataclasses import replace
+            manifest = build_manifest(self.model_path, self.artifact_id)
+            return replace(manifest, notes=manifest.notes + f" Decoding: {self.mode}; primary output is raw.")
         from .kraken_local import build_manifest
 
         return build_manifest(self.model_path, self.artifact_id)
@@ -161,6 +176,7 @@ class WorkerEngine:
                         "document": str(document),
                         "model_path": str(self.model_path),
                         "engine": self.engine,
+                        "decoding_mode": self.mode,
                     },
                     ensure_ascii=False,
                 ),
@@ -245,6 +261,7 @@ class WorkerEngine:
                 number=int(page.get("number", index + 1)),
                 text=str(page.get("text", "")),
                 confidence=page.get("confidence"),
+                assisted_text=page.get("assisted_text"),
                 lines=tuple(
                     LineResult(
                         text=str(line.get("text", "")),
@@ -262,4 +279,6 @@ class WorkerEngine:
             pages=pages,
             duration_seconds=float(payload.get("duration_seconds", 0.0)),
             manifest=self.manifest(),
+            assisted_text=payload.get("assisted_text"),
+            decoding_mode=str(payload.get("decoding_mode", "raw")),
         )

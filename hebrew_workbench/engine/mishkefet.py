@@ -17,9 +17,9 @@ Two things are said plainly here, because they matter to the user:
   author published them, and the file is checked against a digest that
   this project pinned.  A user who needs a commercial licence has to ask
   the author of the model.
-* **The text is what the engine read.**  The engine decodes greedily:
-  no dictionary, no language model and no spelling rule is added to the
-  result.  The program never rewrites a recognition on its own.
+* **The primary text is always greedy/raw.** Experimental beam/TTA and
+  language-assisted readings are separate alternatives, never automatic
+  replacements. Raw benchmarks do not enable them.
 
 The model was trained on the published lines of real Hebrew cursive of
 the Pinkas corpus.  Its numbers on that corpus are therefore not a clean
@@ -32,6 +32,8 @@ import threading
 import time
 from pathlib import Path
 from typing import Callable
+
+from .mishkefet_decoding import decoding_mode, load_language_models
 
 from .base import (
     EngineCancelled,
@@ -109,7 +111,8 @@ def make_engine(options: dict | None = None) -> "MishkefetEngine":
         candidate = models_directory() / artifact.filename
         if candidate.is_file():
             model_path = candidate
-    return MishkefetEngine(model_path, artifact_id=artifact_id)
+    return MishkefetEngine(model_path, artifact_id=artifact_id,
+                           mode=decoding_mode(settings))
 
 
 class MishkefetEngine:
@@ -128,16 +131,32 @@ class MishkefetEngine:
         model_path: str | Path | None = None,
         artifact_id: str = "mishkefet-v1",
         timeout_seconds: float = 900.0,
+        mode: str = "raw",
     ) -> None:
         self.model_path = Path(model_path) if model_path else None
         self.artifact_id = artifact_id
         self.timeout_seconds = timeout_seconds
+        self.mode = decoding_mode({"decoding_mode": mode})
         self._recognizer = None
         self._page_lock = threading.Lock()
 
+    def configure(self, options: dict) -> None:
+        mode = decoding_mode(options)
+        # Do not change a live recognizer while a timed-out inference still runs.
+        if not self._page_lock.acquire(blocking=False):
+            raise ValueError("Recognition is still running; try again after it finishes")
+        try:
+            if mode != self.mode:
+                self._recognizer = None
+                self.mode = mode
+        finally:
+            self._page_lock.release()
+
     # -- availability ------------------------------------------------------
     def manifest(self) -> EngineManifest:
-        return build_manifest(self.model_path, self.artifact_id)
+        from dataclasses import replace
+        manifest = build_manifest(self.model_path, self.artifact_id)
+        return replace(manifest, notes=manifest.notes + f" Decoding: {self.mode}; primary output is raw.")
 
     def available(self) -> bool:
         if not mishkefet_importable():
@@ -199,6 +218,9 @@ class MishkefetEngine:
             pages=tuple(pages),
             duration_seconds=round(time.monotonic() - started, 2),
             manifest=self.manifest(),
+            assisted_text=(None if self.mode == "raw" else
+                           "\n".join(page.assisted_text or "" for page in pages)),
+            decoding_mode=self.mode,
         )
 
     def _load_recognizer(self):
@@ -213,7 +235,14 @@ class MishkefetEngine:
         from .vendor.hebocr.recognize import Recognizer
 
         try:
-            self._recognizer = Recognizer(str(self.model_path), device="cpu")
+            options = {}
+            if self.mode != "raw":
+                options = {"beam_width": 12, "tta": 3}
+                if self.mode == "assisted":
+                    char_lm, word_lm = load_language_models(self.model_path.parent)
+                    options.update(lm=char_lm, lm_weight=0.4,
+                                   word_lm=word_lm, word_weight=0.2)
+            self._recognizer = Recognizer(str(self.model_path), device="cpu", **options)
         except Exception as exc:
             raise EngineFailure(
                 f"לא ניתן לטעון את מודל Mishkefet: {exc}"
@@ -291,9 +320,22 @@ class MishkefetEngine:
         recognizer = self._load_recognizer()
         crops, boxes, _skew = segment_page(image)
         if not crops:
-            return PageResult(number=number, text="", confidence=None, lines=())
+            return PageResult(number=number, text="", confidence=None, lines=(),
+                              assisted_text=None if self.mode == "raw" else "")
 
-        texts, confidences = recognizer.read(crops, return_confidence=True)
+        # Same crops and weights for both readings. The first output is always
+        # greedy, even when the user requests an experimental alternative.
+        if self.mode == "raw":
+            texts, confidences = recognizer.read(crops, return_confidence=True)
+            assisted = None
+        else:
+            width = recognizer.beam_width
+            try:
+                recognizer.beam_width = 0
+                texts, confidences = recognizer.read(crops, return_confidence=True)
+            finally:
+                recognizer.beam_width = width
+            assisted = "\n".join(recognizer.read_tta(crops))
 
         lines: list[LineResult] = []
         for text, confidence, box in zip(texts, confidences, boxes):
@@ -315,6 +357,7 @@ class MishkefetEngine:
             text=page_text,
             confidence=page_confidence,
             lines=tuple(lines),
+            assisted_text=assisted,
         )
 
 

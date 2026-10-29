@@ -100,6 +100,7 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self._build_status_bar()
         self._build_suggestions_dock()
+        self._build_decoding_dock()
         self._sync_document_list()
         self.refresh_engines()
         # The choices of the user about the modules of proposals are
@@ -550,6 +551,7 @@ class MainWindow(QMainWindow):
         self._refresh_suggestions(self.suggestions)
         self.doc_path_label.setText(entry.path)
         self.preview.set_document(entry.path)
+        self._show_decoding_comparison(entry)
 
     def _clear_editor(self) -> None:
         """Show an empty editor, with no document behind it.
@@ -565,6 +567,69 @@ class MainWindow(QMainWindow):
         self._refresh_suggestions(self.suggestions)
         self.doc_path_label.setText("לא נבחר מסמך")
         self.preview.set_document(None)
+        self._show_decoding_comparison(None)
+
+    def _build_decoding_dock(self) -> None:
+        self.decoding_dock = QDockWidget("Raw / פענוח מסייע — השוואה", self)
+        self.decoding_dock.setObjectName("decoding-comparison")
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        self.decoding_label = QLabel("פענוח ניסיוני — הדיוק על הדף לא אומת")
+        self.decoding_label.setWordWrap(True)
+        layout.addWidget(self.decoding_label)
+        splitter = QSplitter(Qt.Horizontal)
+        self.raw_reading = QPlainTextEdit()
+        self.assisted_reading = QPlainTextEdit()
+        for label, editor in (("Raw — טקסט הזיהוי המקורי", self.raw_reading),
+                              ("חלופה ניסיונית — לבדיקה", self.assisted_reading)):
+            column = QWidget()
+            column_layout = QVBoxLayout(column)
+            column_layout.addWidget(QLabel(label))
+            editor.setReadOnly(True)
+            column_layout.addWidget(editor)
+            splitter.addWidget(column)
+        layout.addWidget(splitter)
+        self.use_assisted_button = QPushButton("שימוש בחלופה לאחר בדיקה...")
+        self.use_assisted_button.clicked.connect(self.use_assisted_reading)
+        layout.addWidget(self.use_assisted_button)
+        self.decoding_dock.setWidget(panel)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.decoding_dock)
+        self.decoding_dock.hide()
+        view_menu = self.menuBar().addMenu("השוואת פענוח")
+        view_menu.addAction(self.decoding_dock.toggleViewAction())
+
+    def _show_decoding_comparison(self, entry) -> None:
+        alternative = getattr(entry, "assisted_transcription", None)
+        self.raw_reading.setPlainText(getattr(entry, "original_transcription", ""))
+        self.assisted_reading.setPlainText(alternative or "")
+        self.use_assisted_button.setEnabled(alternative is not None and not self._document_is_recognizing())
+        self.decoding_label.setText(
+            f"מצב: {getattr(entry, 'decoding_mode', 'raw')}. חלופה ניסיונית; "
+            "אין הבטחה לשיפור. יש לבדוק קיצורים, שמות ומונחים נדירים.")
+        if alternative is None:
+            self.decoding_dock.hide()
+        else:
+            self.decoding_dock.show()
+
+    def use_assisted_reading(self) -> None:
+        entry = self._shown_entry
+        if entry is None or entry.assisted_transcription is None or self._document_is_recognizing():
+            return
+        if QMessageBox.question(self, "שימוש בחלופה", "להחליף את הטקסט שבעריכה בחלופה? "
+                                "הטקסט המקורי נשמר וניתן לבטל את ההחלפה.",
+                                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+        self._loading = True
+        self._replace_editor_text(entry.assisted_transcription)
+        self._loading = False
+        entry.edited = True
+        self._store_editor_text()
+        session = SuggestionSession(entry.assisted_transcription)
+        self._sessions[str(entry.path)] = session
+        self.suggestions = session
+        self._store_changes()
+        self._refresh_suggestions(session)
+        self.project.dirty = True
 
     def _session_for(self, entry) -> SuggestionSession:
         """The session of the proposals of a document.
@@ -730,6 +795,8 @@ class MainWindow(QMainWindow):
             # user can go back to it.
             entry.original_transcription = result.text
             entry.engine_name = result.engine_name
+            entry.assisted_transcription = getattr(result, "assisted_text", None)
+            entry.decoding_mode = getattr(result, "decoding_mode", "raw")
             # The text of the document is new, and the corrections that
             # were made on the old text do not belong to it any more.
             # Their places are of no use, and a correction that is
@@ -753,6 +820,7 @@ class MainWindow(QMainWindow):
             # the document is new.
             self.suggestions = self._session_for(entry)
             self._refresh_suggestions(self.suggestions)
+            self._show_decoding_comparison(entry)
         self.statusBar().showMessage(
             f"הזיהוי בוצע באמצעות {result.engine_name} ב-{result.duration_seconds:.1f} שניות. "
             "יש לבדוק כל שורה לפני הייצוא.",
@@ -786,6 +854,7 @@ class MainWindow(QMainWindow):
         self._recognizing_entry = None
         self.editor.setReadOnly(False)
         self.task = None
+        self._show_decoding_comparison(self._shown_entry)
 
     def cancel_task(self) -> None:
         if self.task is not None and self.task.isRunning():
@@ -869,6 +938,35 @@ class MainWindow(QMainWindow):
         self.task.finished.connect(self._on_task_finished)
         self.task.start()
 
+    def install_decoding_models(self) -> None:
+        from ..engine.mishkefet_decoding import DECODING_ARTIFACTS
+        from ..engine.models import install_artifact
+        if self.task is not None:
+            QMessageBox.information(self, "התקנת מודלי שפה", "כבר מתבצעת משימה.")
+            return
+        details = "\n\n".join(a.summary() for a in DECODING_ARTIFACTS.values())
+        if QMessageBox.question(self, "מודלי שפה אופציונליים — שימוש לא מסחרי",
+                                details + "\n\nלהוריד? אין העלאה של מסמכים. המצב לא משתנה אוטומטית.",
+                                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+        def work(progress, cancel):
+            installed = []
+            for artifact in DECODING_ARTIFACTS.values():
+                progress(artifact.name)
+                installed.append(install_artifact(artifact, cancel=cancel))
+            return installed
+        self.progress.setVisible(True)
+        self.progress.setRange(0, 0)
+        self.cancel_action.setEnabled(True)
+        self.task = TaskThread(work, self, completion_wins=True)
+        self.task.progress.connect(self._on_task_progress)
+        self.task.succeeded.connect(lambda paths: self._on_model_installed(
+            "\n".join(str(p) for p in paths)))
+        self.task.failed.connect(self._on_task_failed)
+        self.task.cancelled.connect(self._on_task_cancelled)
+        self.task.finished.connect(self._on_task_finished)
+        self.task.start()
+
     def _on_model_installed(self, path) -> None:
         self.refresh_engines()
         self.statusBar().showMessage(f"המודל הותקן: {path}", 8000)
@@ -943,6 +1041,7 @@ class MainWindow(QMainWindow):
 
         dialog = SettingsDialog(self.plugins, self)
         dialog.changed.connect(self._on_plugins_changed)
+        dialog.install_decoding_requested.connect(self.install_decoding_models)
         dialog.exec()
         # The dialog tells the window when something really changed, so
         # that the plugins are not read again for nothing: a plugin that

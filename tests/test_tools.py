@@ -18,6 +18,7 @@ TOOLS = (
     "download_model.py",
     "publish_diagnostics.py",
     "smoke_test.py",
+    "compare_mishkefet.py",
 )
 
 

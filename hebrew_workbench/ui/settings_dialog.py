@@ -41,6 +41,7 @@ class SettingsDialog(QDialog):
     #: Emitted when the plugins were changed and the program has to
     #: look at them again.
     changed = Signal()
+    install_decoding_requested = Signal()
 
     def __init__(self, registry: PluginRegistry, parent=None) -> None:
         super().__init__(parent)
@@ -68,6 +69,22 @@ class SettingsDialog(QDialog):
             )
             self.active_boxes[kind] = box
             form.addRow(name, box)
+
+        self.decoding_box = QComboBox()
+        self.decoding_box.addItem("Raw / בסיסי — ללא מודל שפה", "raw")
+        self.decoding_box.addItem("Beam 12 + 3 scales — ללא מודל שפה (ניסיוני)", "beam")
+        self.decoding_box.addItem("Assisted — Beam 12 + 3 scales + מודלי שפה (ניסיוני)", "assisted")
+        self.decoding_box.currentIndexChanged.connect(self._on_decoding_changed)
+        form.addRow("Mishkefet: פענוח", self.decoding_box)
+        self.install_decoding_button = QPushButton("התקנת מודלי השפה האופציונליים (32 MB)...")
+        self.install_decoding_button.clicked.connect(self.install_decoding_requested.emit)
+        self.remove_decoding_button = QPushButton("הסרת מודלי השפה האופציונליים...")
+        self.remove_decoding_button.clicked.connect(self._remove_decoding_models)
+        self.decoding_hint = QLabel(
+            "Raw נשמר תמיד. פענוח מסייע מוצג בנפרד ואינו מחליף טקסט בלי אישור. "
+            "מודלי שפה עלולים לשנות קיצורים ומונחים נדירים. השיפור על הדפים שלך לא אומת. "
+            "מודלי השפה: CC-BY-NC-SA-4.0, שימוש לא מסחרי; מותקנים בנפרד.")
+        self.decoding_hint.setWordWrap(True)
 
         buttons = QHBoxLayout()
         self.install_folder_button = QPushButton("התקנה מתיקייה...")
@@ -99,6 +116,9 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout()
         layout.addWidget(self.table)
         layout.addLayout(form)
+        layout.addWidget(self.decoding_hint)
+        layout.addWidget(self.install_decoding_button)
+        layout.addWidget(self.remove_decoding_button)
         layout.addLayout(buttons)
         layout.addWidget(self.hint)
         layout.addWidget(close_box)
@@ -158,6 +178,48 @@ class SettingsDialog(QDialog):
                 index = 0
             box.setCurrentIndex(index)
             box.blockSignals(False)
+
+        plugin = self.registry.chosen("ocr") or self.registry.active("ocr")
+        is_mishkefet = plugin is not None and plugin.id in ("mishkefet", "mishkefet-worker")
+        self.decoding_box.blockSignals(True)
+        self.decoding_box.setEnabled(is_mishkefet)
+        mode = self.registry.options_of(plugin).get("decoding_mode", "raw") if is_mishkefet else "raw"
+        self.decoding_box.setCurrentIndex(max(0, self.decoding_box.findData(mode)))
+        self.decoding_box.blockSignals(False)
+
+    def _on_decoding_changed(self, _index: int) -> None:
+        plugin = self.registry.chosen("ocr") or self.registry.active("ocr")
+        if plugin is None or plugin.id not in ("mishkefet", "mishkefet-worker"):
+            return
+        parent = self.parent()
+        if getattr(parent, "task", None) is not None:
+            QMessageBox.information(self, "פענוח", "יש להמתין לסיום המשימה לפני שינוי המצב.")
+            self.refresh()
+            return
+        if not self.registry.set_option(plugin.id, "decoding_mode", self.decoding_box.currentData()):
+            QMessageBox.warning(self, "פענוח", plugin.rejection or "לא ניתן לשנות את המצב.")
+        else:
+            self.changed.emit()
+        self.refresh()
+
+    def _remove_decoding_models(self) -> None:
+        from ..engine.models import models_directory
+        from ..engine.mishkefet_decoding import DECODING_ARTIFACTS
+        if getattr(self.parent(), "task", None) is not None:
+            QMessageBox.information(self, "הסרה", "יש להמתין לסיום המשימה.")
+            return
+        if QMessageBox.question(self, "הסרת מודלי השפה",
+                                "להסיר רק את שני מודלי השפה? מודל הזיהוי והמסמכים יישארו.",
+                                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+        try:
+            for artifact in DECODING_ARTIFACTS.values():
+                (models_directory() / artifact.filename).unlink(missing_ok=True)
+        except OSError as exc:
+            QMessageBox.warning(self, "הסרה", str(exc))
+            return
+        self.changed.emit()
+        self.refresh()
 
     # -- the active plugin of every kind ------------------------------------
     def _on_active_changed(self, kind: str) -> None:

@@ -35,7 +35,8 @@ def _engine_of(job: dict):
     if name == "mishkefet":
         from hebrew_workbench.engine.mishkefet import MishkefetEngine
 
-        return MishkefetEngine(model_path, artifact_id="mishkefet-v1")
+        return MishkefetEngine(model_path, artifact_id="mishkefet-v1",
+                               mode=job.get("decoding_mode", "raw"))
     if name == "kraken":
         from hebrew_workbench.engine.kraken_local import KrakenEngine
 
@@ -60,11 +61,14 @@ def main(argv: list[str] | None = None) -> int:
             "text": result.text,
             "engine_name": result.engine_name,
             "duration_seconds": result.duration_seconds,
+            "assisted_text": result.assisted_text,
+            "decoding_mode": result.decoding_mode,
             "pages": [
                 {
                     "number": page.number,
                     "text": page.text,
                     "confidence": page.confidence,
+                    "assisted_text": page.assisted_text,
                     "lines": [
                         {
                             "text": line.text,

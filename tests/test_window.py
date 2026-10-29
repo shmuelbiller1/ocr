@@ -51,6 +51,42 @@ class DocumentTextTests(unittest.TestCase):
         self.window._sync_document_list()
         self.window.doc_list.setCurrentRow(0)
 
+    def test_assisted_output_is_reviewed_and_never_auto_applied(self) -> None:
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QMessageBox
+        from hebrew_workbench.engine.base import OCRResult
+        self.add_two_documents()
+        entry = self.window.project[0]
+        result = OCRResult("raw original", "Mishkefet", assisted_text="assisted alternative",
+                           decoding_mode="assisted")
+        self.window._on_ocr_done(result, entry)
+        self.assertEqual(self.window.editor.toPlainText(), "raw original")
+        self.assertEqual(entry.original_transcription, "raw original")
+        self.assertEqual(self.window.assisted_reading.toPlainText(), "assisted alternative")
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.No):
+            self.window.use_assisted_reading()
+        self.assertEqual(self.window.editor.toPlainText(), "raw original")
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+            self.window.use_assisted_reading()
+        self.assertEqual(self.window.editor.toPlainText(), "assisted alternative")
+        self.assertEqual(entry.original_transcription, "raw original")
+        self.window.editor.undo()
+        self.assertEqual(self.window.editor.toPlainText(), "raw original")
+        self.window.doc_list.setCurrentRow(1)
+        self.assertEqual(self.window.assisted_reading.toPlainText(), "")
+        self.window.doc_list.setCurrentRow(0)
+        self.assertEqual(self.window.assisted_reading.toPlainText(), "assisted alternative")
+
+    def test_assisted_apply_cannot_modify_the_recognizing_document(self) -> None:
+        self.add_two_documents()
+        entry = self.window.project[0]
+        entry.assisted_transcription = "alternative"
+        self.window.editor.setPlainText("manual")
+        self.window._recognizing_entry = entry
+        self.window.use_assisted_reading()
+        self.assertEqual(self.window.editor.toPlainText(), "manual")
+        self.window._recognizing_entry = None
+
     def test_only_the_document_being_recognized_is_read_only(self) -> None:
         self.add_two_documents()
         self.window._recognizing_entry = self.window.project[0]
