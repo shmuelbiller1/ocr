@@ -96,3 +96,11 @@ licence confirmation and verified against pinned hashes. Both raw and alternativ
 readings are retained and shown side by side; applying the alternative requires
 confirmation and can be undone. These profiles do not change the raw benchmark
 or establish an accuracy improvement on school notes. See `docs/ASSISTED_DECODING.md`.
+
+## One-click offline release option
+
+Alongside the normal ZIP, GitHub Releases now publishes a self-contained
+`HebrewNotesWorkbench-<version>-one-click.exe` containing the application,
+worker, and a verified Apache-2.0 Kraken-small model. Download and double-click;
+the files are unpacked automatically to a per-user cache, without an installer
+or a model download. This edition does not bundle Mishkefet-v1 weights.

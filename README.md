@@ -98,6 +98,32 @@ the engine, but they are not what the program is made for.
   a document by itself.  Every change is a proposal that is shown first
   and that the user accepts or refuses.
 
+## One-click offline Windows executable
+
+The release also has a separate **one-click offline EXE** for Windows:
+`HebrewNotesWorkbench-<version>-one-click.exe`. Download **that one file**
+and double-click it. No Python, administrator access, installer, ZIP extraction,
+additional model download, or Internet connection is required.
+
+The first launch **automatically** extracts the signed-off Windows application,
+OCR worker, license notices, and a verified Kraken PP-OCRv6 small model into the
+user's own cache at `%LOCALAPPDATA%\\HebrewNotesWorkbench\\one-click\\`.
+The model is checked again on each launch; subsequent launches reuse the
+existing cache. The Qt shared libraries stay replaceable in that folder.
+The download is approximately the size of the full release ZIP plus 13 MB of
+model weights and the small launcher; the first launch takes longer because
+it unpacks the program. No online activation is required.
+
+This edition uses the Apache-2.0 Kraken-small model; **Mishkefet-v1 is not
+bundled** because its weights have noncommercial terms. The normal ZIP and
+the optional Mishkefet model remain available for people comparing recognition
+engines. The one-click edition is not a claim that Kraken is the most accurate
+engine for contemporary Hebrew handwriting.
+
+Windows may display a security warning for an unsigned executable. That is
+outside the app's control: a future signed release would improve trust.
+The offline EXE currently has no automatic updater.
+
 ## Running it from source
 
 ```bash

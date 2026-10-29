@@ -202,6 +202,43 @@ jobs:
         run: |
           python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download.log
           if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
+      - name: Build and verify a one-click offline Windows EXE
+        shell: pwsh
+        run: |
+          # Assemble the verified Apache-2.0 model and the complete
+          # Windows app before building the single self-contained EXE.
+          $archive = Get-ChildItem 'release' -Filter '*-win64.zip' | Select-Object -First 1
+          if (-not $archive) { throw 'the complete release ZIP is missing' }
+          python tools/build_one_click.py `
+            --archive $archive.FullName `
+            --model .cache/models/small.safetensors `
+            --output build/one-click-payload.zip
+          if ($LASTEXITCODE -ne 0) { throw 'the one-click offline payload could not be prepared' }
+          $oneClickBase = $archive.Name -replace '-win64\.zip$', '-one-click'
+          python -m PyInstaller --noconfirm --clean --onefile --windowed `
+            --add-data "build/one-click-payload.zip;." `
+            --distpath release `
+            --workpath build/one-click-launcher `
+            --specpath build/one-click-launcher `
+            --name $oneClickBase tools/portable_launcher.py
+          if ($LASTEXITCODE -ne 0) { throw 'the single-click offline EXE could not be built' }
+          $oneClick = Join-Path 'release' ($oneClickBase + '.exe')
+          if (-not (Test-Path $oneClick)) { throw 'the one-click EXE is missing' }
+          # Test an actual downloaded-style onefile EXE, with no network calls.
+          pwsh -File tools/run_windows_exe.ps1 `
+            -Exe $oneClick -Report 'one-click-selftest.json' `
+            -StdOut 'one-click-out.txt' -StdErr 'one-click-err.txt' `
+            -TimeoutSeconds 300
+          if ($LASTEXITCODE -ne 0) { throw 'the one-click EXE did not start' }
+          if (-not (Test-Path 'one-click-selftest.json')) { throw 'offline self-test report missing' }
+          $check = Get-Content 'one-click-selftest.json' -Raw | ConvertFrom-Json
+          if (-not $check.ok) { throw 'offline application self-test failed' }
+          $root = Join-Path $env:LOCALAPPDATA 'HebrewNotesWorkbench/one-click'
+          $models = @(Get-ChildItem $root -Filter 'small.safetensors' -Recurse -File)
+          if ($models.Count -eq 0) { throw 'the one-click EXE did not unpack the model' }
+          if (-not ($models | Where-Object Length -eq 13065380)) {
+            throw 'the unpacked model has the wrong size'
+          }
       - name: Check the release as a user gets it
         shell: pwsh
         run: |
@@ -612,7 +649,7 @@ jobs:
           cd release
           # One digest file for every archive, with the name of the
           # archive inside it.
-          for archive in ./*.zip; do
+          for archive in ./*.zip ./*.exe; do
             name="$(basename "$archive")"
             sha256sum "$name" > "${name}.sha256"
           done
@@ -648,6 +685,7 @@ jobs:
             }
             publish ./*.sha256
             publish ./*.zip
+            publish ./*.exe
             # The notes are written at the end, when the files of the
             # release are there.
             # -F draft=false: the release API wants a boolean and not
@@ -661,7 +699,7 @@ jobs:
             # --verify-tag: the release is made for the tag that was
             # pushed, and not for a new tag that the tool would make.
             gh release create "$TAG" \
-              ./*.zip ./*.sha256 \
+              ./*.zip ./*.exe ./*.sha256 \
               --verify-tag \
               --title "Hebrew Notes Workbench $TAG" \
               --notes-file ../release-notes.md

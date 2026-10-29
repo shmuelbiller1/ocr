@@ -105,6 +105,24 @@ licence has to ask the author of the model.  The program shows the licence
 of every model before it is fetched, and the file is checked against the
 digest that this project pinned.
 
+## One-click offline EXE
+
+An additional Windows release asset is a standard PyInstaller single-file
+launcher with an embedded ZIP. The ZIP contains the same replaceable Windows program files,
+the same license notices, the OCR worker and a **verified** copy of the
+**Kraken PP-OCRv6 small** model (Apache-2.0). The model's source, SHA-256
+and license are listed in `models/MODEL-SOURCE.txt`; the full Apache-2.0
+license and notices are included in the extracted `LICENCES` folder.
+The original ZIP release continues to download its model on user request.
+
+On first launch, the one-click EXE automatically unpacks to
+`%LOCALAPPDATA%\\HebrewNotesWorkbench\\one-click\\<bundle-id>\\`.
+This is an **automatic unpack**, not a privileged installation.
+The Qt DLLs are present there as separate, replaceable files in accordance
+with the LGPL obligations. The launcher does not prevent DLL replacement,
+and it does not redistribute Mishkefet weights. Users who need to replace
+the Qt DLLs may open the cache folder directly.
+
 ## Test material
 
 | Material | License | Where it is used |
