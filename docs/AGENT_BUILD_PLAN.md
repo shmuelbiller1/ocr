@@ -40,7 +40,7 @@ The rules that follow from this:
 - Preserve original page bytes and user's transcription unchanged.
 - Never present sample data or dummy output as actual OCR.
 - Never auto-apply spelling, grammar, or scholarly-style changes. Maintain accepted/rejected proposals separately.
-- No unapproved network calls, telemetry, model auto-downloads, or shipping third-party copyrighted weights.
+- No unapproved network calls, telemetry, model auto-downloads or redistribution of third-party weights. Approved licensed bundles are explicitly labelled below and in `docs/THIRD_PARTY.md`.
 - Review actual license terms for CODE, WEIGHTS, DICTIONARIES, and DATA independently before inclusion.
 - Program must install/run under a standard Windows account, without Python or WSL preinstalled.
 - Every release must be compiled and smoke-tested on Windows CI, not just built in Linux.
@@ -63,8 +63,8 @@ The rules that follow from this:
 | Preview of PDF and image pages | **Works** | `hebrew_workbench/preview/` |
 | Project file, export, print | **Works** | `hebrew_workbench/project.py`, `hebrew_workbench/exporting.py` |
 | OCR engine contract, fail-closed default | **Works** | `hebrew_workbench/engine/` |
-| One pretrained Hebrew engine (kraken + PP-OCRv6, Apache-2.0) | **Works, needs the model** | the model is downloaded by the user and checked against two digests; the accuracy is in `docs/OCR_ACCURACY.md` |
-| A second pretrained engine for modern Hebrew cursive (Mishkefet-v1) | **Works, needs the model** | the code is MIT and is shipped with the program; the weights are CC-BY-NC-SA-4.0 (not commercial), are not bundled, and are fetched by the user and checked against a SHA-256; the search is in `docs/ENGINES.md` |
+| One pretrained Hebrew engine (kraken + PP-OCRv6, Apache-2.0) | **Works; assets depend on edition** | small is bundled in Lite, small/medium in All Models; ZIP installation is explicit and integrity checked; accuracy is in `docs/OCR_ACCURACY.md` |
+| A second pretrained engine for modern Hebrew cursive (Mishkefet-v1) | **Works; noncommercial assets** | MIT code ships with the app. CC-BY-NC-SA-4.0 weights are bundled only in All Models — Noncommercial; Lite/ZIP users opt in to installation. Pinned SHA-256 checks apply; search is in `docs/ENGINES.md` |
 | Spelling proposals | **Works, needs a word list** | `hebrew_workbench/suggestions/spelling.py`; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
 | Working on the proposals of a page together | **Works** | accept or refuse all of them, or only the ones that were checked; change one word in all its places; keep a word in the word list of the user; take the last group of changes back as one action; go back to the text that the recognition gave |
 | Grammar proposals | **Works, a few rules** | `hebrew_workbench/suggestions/grammar.py` |

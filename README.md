@@ -20,8 +20,9 @@ the engine, but they are not what the program is made for.
 > PP-OCRv6 (both Apache-2.0).  A second engine, *Mishkefet-v1*, was added
 > for the handwriting the program is really made for - modern Hebrew
 > cursive - and it is the best open model that was found for that
-> material; its weights carry a non-commercial licence and are fetched by
-> the user, never bundled.
+> material; its weights carry a non-commercial licence. They are bundled
+> only in **All Models — Noncommercial**; Lite/ZIP users can install them
+> separately after licence confirmation.
 >
 > The measured accuracy on early modern
 > Hebrew cursive is a character error rate of 57.6% (small model) and

@@ -197,10 +197,11 @@ them on the same pages.
 | Device | CPU only, no GPU and no cloud service |
 | Published results of the model authors | Hebrew character error rate 6.5% (small) and 5.1% (medium), word error rate 18.5% and 14.2%, on their own test set |
 
-The model file is never bundled with the application.  The user installs
-it explicitly, and the file is checked against the MD5 digest published
-by the model authors and against the SHA-256 digest pinned in
-`hebrew_workbench/engine/models.py`.
+Lite bundles the small model; All Models bundles small and medium. The
+regular ZIP requires explicit model installation. Downloaded files are checked
+against the authors' MD5 and the SHA-256 pinned in
+`hebrew_workbench/engine/models.py`; bundled files are checked against pinned
+SHA-256 digests. Distribution editions do not change the benchmark results.
 
 ### The second engine: Mishkefet-v1
 
@@ -213,11 +214,11 @@ by the model authors and against the SHA-256 digest pinned in
 | Size of the model | 115.3 MB, checked against the SHA-256 `0dfb82e4…f6fd850b88` |
 | Published results of the model authors | A median character error rate of 0.175 on the lines of the public Hebrew handwriting benchmark (second of nine, behind a cloud model alone) and the best page error rate of that benchmark, 0.331.  The author reports greedy median CER 0.239 (micro CER 0.261), versus assisted median 0.175. These are author benchmark figures, not this app's measured accuracy |
 
-The weights of this model are **not** bundled with the program and are not
-redistributed by it: the user fetches them, on request, from the place
-where the author published them, after the licence has been shown.  The
-licence forbids commercial use, so a user who needs a commercial licence
-has to ask the author of the model.
+All Models — Noncommercial bundles the unmodified Mishkefet weights with
+attribution and a licence link. Lite and regular ZIP users fetch them on
+request from the author's repository after licence confirmation. The licence
+forbids commercial use; a user needing commercial permission must ask the
+model author. These distribution choices do not establish an accuracy gain.
 
 **The numbers of this engine on the pages of the Pinkas corpus are not a
 clean measurement.**  The model was trained on the published lines of

@@ -19,6 +19,16 @@ class ReleaseVersionTests(unittest.TestCase):
         self.assertIn('CC-BY-NC-SA-4.0', notes)
         self.assertIn('still unverified', notes)
 
+    def test_current_installation_guides_describe_all_models_edition(self):
+        root = Path(__file__).resolve().parents[1]
+        for filename in ('README.md', 'docs/ASSISTED_DECODING.md', 'docs/ENGINES.md',
+                         'docs/OCR_ACCURACY.md', 'docs/THIRD_PARTY.md', 'docs/AGENT_BUILD_PLAN.md'):
+            with self.subTest(filename=filename):
+                self.assertIn('All Models', (root / filename).read_text(encoding='utf-8'))
+        assisted = (root / 'docs/ASSISTED_DECODING.md').read_text(encoding='utf-8')
+        self.assertNotIn('These files are not bundled', assisted)
+        self.assertNotIn('These data files are not redistributed by this project', assisted)
+
 
 if __name__ == '__main__':
     unittest.main()

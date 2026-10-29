@@ -4,6 +4,15 @@ This page records the search for an open model that can read the
 handwriting the program is made for, and the reasons behind the choice.
 It was written on 2026-10-28 and it says what was checked and when.
 
+## Current distribution (v0.4.0)
+
+The search/benchmark observations below remain a dated research record.
+Distribution now depends on edition: Lite bundles Kraken small; All Models —
+Noncommercial bundles Kraken small/medium, Mishkefet and both optional language
+models. The regular ZIP uses explicit downloads. All bundled assets retain
+their own licences, attribution and pinned integrity checks; no cloud OCR is
+introduced. See [RELEASE_NOTES.md](RELEASE_NOTES.md) for download choices.
+
 ## What the program needs
 
 The material is **contemporary handwritten Hebrew script**: school notes,
@@ -26,8 +35,8 @@ Three rules follow from that, and they decide what is acceptable:
 
 | Model | What it is | Licence | Verdict |
 | --- | --- | --- | --- |
-| **Mishkefet-v1** (`itayinbar/Mishkefet-v1`, code in `itayinbarr/heb-ocr`) | A 30-million-parameter CTC recogniser written **for modern Hebrew cursive**. On the public Hebrew handwriting leaderboard it has the **best page error rate** of the board (0.331) and is **second of nine** in the line mode (a median error rate of 0.175). The only model ahead of it in the line mode is a cloud model of a company, which this program may not use. It runs on the processor. | Weights: **CC-BY-NC-SA-4.0** (not commercial). Code: MIT. | **Used**, as the second engine. The code is shipped with the program; the weights are fetched by the user, on request, and checked against a digest. The licence is shown before the download. |
-| **kraken + PP-OCRv6** (small and medium) | A multilingual recogniser that reads 43 languages, among them Hebrew. | Apache-2.0 (code and weights) | **Used**, as the first engine. The weights are fetched by the user and checked against two digests. |
+| **Mishkefet-v1** (`itayinbar/Mishkefet-v1`, code in `itayinbarr/heb-ocr`) | A 30-million-parameter CTC recogniser written **for modern Hebrew cursive**. On the public Hebrew handwriting leaderboard it has the **best page error rate** of the board (0.331) and is **second of nine** in the line mode (a median error rate of 0.175). The only model ahead of it in the line mode is a cloud model of a company, which this program may not use. It runs on the processor. | Weights: **CC-BY-NC-SA-4.0** (not commercial). Code: MIT. | **Used**, as the second engine. Code ships with the app. Unmodified weights are included only in All Models — Noncommercial; Lite/ZIP installation is opt-in after licence confirmation. Integrity is checked against pinned digests. |
+| **kraken + PP-OCRv6** (small and medium) | A multilingual recogniser that reads 43 languages, among them Hebrew. | Apache-2.0 (code and weights) | **Used**, as the first engine. Small is bundled in Lite; small/medium in All Models. ZIP users install weights explicitly. Download and bundle integrity checks apply. |
 | `cyttic/hebrew-ocr-android` | ONNX models of a TrOCR line recogniser for Hebrew, with a detector and a character language model. | **No licence is written on the model files.** | **Not used.** A file without a licence is a file that nobody may redistribute, and the conditions of the use are unknown. |
 | `sivan22/testing-trOCR-hebrew-handwritten` | A TrOCR fine-tuned for Hebrew handwriting. | **No licence is written on the model.** | **Not used**, for the same reason. |
 | `johnlockejrr/ppocrv6-sam-heb` | PP-OCRv6 recognisers for **Samaritan** Hebrew manuscripts. | Apache-2.0 | **Not used for the target.** The script is Samaritan and not the modern Hebrew script of the school notes. It stays a candidate for a corpus of Samaritan manuscripts. |
@@ -100,8 +109,9 @@ errors of a real hand.
 * The file that arrives is checked against the SHA-256 that this project
   pinned, and against the MD5 that the author published when there is
   one.  A file that does not match is deleted and is never used.
-* The weights of a model with a non-commercial licence are not bundled
-  with the program and are not redistributed by it.
+* The regular ZIP and Lite do not bundle noncommercial weights. The explicitly
+  labelled All Models — Noncommercial edition includes approved, unmodified
+  Mishkefet assets with attribution and the CC-BY-NC-SA-4.0 licence link.
 
 ## Optional experimental decoding
 
