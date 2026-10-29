@@ -1,4 +1,4 @@
-# הערות הגרסה
+# הערות הגרסה — v0.3.0
 
 Hebrew Notes Workbench - a program for handwritten Hebrew-script notes on
 Windows, that works without an internet connection and without Python.
@@ -7,6 +7,10 @@ Windows, that works without an internet connection and without Python.
 
 * זיהוי כתב יד עם kraken ומודל PP-OCRv6 (Apache-2.0).  המודל מותקן
   על ידי המשתמש, ונבדק מול הטבעה שפורסמה על יד מפרסמיו.
+* מנוע שני, "Mishkefet-v1", שנכתב לכתב יד עברי מודרני: הקוד שלו
+  (רישיון MIT) מצורף לתוכנה, והמשקלים שלו (רישיון CC-BY-NC-SA-4.0, שימוש
+  לא מסחרי) מותקנים על ידי המשתמש ונבדקים מול טבעת SHA-256.  המנוע
+  קורא בלי מילון ובלי מודל שפה, כדי שהמדידה תהיה מדידה של המנוע עצמו.
 * מנוע הזיהוי ומודלי השפה הם תוספים: אפשר להתקין, להסיר ולבחור אותם
   במסך "הגדרות".
 * תצוגה מקדימה של תמונות ושל דפי PDF, שמירת העבודה בקובץ .hwproj,
@@ -19,6 +23,13 @@ Windows, that works without an internet connection and without Python.
   את ההצעות שסומנו, שינוי מילה בכל המקומות שבהם היא מופיעה, שמירת
   מילה במילון של המשתמש, ביטול הפעולה האחרונה כמעשה אחד, וחזרה לטקסט
   שהזיהוי נתן.  שום הצעה אינה מוחלת בלי לחיצה של המשתמש.
+* רק המסמך המזוהה נעול בזמן הזיהוי, כדי שמה שהמשתמש כותב בינתיים לא ייעלם
+  כשתוצאת הזיהוי מחליפה את הטקסט.
+* אפשר לבטל את הורדת המודל, והורדה שבוטלה אינה משאירה קובץ מאחור.
+* דף אמיתי אחד של כתב יד עברי מודרני נמצא במאגר, וכל בנייה קוראת
+  אותו בכל המנועים ומפרסמת את מה שכל מנוע קרא.  הדיוק על חומר בית
+  הספר עדיין **לא מאומת**, כי לאף דף אין עדיין תמליל שנבדק על ידי
+  מישהו אחר.
 
 **מה עדיין לא עובד**
 
@@ -52,8 +63,27 @@ of the user, take the last group of changes back as one action, and go
 back to the text that the recognition gave.  Nothing is applied without
 the press of the user.
 
+There is a second engine, *Mishkefet-v1*, which was written for modern
+Hebrew cursive: its code (MIT) is shipped with the program, and its
+weights (CC-BY-NC-SA-4.0, non-commercial) are installed by the user and
+checked against a SHA-256 digest.  It reads with the best path alone,
+without a dictionary and without a language model, so that a measurement
+measures the engine and not the word list.  The search that led to it and
+the models that were not used are in `docs/ENGINES.md`.
+
 The accuracy of the recognition on modern school handwriting is **not
 verified** yet: there is no page with a transcript that was checked by
 somebody else.  The tools that build the corpus and that measure the
 engines on it are in the repository, and `docs/MODERN_SCHOOL_BENCHMARK.md`
 says what the school has to add.
+
+One real page of contemporary handwritten Hebrew is in the repository,
+and every build reads it with every engine and publishes what each of
+them read.  No rate is calculated from it: without a transcript that
+somebody else checked, the number would be the number of the mistakes
+of the transcript and not of the engine.
+
+The editor is closed while the recognition runs, so that what the user
+writes in the meantime is not lost when the result replaces the text.
+The download of a model can be stopped, and a download that was stopped
+leaves nothing behind.

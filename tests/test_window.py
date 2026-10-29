@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -12,6 +14,7 @@ if sys.platform.startswith("linux"):
     # The machine that runs the tests has no screen.
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from hebrew_workbench.engine.registry import EngineRegistry  # noqa: E402
 from hebrew_workbench.suggestions.session import AcceptedChange  # noqa: E402
 from hebrew_workbench.ui.main_window import MainWindow  # noqa: E402
 from tests.qt_app import application, temporary_home  # noqa: E402
@@ -47,6 +50,18 @@ class DocumentTextTests(unittest.TestCase):
         self.window.project.add(self.pages[1])
         self.window._sync_document_list()
         self.window.doc_list.setCurrentRow(0)
+
+    def test_only_the_document_being_recognized_is_read_only(self) -> None:
+        self.add_two_documents()
+        self.window._recognizing_entry = self.window.project[0]
+        self.window._show_entry(self.window.project[0])
+        self.assertTrue(self.window.editor.isReadOnly())
+        self.window.doc_list.setCurrentRow(1)
+        self.assertFalse(self.window.editor.isReadOnly())
+        self.window.doc_list.setCurrentRow(0)
+        self.assertTrue(self.window.editor.isReadOnly())
+        self.window._on_task_finished()
+        self.assertFalse(self.window.editor.isReadOnly())
 
     def test_the_text_of_a_document_is_kept_when_another_one_is_chosen(self) -> None:
         self.add_two_documents()
@@ -199,8 +214,6 @@ class DocumentTextTests(unittest.TestCase):
             self.assertEqual(self.window.suggestions.pending(), [])
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class UnsavedWorkTests(unittest.TestCase):
@@ -526,3 +539,65 @@ class OriginalTextTests(unittest.TestCase):
         # The text of the editor is not changed, because there is no
         # original text yet.
         self.assertEqual(self.window.editor.toPlainText(), "טקסט שהמשתמש הקליד")
+
+
+class TheEditorDuringTheRecognitionTests(unittest.TestCase):
+    """While the recognition runs, the editor is closed.
+
+    The result of the recognition replaces the text of the editor, and
+    what the user writes in the meantime would be lost without a word.
+    """
+
+    def setUp(self) -> None:
+        self.app = application()
+        self.home = temporary_home()
+        self.window = MainWindow()
+        from hebrew_workbench.resources import samples_directory
+
+        samples = samples_directory()
+        pages = sorted(samples.glob("scan_page_*.png")) if samples else []
+        if not pages:
+            self.skipTest("the sample pages are not available here")
+        self.window.project.add(pages[0])
+        self.window._sync_document_list()
+        self.window.doc_list.setCurrentRow(0)
+
+    def tearDown(self) -> None:
+        self.window.close()
+        self.window.deleteLater()
+        self.app.processEvents()
+        self.home.cleanup()
+
+    def test_the_editor_is_closed_while_the_recognition_runs(self) -> None:
+        release = threading.Event()
+
+        class Result:
+            text = "תוצאת הזיהוי"
+            engine_name = "מנוע הבדיקה"
+            duration_seconds = 0.1
+
+        class Engine:
+            name = "מנוע הבדיקה"
+
+            def available(self) -> bool:
+                return True
+
+            def recognize(self, file_path, progress=None, cancel=None):
+                release.wait(20)
+                return Result()
+
+        self.window.registry = EngineRegistry(Engine())
+        self.window.run_ocr()
+        # The editor is closed while the recognition runs.
+        self.assertTrue(self.window.editor.isReadOnly())
+        release.set()
+        deadline = time.monotonic() + 20
+        while self.window.task is not None and time.monotonic() < deadline:
+            self.app.processEvents()
+            time.sleep(0.05)
+        # And it is open again when the recognition is over.
+        self.assertFalse(self.window.editor.isReadOnly())
+
+
+if __name__ == "__main__":
+    unittest.main()

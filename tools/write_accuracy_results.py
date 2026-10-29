@@ -347,10 +347,19 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
             "",
         ]
 
+    # The report of the modern corpus and the report of the diagnostic
+    # corpus are two different files, and they are uploaded as two
+    # different artefacts.  The section says which one it is, so that
+    # the numbers can be looked at in the place they come from.
+    artefact = (
+        "ocr-accuracy-modern-report"
+        if target == "modern"
+        else "ocr-accuracy-report"
+    )
     lines += [
         "The numbers were produced by `tools/benchmark_ocr.py` in the"
         " `ocr-engine` job of the build, and the report they come from is"
-        " uploaded as the artefact `ocr-accuracy-report`.",
+        f" uploaded as the artefact `{artefact}`.",
         "",
         end,
     ]

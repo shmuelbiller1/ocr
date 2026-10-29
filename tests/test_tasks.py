@@ -58,6 +58,22 @@ class TaskThreadTests(unittest.TestCase):
         self.assertEqual(failures, [])
         self.assertEqual(results, [])
 
+    def test_a_committed_install_wins_over_a_late_cancel_request(self) -> None:
+        results = []
+        cancelled = []
+
+        def install(progress, cancel):
+            task.cancel()
+            return "installed-model.pt"
+
+        task = TaskThread(install, completion_wins=True)
+        task.succeeded.connect(results.append)
+        task.cancelled.connect(lambda: cancelled.append(True))
+        task.start()
+        self.wait_for(task)
+        self.assertEqual(results, ["installed-model.pt"])
+        self.assertEqual(cancelled, [])
+
     def test_the_task_says_that_it_was_cancelled(self) -> None:
         task = TaskThread(lambda progress, cancel: None)
         self.assertFalse(task.is_cancelled)

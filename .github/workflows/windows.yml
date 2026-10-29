@@ -129,6 +129,10 @@ jobs:
           # pair from the same place.
           python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 install-engine.log
           python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          # The page segmentation of the second engine (Mishkefet) is
+          # written with OpenCV.  The package is Apache-2.0 and it does
+          # not need a display.
+          python -m pip install "opencv-python-headless==4.12.0.88" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           python tools/check_engine.py 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           if ($LASTEXITCODE -ne 0) { throw 'torch and torchvision do not belong together' }
       - name: Build the recognition worker
@@ -311,6 +315,13 @@ jobs:
             # torchvision::nms does not exist".  The pair is pinned.
             python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
             python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
+            # The page segmentation of the second engine (Mishkefet) is
+            # written with OpenCV.  The package is Apache-2.0 and it does
+            # not need a display.
+            python -m pip install "opencv-python-headless==4.12.0.88"
+            # The pages of a PDF are read with pypdfium2, and the real
+            # page of the smoke test is a PDF.
+            python -m pip install "pypdfium2==4.30.0"
           } 2>&1 | tee install-engine.log
       - name: Check that torch and torchvision belong together
         run: |
@@ -325,6 +336,11 @@ jobs:
           # be compared with one another on the same pages.
           python tools/download_model.py --model kraken-ppocrv6-medium --target .cache/models 2>&1 | tee model-download-medium.log
           if [ "$?" -ne 0 ]; then throw 'the second model could not be downloaded'; fi
+          # The model of the second engine, which was written for modern
+          # Hebrew cursive.  Its licence is not a commercial one, and the
+          # file is checked against the digest that the project pinned.
+          python tools/download_model.py --model mishkefet-v1 --target .cache/models 2>&1 | tee model-download-mishkefet.log
+          if [ "$?" -ne 0 ]; then throw 'the model of the second engine could not be downloaded'; fi
       - name: Check the corpus of the modern school handwriting
         run: |
           set -o pipefail
@@ -347,7 +363,7 @@ jobs:
           python tools/benchmark_ocr.py \
             --corpus benchmark/modern_school \
             --models .cache/models \
-            --engines kraken-ppocrv6-small kraken-ppocrv6-medium \
+            --engines kraken-ppocrv6-small kraken-ppocrv6-medium mishkefet-v1 \
             --output ocr-accuracy-modern.json 2>&1 | tee benchmark-modern.log
           if [ "$?" -ne 0 ]; then throw 'the measurement of the modern corpus failed'; fi
       - name: Measure the accuracy on the diagnostic corpus of the old handwriting
@@ -359,7 +375,7 @@ jobs:
           python tools/benchmark_ocr.py \
             --pinkas --download --cache .cache/pinkas --pages 5 \
             --models .cache/models \
-            --engines kraken-ppocrv6-small kraken-ppocrv6-medium \
+            --engines kraken-ppocrv6-small kraken-ppocrv6-medium mishkefet-v1 \
             --output ocr-accuracy.json 2>&1 | tee benchmark.log
           if [ "$?" -ne 0 ]; then throw 'the measurement failed'; fi
       - name: Look at the corpus
@@ -367,6 +383,26 @@ jobs:
         continue-on-error: true
         run: |
           python tools/inspect_dataset.py --cache .cache/pinkas 2>&1 | tee corpus-structure.log || true
+      - name: Read a real page of modern handwriting
+        run: |
+          set -o pipefail
+          # A real scan of contemporary handwritten Hebrew.  The page has
+          # no transcript that somebody else checked, so nothing is
+          # measured here: the readings of every engine are published, so
+          # that they can be compared on the same real material.
+          python tools/smoke_test.py --require-text \
+            --document benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf \
+            --models .cache/models \
+            --engines kraken-ppocrv6-small kraken-ppocrv6-medium mishkefet-v1 \
+            --output build/smoke 2>&1 | tee smoke-test.log
+          if [ "$?" -ne 0 ]; then throw 'the reading of the real page failed'; fi
+      - name: Publish the readings of the real page
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-readings
+          path: build/smoke
+          if-no-files-found: warn
       - name: Write the results into the documentation
         if: always()
         continue-on-error: true
@@ -412,7 +448,7 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/smoke-small.txt build/smoke/smoke-medium.txt build/smoke/smoke-mishkefet-v1.txt build/smoke/smoke-test.json
 
   ocr-worker-windows:
     name: OCR worker (Windows)
@@ -442,6 +478,10 @@ jobs:
           # exist".  The pair is pinned.
           python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          # The page segmentation of the second engine (Mishkefet) is
+          # written with OpenCV.  The package is Apache-2.0 and it does
+          # not need a display.
+          python -m pip install "opencv-python-headless==4.12.0.88" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           python -m pip install "pyinstaller==6.16.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
       - name: Check that torch and torchvision belong together
         shell: pwsh
@@ -453,6 +493,8 @@ jobs:
         run: |
           python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download.log
           if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
+          python tools/download_model.py --model mishkefet-v1 --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download-mishkefet.log
+          if ($LASTEXITCODE -ne 0) { throw 'the model of the second engine could not be downloaded' }
       - name: Build the OCR worker
         shell: pwsh
         run: |
@@ -476,6 +518,20 @@ jobs:
           $result = Get-Content 'result.json' -Raw | ConvertFrom-Json
           if ($result.error) { Write-Output "::error title=Worker::$($result.error)"; throw 'The worker reported an error' }
           Write-Output "::warning title=Worker::recognised $($result.text.Length) characters in $($result.duration_seconds) seconds"
+      - name: Recognise a page with the packaged worker and the second engine
+        shell: pwsh
+        run: |
+          $job = @{ document = (Resolve-Path 'samples\scan_page_1.png').Path; model_path = (Resolve-Path '.cache\models\mishkefet-v1.pt').Path; engine = 'mishkefet' } | ConvertTo-Json
+          $job | Set-Content -Encoding utf8 job-mishkefet.json
+          $process = Start-Process -FilePath 'dist\ocr-worker\ocr-worker.exe' `
+            -ArgumentList '--job','job-mishkefet.json','--result','result-mishkefet.json' `
+            -Wait -PassThru -RedirectStandardOutput 'worker-mishkefet-out.txt' -RedirectStandardError 'worker-mishkefet-err.txt'
+          Write-Host "exit code: $($process.ExitCode)"
+          if (Test-Path 'worker-mishkefet-err.txt') { Get-Content 'worker-mishkefet-err.txt' | Select-Object -Last 20 | ForEach-Object { Write-Output "::warning title=Worker::$_" } }
+          if (-not (Test-Path 'result-mishkefet.json')) { throw 'The worker did not write a result for the second engine' }
+          $result = Get-Content 'result-mishkefet.json' -Raw | ConvertFrom-Json
+          if ($result.error) { Write-Output "::error title=Worker::$($result.error)"; throw 'The worker reported an error for the second engine' }
+          Write-Output "::warning title=Worker::the second engine recognised $($result.text.Length) characters in $($result.duration_seconds) seconds"
       - name: Upload the OCR worker
         uses: actions/upload-artifact@v4
         with:

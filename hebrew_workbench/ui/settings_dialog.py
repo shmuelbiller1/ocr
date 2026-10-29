@@ -108,8 +108,14 @@ class SettingsDialog(QDialog):
 
     # -- showing -----------------------------------------------------------
     def refresh(self) -> None:
-        """Read the registry again and show it."""
-        self.registry.load()
+        """Show the plugins that are there.
+
+        This is a refresh of the *screen* and nothing more: the plugins
+        are not read again, because a plugin that is read again is a new
+        object, and the program that is running holds the old one.  The
+        registry is read again when the set of the plugins really
+        changes, when a plugin is installed or when one is removed.
+        """
         self.table.setRowCount(0)
         for plugin in self.registry.plugins:
             row = self.table.rowCount()

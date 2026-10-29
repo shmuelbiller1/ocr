@@ -30,6 +30,15 @@ have to be added by the school.  Until then, the numbers of this
 section are empty, and the build says so on every run.
 
 <!-- RESULTS:BEGIN -->
+
+**The accuracy of the recognition on Modern school handwriting is not verified.**
+
+The corpus holds 0 pages, and none of them has a transcript that was checked by somebody who is not the one who wrote it down.  Without such a transcript there is nothing to measure, and no rate is published here.
+
+> the corpus has no page with a verified transcript, so the accuracy of the recognition on this material is NOT verified
+
+The tools that build the corpus and that measure the engines on it are ready: see `docs/MODERN_SCHOOL_BENCHMARK.md`.
+
 <!-- RESULTS:END -->
 
 ### What is measured, and what is not
@@ -47,6 +56,26 @@ section are empty, and the build says so on every run.
 * A page is measured only when its transcript was checked by somebody
   who is not the one who wrote it down.  A page without that check is
   left out of the rate and is named in the report.
+
+### A real page that is read but not measured
+
+There is one **real** page in the repository:
+`benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf` is a scan of
+contemporary handwritten Hebrew that was given to the project so that
+the program could be tried on the material it is made for.
+
+Every build reads that page with every engine and publishes what each
+of them read, as the artefact `smoke-test-readings`.  **No rate is
+calculated from it.**  The page has no transcript that somebody else
+checked, and a rate without such a transcript is not a measurement of
+the engine - it would be a measurement of the transcript.  The accuracy
+of the recognition on modern school handwriting therefore stays
+**unverified** until a page with a checked transcript is added to
+`benchmark/modern_school/`.
+
+The readings are published so that the engines can be compared on real
+material, and so that a person can look at what the program reads on a
+page and judge it.
 
 ## The diagnostic corpus: the old handwriting
 
@@ -80,29 +109,84 @@ pen, and the numbers below should be read as what they are: the accuracy
 of a general multilingual handwriting model on real historical Hebrew
 cursive.
 
+### The second engine on these pages, and why the number is not what it seems
+
+The table below has a row for *Mishkefet-v1*, the engine that was written
+for the modern cursive, and its rate on these pages is **worse** than the
+rate of the two kraken models.  That is not a surprise, and it is not
+what the model is good at, and the reason is worth writing down:
+
+* **The two engines do not cut the page up the same way.**  kraken
+  segments the page with its own model; *Mishkefet-v1* uses the
+  segmenter that came with it, which was written for the pages of the
+  public benchmark.  On the page `105_2.jpg` that segmenter found **96
+  lines where the ground truth has 48** - it cuts the lines of the old
+  cursive in two - and on `112_1.jpg` it found 54 where the ground truth
+  has 34.  A line that is cut in half is read as half a line, and the
+  errors that come of it are counted against the engine.
+* **The reading is greedy.**  The published numbers of the model are
+  made with a character language model, a word language model, a beam of
+  twelve and three to five readings of every line.  This program reads
+  the best path alone, on purpose, and the rate of the errors is
+  therefore higher by design.
+* **These pages are not its material.**  The model was written for
+  modern Hebrew cursive; the leaderboard says that it is the best of
+  the open models for it.
+
+So the number of the second engine on these pages measures the whole
+chain - segmentation, greedy reading, and the material - and it is not a
+comparison of the two recognisers.  The clean comparison is the corpus of
+the modern school handwriting, and that corpus has no verified page yet.
+
 <!-- DIAGNOSTIC:BEGIN -->
-The numbers of the last measurement of the build.  The build reads the
-first **5** pages of the dataset (`--pages 5`), and 4 of them have a
-ground truth that is complete and was verified.  The rates below are of
-those 4 pages, and the report names the page that was left out.
 
-| Engine | Pages measured | Character error rate | Word error rate | Seconds per page |
+Measured with kraken PP-OCRv6 (Apache-2.0) on 4 pages of The Pinkas Dataset:
+
+| | |
+| --- | --- |
+| Character error rate | **57.6%** |
+| Word error rate | **93.8%** |
+| Seconds per page | 24.03 |
+| Pages measured | 4 |
+| Pages seen | 4 |
+| Characters of the ground truth | 10798 |
+| Words of the ground truth | 2176 |
+
+The corpus holds 30 pages.  The build chose 5 of them, and 4 of them could be measured.  The rate above is of the 4 pages that were measured, and it is not a rate of the whole corpus.
+
+> **1 of the pages were left out of the measurement:** Page 107_2.jpg.  There is no ground truth to compare them with, and the rate above is not a rate of those pages.
+
+### The engines on the same pages
+
+Every engine was measured on the **same** pages.
+
+The rate of the errors is what decides which engine is the better one; the time that a teacher needs to correct the text is the other half of the decision, and it is measured with the people of the school.
+
+| Engine | Character error rate | Word error rate | Seconds per page | Pages |
 | --- | --- | --- | --- | --- |
-| PP-OCRv6 (small) | 4 | **57.6%** | **93.8%** | 22.43 |
-| PP-OCRv6 (medium) | 4 | **55.7%** | **90.3%** | 39.06 |
+| kraken-ppocrv6-small | 57.6% | 93.8% | 24.03 | 4 |
+| kraken-ppocrv6-medium | 55.7% | 90.3% | 39.83 | 4 |
+| mishkefet-v1 | 73.0% | 96.0% | 25.92 | 4 |
 
-The ground truth of those pages holds 10,798 characters and 2,176 words.
-The engines were measured on the **same** pages, and the rates above
-are the rates over those pages, so that they can be compared with one
-another.
+| Page | Characters in the ground truth | Character error rate | Word error rate | Seconds | Ground truth |
+| --- | --- | --- | --- | --- | --- |
+| Page 105_1.jpg | 2862 | 64.6% | 98.6% | 29.74 | complete |
+| Page 105_2.jpg | 3008 | 75.6% | 100.3% | 25.23 | complete |
+| Page 107_1.jpg | 2287 | 35.3% | 82.2% | 19.68 | complete |
+| Page 112_1.jpg | 2641 | 48.8% | 90.9% | 21.48 | complete |
 
-The build measures every engine that is installed on the same pages,
-and writes the fresh numbers into this block.  The numbers here are
-the ones of the last build; the block in the artifact of the build is
-the one that was measured last.
+These pages are the *diagnostic* corpus of the old handwriting. They are not the material the program is made for, and they do not decide which engine is the better one.
+
+The numbers were produced by `tools/benchmark_ocr.py` in the `ocr-engine` job of the build, and the report they come from is uploaded as the artefact `ocr-accuracy-report`.
+
 <!-- DIAGNOSTIC:END -->
 
 ## The engines
+
+There are two engines in the program, and every build measures both of
+them on the same pages.
+
+### The first engine: kraken and PP-OCRv6
 
 | | |
 | --- | --- |
@@ -117,6 +201,55 @@ The model file is never bundled with the application.  The user installs
 it explicitly, and the file is checked against the MD5 digest published
 by the model authors and against the SHA-256 digest pinned in
 `hebrew_workbench/engine/models.py`.
+
+### The second engine: Mishkefet-v1
+
+| | |
+| --- | --- |
+| Engine | [heb-ocr](https://github.com/itayinbarr/heb-ocr) 0.1.0 - MIT (the code is shipped with the program) |
+| Weights | Mishkefet-v1 - **CC-BY-NC-SA-4.0, not a commercial licence**, <https://huggingface.co/itayinbar/Mishkefet-v1> |
+| Script | Hebrew, modern cursive - the material of the program |
+| Device | CPU only, no GPU and no cloud service |
+| Size of the model | 115.3 MB, checked against the SHA-256 `0dfb82e4…f6fd850b88` |
+| Published results of the model authors | A median character error rate of 0.175 on the lines of the public Hebrew handwriting benchmark (second of nine, behind a cloud model alone) and the best page error rate of that benchmark, 0.331.  The same numbers with the best path alone, without the language models and without the beam, are 0.261 - and those are the numbers this program measures |
+
+The weights of this model are **not** bundled with the program and are not
+redistributed by it: the user fetches them, on request, from the place
+where the author published them, after the licence has been shown.  The
+licence forbids commercial use, so a user who needs a commercial licence
+has to ask the author of the model.
+
+**The numbers of this engine on the pages of the Pinkas corpus are not a
+clean measurement.**  The model was trained on the published lines of
+real Hebrew cursive of that same corpus, and on synthetic Hebrew
+writing.  Its rates on the Pinkas pages are therefore optimistic, and
+they cannot be compared with the rates of the first engine, which was not
+trained on that corpus.  The clean comparison is the corpus of the
+modern school handwriting, and it has no page in it yet.
+
+The engine decodes greedily: no dictionary, no language model and no
+spelling rule is added to the result.  The model itself writes the
+folded punctuation of its own vocabulary, and it keeps the niqqud, the
+te'amim and the final letter forms of the Hebrew.
+
+**The numbers that the author published are not the numbers of this
+program, and the difference is on purpose.**  The author reads with a
+character language model, a word language model, a beam of twelve
+candidates and three or five readings of every line at different widths.
+This program reads with the best path alone, because a measurement with a
+dictionary in it does not measure the engine, and the rule of this project
+is that no word list and no language model take part in a measurement.  The
+rate of the errors of this program is therefore **higher** than the rate
+that the author published, and it is the rate of the engine and not of the
+dictionary.
+
+The page segmentation of this engine has a caveat of its own: its author
+wrote it against the only real pages that exist, which are the pages of
+the public benchmark, and says so.  The rate of the whole page is
+therefore also to be read with that in mind.
+
+The search that led to this engine, and the models that were not used and
+why, are in `docs/ENGINES.md`.
 
 **Choosing the default engine by the measurement is the plan, and it is
 not what the program does yet.**  Today the program restores the engine

@@ -106,8 +106,6 @@ class ProjectTests(unittest.TestCase):
             self.assertEqual(len(project), 0)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class OriginalTranscriptionTests(unittest.TestCase):
@@ -133,3 +131,7 @@ class OriginalTranscriptionTests(unittest.TestCase):
             project = Project()
             project.add(scan).transcription = "רק תיקון"
             self.assertEqual(project[0].original_transcription, "")
+
+
+if __name__ == "__main__":
+    unittest.main()

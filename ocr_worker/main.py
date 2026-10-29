@@ -23,6 +23,26 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
+def _engine_of(job: dict):
+    """The engine that the job asks for.
+
+    The worker can run more than one engine.  The job says which one,
+    and an unknown name is an error and not a silent fall back to the
+    first engine that happens to be there.
+    """
+    name = str(job.get("engine") or "kraken")
+    model_path = job["model_path"]
+    if name == "mishkefet":
+        from hebrew_workbench.engine.mishkefet import MishkefetEngine
+
+        return MishkefetEngine(model_path, artifact_id="mishkefet-v1")
+    if name == "kraken":
+        from hebrew_workbench.engine.kraken_local import KrakenEngine
+
+        return KrakenEngine(model_path)
+    raise ValueError(f"unknown engine: {name}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Hebrew Notes Workbench OCR worker")
     parser.add_argument("--job", required=True, help="path of the job description")
@@ -34,9 +54,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         job = json.loads(job_path.read_text(encoding="utf-8"))
-        from hebrew_workbench.engine.kraken_local import KrakenEngine
-
-        engine = KrakenEngine(job["model_path"])
+        engine = _engine_of(job)
         result = engine.recognize(job["document"])
         payload = {
             "text": result.text,

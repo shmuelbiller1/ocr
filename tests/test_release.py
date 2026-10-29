@@ -116,6 +116,45 @@ class ReleaseTests(unittest.TestCase):
                 "HebrewNotesWorkbench/LICENCES/pillow-1.0.dist-info-LICENSE", names
             )
 
+    def test_the_release_holds_the_licence_of_the_vendored_code(self) -> None:
+        """The code of the second engine is inside the program, and its
+        licence has to be in the release as well.  The MIT licence asks
+        for the notice to be kept with the code."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            app = self.make_application(root)
+            output = root / "program.zip"
+
+            self.build(app, output, self.make_packages(root))
+
+            with zipfile.ZipFile(output) as archive:
+                names = archive.namelist()
+                self.assertIn(
+                    "HebrewNotesWorkbench/LICENCES/HEB-OCR-MIT.txt", names
+                )
+                text = archive.read(
+                    "HebrewNotesWorkbench/LICENCES/HEB-OCR-MIT.txt"
+                ).decode("utf-8")
+            self.assertIn("MIT License", text)
+            self.assertIn("Itay Inbar", text)
+
+    def test_the_release_is_not_made_without_the_licence_of_the_vendored_code(self) -> None:
+        """A program that is given to somebody has to carry the licence
+        of every part of it.  A release without the notice of the
+        vendored code is not made at all."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            app = self.make_application(root)
+            output = root / "program.zip"
+            original = release.REPO_ROOT
+            release.REPO_ROOT = root / "a-repository-without-the-text"
+            try:
+                with self.assertRaises(SystemExit):
+                    self.build(app, output, self.make_packages(root))
+            finally:
+                release.REPO_ROOT = original
+            self.assertFalse(output.is_file())
+
     def test_a_licence_text_that_is_not_the_right_one_is_not_kept(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             target = Path(folder) / "licences"

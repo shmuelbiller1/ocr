@@ -64,6 +64,7 @@ The rules that follow from this:
 | Project file, export, print | **Works** | `hebrew_workbench/project.py`, `hebrew_workbench/exporting.py` |
 | OCR engine contract, fail-closed default | **Works** | `hebrew_workbench/engine/` |
 | One pretrained Hebrew engine (kraken + PP-OCRv6, Apache-2.0) | **Works, needs the model** | the model is downloaded by the user and checked against two digests; the accuracy is in `docs/OCR_ACCURACY.md` |
+| A second pretrained engine for modern Hebrew cursive (Mishkefet-v1) | **Works, needs the model** | the code is MIT and is shipped with the program; the weights are CC-BY-NC-SA-4.0 (not commercial), are not bundled, and are fetched by the user and checked against a SHA-256; the search is in `docs/ENGINES.md` |
 | Spelling proposals | **Works, needs a word list** | `hebrew_workbench/suggestions/spelling.py`; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
 | Working on the proposals of a page together | **Works** | accept or refuse all of them, or only the ones that were checked; change one word in all its places; keep a word in the word list of the user; take the last group of changes back as one action; go back to the text that the recognition gave |
 | Grammar proposals | **Works, a few rules** | `hebrew_workbench/suggestions/grammar.py` |
@@ -88,7 +89,7 @@ The rules that follow from this:
 1. Make document preview work offline: PDF page rasterization plus image viewport with zoom, rotation, next/previous pages. Reject malformed, massive, or encrypted documents gracefully.
 2. Add project save/load so the user can keep the work, plus TXT/DOCX export and a print path with a printer choice.
 3. Add a selectable OCR-engine registry: manifest id, version, supported script, executable location, license, CPU/GPU, availability, health check, typed per-page results, line bounding boxes, confidence if meaningful, cancellation and timeout.
-4. Choose ONE verified, genuinely tested, appropriately licensed pretrained model. Set up reproducible local packaging and benchmark on school handwriting; never claim unsupported languages work. **Done for kraken + PP-OCRv6; the benchmark of the modern school handwriting is built and waiting for the pages of the school.**
+4. Choose ONE verified, genuinely tested, appropriately licensed pretrained model. Set up reproducible local packaging and benchmark on school handwriting; never claim unsupported languages work. **Done for kraken + PP-OCRv6, and a second engine was added for the modern cursive (Mishkefet-v1) after a search of the open models - `docs/ENGINES.md`; the benchmark of the modern school handwriting is built and waiting for the pages of the school, so the accuracy of the program on the material it is made for is still unverified.**
 5. Add simple spelling adapter with a licensed Hebrew-script dictionary and user custom vocabulary. Show 0-3 ranked choices and 'keep original'; log exact source and accepted replacement. Preserve specialized abbreviations.
 6. Add optional local language model for grammar and לשון הספר changes, with passage-by-passage approval. It cannot overwrite exact transcription.
 7. Add right-to-left DOCX and PDF output with correct punctuation, Hebrew/English mixed text, headings, page numbers, quote marks and reasonable printable margins. Add print preview and Windows printer choice.

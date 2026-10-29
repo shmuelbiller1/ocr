@@ -385,6 +385,10 @@ class SessionTests(unittest.TestCase):
         text = session.undo_all("עולם, סוף")
         self.assertEqual(text, "עולם, סוף")
         self.assertEqual(len(session.last_undo_skipped), 1)
+        # The correction that could not be taken back is still in the
+        # history: it is still in the text, and the user has to be able
+        # to try to take it back another time.
+        self.assertEqual(len(session.accepted), 1)
 
     def test_the_undo_finds_the_correction_after_a_change_before_it(self) -> None:
         """The place of a correction is found even when the text moved."""
@@ -425,8 +429,6 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(restored.undo_all(), "שלום ,עולם")
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class BatchTests(unittest.TestCase):
@@ -492,6 +494,23 @@ class BatchTests(unittest.TestCase):
         session = self.make_session()
         self.assertIsNone(session.undo_last_batch())
         self.assertFalse(session.has_batch)
+
+    def test_a_change_of_the_group_that_cannot_be_taken_back_stays_in_the_history(
+        self,
+    ) -> None:
+        """A change that could not be taken back is still in the text,
+        and the user has to be able to try to take it back another
+        time."""
+        session = self.make_session()
+        session.accept_many(session.pending())
+        # The text around the changes is not the text that was there
+        # when they were accepted, so they cannot be found.
+        text = session.undo_last_batch("משהו אחר לגמרי")
+        self.assertEqual(text, "משהו אחר לגמרי")
+        self.assertEqual(len(session.last_undo_skipped), 2)
+        # The changes are still accepted: they are still in the text.
+        self.assertEqual(len(session.accepted), 2)
+        self.assertTrue(session.has_batch)
 
     def test_the_group_is_kept_when_the_project_is_saved(self) -> None:
         session = self.make_session()
@@ -1090,6 +1109,15 @@ class ContextOfTheChangesTests(unittest.TestCase):
             end=start + len(original),
         )
 
+    def test_repeated_skipped_batch_undo_never_weakens_context_guard(self) -> None:
+        session = SuggestionSession("a ,b")
+        session.set_suggestions([self.a_suggestion(" ,", ",", 1)])
+        session.accept_many(session.pending())
+        for _ in range(3):
+            self.assertEqual(session.undo_last_batch("x,b"), "x,b")
+            self.assertFalse(session.accepted[0].context_stale)
+            self.assertEqual(len(session.last_undo_skipped), 1)
+
     def test_a_change_that_is_not_at_the_start_is_not_made_stale(self) -> None:
         """The text that was kept begins before the place of the change,
         and the comparison has to begin there too."""
@@ -1105,3 +1133,7 @@ class ContextOfTheChangesTests(unittest.TestCase):
         session.undo_last_batch()
         self.assertEqual(len(session.accepted), 1)
         self.assertFalse(session.accepted[0].context_stale)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -86,6 +86,25 @@ class SettingsDialogTests(unittest.TestCase):
         box.setCurrentIndex(index)
         self.assertEqual(self.registry.settings.active.get("ocr"), "kraken-worker")
 
+    def test_a_refresh_of_the_screen_does_not_replace_the_plugins(self) -> None:
+        """A plugin that is read again is a new object, and the program
+        that is running holds the old one.  The screen is only a
+        screen: refreshing it does not read the plugins again."""
+        before = list(self.registry.plugins)
+        self.dialog.refresh()
+        after = list(self.registry.plugins)
+        self.assertEqual(len(before), len(after))
+        for old, new in zip(before, after):
+            self.assertIs(old, new)
+
+    def test_switching_a_plugin_off_does_not_replace_the_plugins(self) -> None:
+        before = list(self.registry.plugins)
+        self.dialog.table.setCurrentCell(0, 0)
+        self.dialog.toggle_plugin()
+        after = list(self.registry.plugins)
+        for old, new in zip(before, after):
+            self.assertIs(old, new)
+
 
 class WindowPluginTests(unittest.TestCase):
     """The window takes its engines and its modules from the plugins."""

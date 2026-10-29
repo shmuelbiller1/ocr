@@ -48,6 +48,35 @@ BUILTIN_MANIFESTS: tuple[PluginManifest, ...] = (
         options={"model_id": "kraken-ppocrv6-small"},
     ),
     PluginManifest(
+        id="mishkefet",
+        name="Mishkefet-v1 (כתב יד עברי מודרני, בתוך התוכנה)",
+        version="1.0.0",
+        kind=KIND_OCR,
+        entry="hebrew_workbench.engine.mishkefet:make_engine",
+        license="CC-BY-NC-SA-4.0",
+        license_url="https://huggingface.co/itayinbar/Mishkefet-v1",
+        description=(
+            "מנוע קומפקט לכתב יד עברי מודרני. הקוד ברישיון MIT והוא מצורף "
+            "לתוכנה; המשקלים ברישיון שאינו מסחרי ומותקנים בנפרד."
+        ),
+        builtin=True,
+        options={"model_id": "mishkefet-v1"},
+    ),
+    PluginManifest(
+        id="mishkefet-worker",
+        name="Mishkefet-v1 (תהליך נפרד)",
+        version="1.0.0",
+        kind=KIND_OCR,
+        entry="hebrew_workbench.engine.worker:make_worker_engine",
+        license="CC-BY-NC-SA-4.0",
+        license_url="https://huggingface.co/itayinbar/Mishkefet-v1",
+        description=(
+            "אותו מנוע, אבל בתהליך נפרד, כדי שהתוכנית לא תיתקע על זיהוי ארוך."
+        ),
+        builtin=True,
+        options={"model_id": "mishkefet-v1", "engine": "mishkefet"},
+    ),
+    PluginManifest(
         id="spelling-hebrew",
         name="בדיקת איות עברית",
         version="1.0.0",

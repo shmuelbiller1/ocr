@@ -232,6 +232,12 @@ class WorkerTests(unittest.TestCase):
 class WorkerManifestTests(unittest.TestCase):
     """The manifest of the worker names the model that it uses."""
 
+    def test_mismatched_worker_engine_and_artifact_are_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "do not match"):
+            WorkerEngine("worker.exe", "small.safetensors", engine="mishkefet")
+        with self.assertRaisesRegex(ValueError, "do not match"):
+            WorkerEngine("worker.exe", "model.pt", artifact_id="mishkefet-v1")
+
     def test_the_model_of_the_manifest_is_the_model_that_was_chosen(self) -> None:
         engine = WorkerEngine(
             "does-not-exist.exe",

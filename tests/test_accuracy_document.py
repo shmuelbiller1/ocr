@@ -26,6 +26,36 @@ def load_notice():
     return notice
 
 
+def measured_report(target: str) -> dict:
+    """A report of a corpus that was measured, with one engine."""
+    return {
+        "corpus": {
+            "name": "The Pinkas Dataset" if target != "modern" else "Modern school",
+            "target": target,
+            "pages": 2,
+            "pages_measured": 2,
+            "verified": True,
+        },
+        "engines": [
+            {
+                "engine": "kraken PP-OCRv6 (small)",
+                "model": "kraken-ppocrv6-small",
+                "pages": 2,
+                "pages_seen": 2,
+                "summary": {
+                    "cer": 0.2,
+                    "wer": 0.4,
+                    "seconds_per_page": 12.5,
+                    "characters_reference": 100,
+                    "words_reference": 20,
+                    "ground_truth_complete": True,
+                },
+                "results": [],
+            }
+        ],
+    }
+
+
 REPORT = {
     "engine": "kraken",
     "model": "small.safetensors",
@@ -127,6 +157,23 @@ class ModernCorpusTests(unittest.TestCase):
 
     def test_the_note_of_the_report_is_shown(self) -> None:
         self.assertIn("NOT verified", writer.build_section(self.REPORT))
+
+    def test_the_section_names_the_artefact_of_the_modern_report(self) -> None:
+        """The report of the modern corpus and the report of the
+        diagnostic corpus are two different files, and the section says
+        which one it is."""
+        section = writer.build_section(measured_report("modern"))
+        self.assertIn("ocr-accuracy-modern-report", section)
+        self.assertNotIn("`ocr-accuracy-report`", section)
+
+
+class TheDiagnosticCorpusTests(unittest.TestCase):
+    """The report of the old handwriting names its own artefact."""
+
+    def test_the_section_names_the_artefact_of_the_diagnostic_report(self) -> None:
+        section = writer.build_section(measured_report("historical"))
+        self.assertIn("`ocr-accuracy-report`", section)
+        self.assertNotIn("ocr-accuracy-modern-report", section)
 
 
 class SeveralEnginesTests(unittest.TestCase):

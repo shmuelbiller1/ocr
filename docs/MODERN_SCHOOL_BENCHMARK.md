@@ -16,7 +16,7 @@ is still missing.  The rules of the corpus itself are in
 | --- | --- |
 | The corpus of the modern school handwriting | **Empty** - there is no page in it yet |
 | The tools that build the corpus and measure the engines on it | **Ready** - `tools/build_benchmark.py` and `tools/benchmark_ocr.py` |
-| The measurement of the engines on the same pages | **Ready** - every engine is measured on the same pages |
+| The measurement of the engines on the same pages | **Ready** - every engine is measured on the same pages, including the second engine, *Mishkefet-v1*, that was written for the modern cursive (`docs/ENGINES.md`) |
 | The accuracy of the recognition on the material of the program | **Not verified** - there is nothing to measure it on yet |
 
 The last line is the honest state of the work, and it is written in
@@ -24,6 +24,15 @@ the same words in the report that every build produces.  Nothing in
 this repository claims a number for the recognition of modern school
 handwriting, because there is no page with a verified transcript to
 measure it on.
+
+There **is** one real page in the repository,
+`benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf`: a scan of
+contemporary handwritten Hebrew that was given to the project.  Every
+build reads it with every engine and publishes the readings, so that
+the engines can be compared on real material and a person can look at
+what the program reads.  It is not counted in any rate, because it has
+no transcript that somebody else checked - see
+`benchmark/smoke_test/README.md`.
 
 ## Why the historical pages are only a diagnostic
 
@@ -88,7 +97,7 @@ truth, in the same run:
 
 ```bash
 python tools/benchmark_ocr.py --corpus benchmark/modern_school \
-    --engines kraken-ppocrv6-small kraken-ppocrv6-medium
+    --engines kraken-ppocrv6-small kraken-ppocrv6-medium mishkefet-v1
 ```
 
 The report holds, for every engine: the character error rate, the word

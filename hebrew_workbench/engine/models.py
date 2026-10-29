@@ -32,6 +32,7 @@ __all__ = [
     "verify_file",
     "install_artifact",
     "InstallError",
+    "InstallCancelled",
 ]
 
 #: Largest model file the application is willing to download (bytes).
@@ -40,6 +41,14 @@ MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
 
 class InstallError(RuntimeError):
     """The model file could not be downloaded or did not pass the check."""
+
+
+class InstallCancelled(InstallError):
+    """The user asked the download of the model to stop.
+
+    It is not a failure of a place to fetch the file from: the download
+    was stopped, and the other places are not tried.
+    """
 
 
 @dataclass(frozen=True)
@@ -51,13 +60,21 @@ class ModelArtifact:
     filename: str
     url: str
     size_bytes: int
-    md5: str
-    sha256: str | None
     license: str
     license_url: str
     script: str
     engine_version: str
+    #: Which engine reads this model: ``kraken`` or ``mishkefet``.
+    engine: str = "kraken"
     notes: str = ""
+    #: The MD5 that the author of the model published.  Some hosts publish
+    #: no MD5, and then only the SHA-256 that this project pinned is
+    #: checked.
+    md5: str | None = None
+    #: The SHA-256 of the file, as it was when this project fetched it.
+    sha256: str | None = None
+    #: Other places where the same file can be fetched, when the first
+    #: one does not answer.
     fallback_urls: tuple[str, ...] = ()
 
     @property
@@ -121,6 +138,35 @@ MODEL_ARTIFACTS: dict[str, ModelArtifact] = {
             "error rate for Hebrew is 5.1% and the word error rate 14.2%."
         ),
     ),
+    "mishkefet-v1": ModelArtifact(
+        id="mishkefet-v1",
+        name="Mishkefet-v1, a compact recogniser for modern Hebrew cursive",
+        filename="mishkefet-v1.pt",
+        url=(
+            "https://huggingface.co/itayinbar/Mishkefet-v1/resolve/main/"
+            "mishkefet-v1.pt"
+        ),
+        size_bytes=120_864_761,
+        license="CC-BY-NC-SA-4.0",
+        license_url="https://huggingface.co/itayinbar/Mishkefet-v1",
+        script="Hebrew (modern cursive)",
+        engine_version="heb-ocr 0.1.0",
+        engine="mishkefet",
+        notes=(
+            "The model was written for modern Hebrew cursive, which is the "
+            "material this program is made for. The file is not part of the "
+            "program: it is downloaded by the user, on request, and is "
+            "checked against the SHA-256 below. The licence is not a "
+            "commercial one: the weights may be used for non-commercial "
+            "purposes only, and a modified file keeps the same licence. "
+            "The model was trained on the published lines of real Hebrew "
+            "cursive of the Pinkas corpus, so its numbers on that corpus "
+            "are not a clean measurement."
+        ),
+        sha256=(
+            "0dfb82e440ebfa9dd61f562ad36a83ec41c23904eacd96623c3bd8f6fd850b88"
+        ),
+    ),
 }
 
 
@@ -173,9 +219,10 @@ def verify_file(path: str | Path, artifact: ModelArtifact) -> str | None:
         return (
             f"גודל הקובץ אינו תואם ({size} במקום {artifact.size_bytes} בתים)"
         )
-    published_md5 = md5_of(target)
-    if published_md5.lower() != artifact.md5.lower():
-        return "ה-MD5 שפורסם על יד מפרסם המודל אינו תואם"
+    if artifact.md5:
+        published_md5 = md5_of(target)
+        if published_md5.lower() != artifact.md5.lower():
+            return "ה-MD5 שפורסם על יד מפרסם המודל אינו תואם"
     if artifact.sha256:
         digest = sha256_of(target)
         if digest.lower() != artifact.sha256.lower():
@@ -188,12 +235,16 @@ def install_artifact(
     destination: str | Path | None = None,
     progress: Callable[[int, int], None] | None = None,
     timeout: float = 600.0,
+    cancel: Callable[[], bool] | None = None,
 ) -> Path:
     """Download a model file and verify it.
 
     The file is written to a temporary name first and only moved into
     place after every check passed, so an interrupted download can never
     be mistaken for a good model.
+
+    The download can be stopped: the ``cancel`` callable is asked at
+    every step, and a download that was stopped leaves nothing behind.
     """
     target_dir = Path(destination) if destination else models_directory()
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -214,17 +265,25 @@ def install_artifact(
     failures: list[str] = []
     try:
         for url in urls:
+            if cancel and cancel():
+                # The user asked the download to stop.  The other places
+                # are not tried: the download was stopped, and not
+                # refused.
+                raise InstallCancelled("ההורדה בוטלה.")
             temp_path.unlink(missing_ok=True)
             try:
                 request = urllib.request.Request(
                     url, headers={"User-Agent": "HebrewNotesWorkbench/0.2"}
                 )
-                with urllib.request.urlopen(request, timeout=timeout) as response:
+                with urllib.request.urlopen(request, timeout=min(timeout, 5.0) if cancel else timeout) as response:
                     total = int(response.headers.get("Content-Length") or 0)
                     done = 0
                     with open(temp_path, "wb") as stream:
                         while True:
-                            chunk = response.read(1024 * 256)
+                            if cancel and cancel():
+                                raise InstallCancelled("ההורדה בוטלה.")
+                            read = getattr(response, "read1", response.read)
+                            chunk = read(1024 * 256)
                             if not chunk:
                                 break
                             stream.write(chunk)
@@ -235,10 +294,20 @@ def install_artifact(
                                 progress(done, total)
                 problem = verify_file(temp_path, artifact)
                 if problem is not None:
-                    raise InstallError(problem)
+                    raise InstallError(
+                        f"הקובץ שהורד אינו תואם לפרסום ({problem}). "
+                        "הקובץ נמחק ולא ייעשה בו שימוש."
+                    )
+                if cancel and cancel():
+                    raise InstallCancelled("ההורדה בוטלה.")
                 shutil.move(str(temp_path), str(target))
                 return target
+            except InstallCancelled:
+                # A download that was stopped is not a source that failed.
+                raise
             except Exception as exc:
+                if cancel and cancel():
+                    raise InstallCancelled("ההורדה בוטלה.") from exc
                 temp_path.unlink(missing_ok=True)
                 failures.append(f"{url}: {exc}")
         details = " | ".join(failures)
