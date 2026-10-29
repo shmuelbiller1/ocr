@@ -100,6 +100,13 @@ class WorkerPackagingTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/windows.yml').read_text()
         self.assertIn('needs: [test-and-package, unit-tests, ocr-engine, ocr-worker-windows]', workflow)
 
+    def test_independent_worker_installs_the_desktop_pdf_runtime(self):
+        root = Path(__file__).resolve().parents[1]
+        requirements = (root / 'requirements.txt').read_text()
+        pdf_pin = next(line for line in requirements.splitlines() if line.startswith('pypdfium2=='))
+        worker_job = (root / '.github/workflows/windows.yml').read_text().split('  ocr-worker-windows:')[1]
+        self.assertIn(pdf_pin, worker_job)
+
     def test_offline_guard_blocks_outbound_lookup_and_connect_without_reaching_network(self):
         # Audit hooks cannot be removed, so keep this check in a fresh process.
         code = '''
