@@ -708,9 +708,12 @@ jobs:
               gh api "repos/${{ github.repository }}/releases/assets/$new" -X PATCH \
                 -F name="$name"
             }
-            publish ./*.sha256
-            publish ./*.zip
-            publish ./*.exe
+            # Each pattern may match multiple files; pass one asset at a time.
+            # The publish helper accepts only one positional argument.
+            for asset in ./*.sha256 ./*.zip ./*.exe; do
+              [ -f "$asset" ] || continue
+              publish "$asset"
+            done
             # The notes are written at the end, when the files of the
             # release are there.
             # -F draft=false: the release API wants a boolean and not
