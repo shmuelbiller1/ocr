@@ -18,9 +18,11 @@ later require a download, but the models listed for each EXE work locally.
 Nothing is uploaded. These EXEs are not claimed to be digitally signed.
 
 The noncommercial model licence does not replace the surrounding application
-and dependency licences. Attribution, original model sources and licence texts
-are included; see `LICENCES` and `docs/THIRD_PARTY.md`. Use Lite if those
-noncommercial restrictions do not suit your intended use.
+and dependency licences. Application/dependency licence texts are included in
+`LICENCES`. The Mishkefet notice includes attribution, original model sources
+and an online link to the CC-BY-NC-SA-4.0 terms; its full legal text is not
+bundled. Reading that link is not required to run OCR. See `docs/THIRD_PARTY.md`
+and use Lite if the noncommercial restrictions do not suit your intended use.
 
 ## Changes in v0.4.0
 
@@ -86,8 +88,8 @@ This is an offline Windows program for Hebrew handwriting: import a scan,
 recognise the text, correct it, and print it.  Python is not needed.  The
 regular ZIP requires recognition weights to be installed when the user asks;
 the one-click editions already include the models listed above, and
-the model file is checked against the digest published by its authors.  Nothing is uploaded anywhere.  The licence texts of every bundled
-component are in the folder LICENCES.
+the model file is checked against the digest published by its authors.  Nothing is uploaded anywhere.  Application/dependency licence texts and model-attribution notices are in
+the folder LICENCES; the Mishkefet notice links to its full licence online.
 
 The program asks before it closes a window with work that was not saved,
 and before it replaces a file that is already there.
