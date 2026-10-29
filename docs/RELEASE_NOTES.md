@@ -97,10 +97,19 @@ readings are retained and shown side by side; applying the alternative requires
 confirmation and can be undone. These profiles do not change the raw benchmark
 or establish an accuracy improvement on school notes. See `docs/ASSISTED_DECODING.md`.
 
-## One-click offline release option
+## One-click offline release options
 
-Alongside the normal ZIP, GitHub Releases now publishes a self-contained
-`HebrewNotesWorkbench-<version>-one-click.exe` containing the application,
-worker, and a verified Apache-2.0 Kraken-small model. Download and double-click;
-the files are unpacked automatically to a per-user cache, without an installer
-or a model download. This edition does not bundle Mishkefet-v1 weights.
+Two single-download, double-click Windows EXE editions are published alongside
+the existing ZIP, with no installer, extraction wizard, Python setup, or
+separate model download.
+
+- **One-click Lite** bundles the Kraken PP-OCRv6 small model (Apache-2.0).
+- **One-click All Models — Noncommercial** bundles Kraken small, Kraken medium,
+  Mishkefet-v1 and both of Mishkefet's optional language models. The Mishkefet
+  model files are CC-BY-NC-SA-4.0, attributed and supplied unmodified for
+  noncommercial use. See the included notice and license link.
+
+All bundled model files are validated against pinned SHA-256 digests. Windows
+automatically unpacks the program into a per-user cache; the PyInstaller
+onefile payload is temporarily extracted on every launch, so it may open
+more slowly than the regular ZIP. Switching OCR engines is done in Settings.
