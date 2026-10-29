@@ -51,6 +51,18 @@ class DocumentTextTests(unittest.TestCase):
         self.window._sync_document_list()
         self.window.doc_list.setCurrentRow(0)
 
+    def test_only_the_document_being_recognized_is_read_only(self) -> None:
+        self.add_two_documents()
+        self.window._recognizing_entry = self.window.project[0]
+        self.window._show_entry(self.window.project[0])
+        self.assertTrue(self.window.editor.isReadOnly())
+        self.window.doc_list.setCurrentRow(1)
+        self.assertFalse(self.window.editor.isReadOnly())
+        self.window.doc_list.setCurrentRow(0)
+        self.assertTrue(self.window.editor.isReadOnly())
+        self.window._on_task_finished()
+        self.assertFalse(self.window.editor.isReadOnly())
+
     def test_the_text_of_a_document_is_kept_when_another_one_is_chosen(self) -> None:
         self.add_two_documents()
         first = self.window.project[0]

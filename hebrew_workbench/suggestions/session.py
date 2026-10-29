@@ -539,6 +539,14 @@ class SuggestionSession:
             return None
         last = max(batches)
         result = self.current_text if text is None else text
+        # Only a context that matched before a real undo may become stale.
+        # A skipped change must never gain a position-only fallback.
+        matching_contexts = set()
+        for change in self.accepted:
+            piece = change.before + change.replacement + change.after
+            start = max(0, change.position - len(change.before))
+            if piece and result[start : start + len(piece)] == piece:
+                matching_contexts.add(id(change))
         self.last_undo_skipped = []
         taken_back_changes: list[AcceptedChange] = []
         for change in reversed(list(self.accepted)):
@@ -590,7 +598,7 @@ class SuggestionSession:
         # the text that is there, and they are found by their place
         # alone, so that they can still be taken back.
         for change in self.accepted:
-            if change.context_stale:
+            if change.context_stale or id(change) not in matching_contexts:
                 continue
             piece = change.before + change.replacement + change.after
             if not piece:

@@ -86,6 +86,7 @@ class MainWindow(QMainWindow):
         # proposals of one document are never offered for another one.
         self._sessions: dict[str, SuggestionSession] = {}
         self._shown_entry = None
+        self._recognizing_entry = None
         self._loading = False
         self.task: TaskThread | None = None
 
@@ -544,6 +545,7 @@ class MainWindow(QMainWindow):
         self.editor.setPlainText(entry.transcription)
         self._loading = False
         self._shown_entry = entry
+        self.editor.setReadOnly(self._document_is_recognizing())
         self.suggestions = self._session_for(entry)
         self._refresh_suggestions(self.suggestions)
         self.doc_path_label.setText(entry.path)
@@ -698,6 +700,7 @@ class MainWindow(QMainWindow):
         # While the recognition runs, the editor is closed: the result
         # of the recognition replaces the text of the editor, and what
         # the user writes in the meantime would be lost.
+        self._recognizing_entry = entry
         self.editor.setReadOnly(True)
 
         def work(progress, cancel):
@@ -780,6 +783,7 @@ class MainWindow(QMainWindow):
         self.cancel_action.setEnabled(False)
         self.run_ocr_action.setEnabled(True)
         # The editor is open again: the work is over.
+        self._recognizing_entry = None
         self.editor.setReadOnly(False)
         self.task = None
 
@@ -1152,6 +1156,8 @@ class MainWindow(QMainWindow):
 
     def accept_suggestion(self, suggestion) -> None:
         """Apply one proposal that the user accepted."""
+        if self._document_is_recognizing():
+            return
         session = self.suggestions
         if session is not self._session_for(self._shown_entry):
             # The proposals belong to another document, and they are not
@@ -1201,8 +1207,14 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("ההצעה נדחתה. הטקסט לא השתנה.", 5000)
 
     # -- the proposals of the document as a whole --------------------------
+    def _document_is_recognizing(self) -> bool:
+        return (self._shown_entry is not None
+                and self._shown_entry is self._recognizing_entry)
+
     def _session_of_the_document(self) -> SuggestionSession | None:
         """The session of the document that is shown, when it may be used."""
+        if self._document_is_recognizing():
+            return
         session = self.suggestions
         if session is not self._session_for(self._shown_entry):
             self.statusBar().showMessage(
@@ -1391,6 +1403,8 @@ class MainWindow(QMainWindow):
 
     def undo_last_batch(self) -> None:
         """Take back the last group of changes, as one action."""
+        if self._document_is_recognizing():
+            return
         session = self.suggestions
         if session is not self._session_for(self._shown_entry):
             self.statusBar().showMessage(
@@ -1419,6 +1433,8 @@ class MainWindow(QMainWindow):
 
     def restore_original_text(self) -> None:
         """Go back to the text that the recognition gave."""
+        if self._document_is_recognizing():
+            return
         entry = self._shown_entry
         if entry is None:
             self.statusBar().showMessage("אין מסמך פתוח.", 5000)
@@ -1454,7 +1470,8 @@ class MainWindow(QMainWindow):
         # as written by hand any more.
         entry.edited = False
         self._store_editor_text()
-        session.undo_all(self.editor.toPlainText())
+        session = SuggestionSession(original)
+        self._sessions[str(entry.path)] = session
         self.suggestions = session
         self._refresh_suggestions(session)
         self._store_changes()
@@ -1464,6 +1481,8 @@ class MainWindow(QMainWindow):
 
     def undo_all_changes(self) -> None:
         """Take back every correction that was accepted."""
+        if self._document_is_recognizing():
+            return
         session = self.suggestions
         if session is not self._session_for(self._shown_entry):
             self.statusBar().showMessage(

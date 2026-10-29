@@ -390,7 +390,7 @@ jobs:
           # no transcript that somebody else checked, so nothing is
           # measured here: the readings of every engine are published, so
           # that they can be compared on the same real material.
-          python tools/smoke_test.py \
+          python tools/smoke_test.py --require-text \
             --document benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf \
             --models .cache/models \
             --engines kraken-ppocrv6-small kraken-ppocrv6-medium mishkefet-v1 \
@@ -448,7 +448,7 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/small.txt build/smoke/medium.txt build/smoke/mishkefet-v1.txt build/smoke/smoke-test.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/smoke-small.txt build/smoke/smoke-medium.txt build/smoke/smoke-mishkefet-v1.txt build/smoke/smoke-test.json
 
   ocr-worker-windows:
     name: OCR worker (Windows)

@@ -39,6 +39,38 @@ def make_artifact(path: Path, **overrides) -> ModelArtifact:
 
 
 class ModelTests(unittest.TestCase):
+    def test_cancellation_during_verification_never_installs(self) -> None:
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "model.bin"
+            source.write_bytes(b"model weights")
+            artifact = make_artifact(source)
+            destination = Path(folder) / "installed"
+            stopped = False
+
+            def verify(*args):
+                nonlocal stopped
+                stopped = True
+                return None
+
+            with patch.object(models, "verify_file", side_effect=verify):
+                with self.assertRaises(InstallCancelled):
+                    install_artifact(artifact, destination, cancel=lambda: stopped)
+            self.assertEqual(list(destination.iterdir()), [])
+
+    def test_cancellable_download_caps_network_operation_timeout(self) -> None:
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "model.bin"
+            source.write_bytes(b"weights")
+            artifact = make_artifact(source)
+            with patch.object(models.urllib.request, "urlopen", side_effect=TimeoutError) as open_url:
+                with self.assertRaises(InstallError):
+                    install_artifact(artifact, Path(folder) / "out", cancel=lambda: False)
+                self.assertEqual(open_url.call_args.kwargs["timeout"], 5.0)
+
     def test_digests_are_computed_over_the_whole_file(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "model.bin"

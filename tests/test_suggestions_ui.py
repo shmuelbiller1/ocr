@@ -478,6 +478,32 @@ class BulkActionsTests(unittest.TestCase):
         self.assertEqual(self.window.editor.toPlainText(), "שלום ,עולם ועוד ,דבר")
         self.assertFalse(self.window.suggestions.has_batch)
 
+    def test_restore_original_discards_old_correction_history(self) -> None:
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QMessageBox
+
+        self.make_suggestions()
+        self.window.project[0].original_transcription = self.window.editor.toPlainText()
+        self.window.accept_all_suggestions()
+        self.assertTrue(self.window.suggestions.accepted)
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+            self.window.restore_original_text()
+        self.assertEqual(self.window.suggestions.accepted, [])
+        self.assertEqual(self.window.project[0].changes, [])
+        self.window.editor.setPlainText("שלום,עולם ועוד,דבר")
+        self.window.undo_all_changes()
+        self.assertEqual(self.window.editor.toPlainText(), "שלום,עולם ועוד,דבר")
+
+    def test_ocr_lock_blocks_programmatic_corrections(self) -> None:
+        self.make_suggestions()
+        before = self.window.editor.toPlainText()
+        self.window._recognizing_entry = self.window._shown_entry
+        self.window.accept_all_suggestions()
+        self.window.accept_suggestion(self.window.suggestions.pending()[0])
+        self.assertEqual(self.window.editor.toPlainText(), before)
+        self.assertEqual(self.window.suggestions.accepted, [])
+        self.window._recognizing_entry = None
+
     def test_the_text_goes_back_to_what_the_recognition_gave(self) -> None:
         from PySide6.QtWidgets import QMessageBox
 

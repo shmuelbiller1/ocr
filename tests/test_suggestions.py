@@ -1109,6 +1109,15 @@ class ContextOfTheChangesTests(unittest.TestCase):
             end=start + len(original),
         )
 
+    def test_repeated_skipped_batch_undo_never_weakens_context_guard(self) -> None:
+        session = SuggestionSession("a ,b")
+        session.set_suggestions([self.a_suggestion(" ,", ",", 1)])
+        session.accept_many(session.pending())
+        for _ in range(3):
+            self.assertEqual(session.undo_last_batch("x,b"), "x,b")
+            self.assertFalse(session.accepted[0].context_stale)
+            self.assertEqual(len(session.last_undo_skipped), 1)
+
     def test_a_change_that_is_not_at_the_start_is_not_made_stale(self) -> None:
         """The text that was kept begins before the place of the change,
         and the comparison has to begin there too."""

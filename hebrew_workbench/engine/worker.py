@@ -109,6 +109,11 @@ class WorkerEngine:
         artifact_id: str = "kraken-ppocrv6-small",
         engine: str = "kraken",
     ) -> None:
+        from .models import MODEL_ARTIFACTS
+
+        artifact = MODEL_ARTIFACTS.get(artifact_id)
+        if artifact is None or artifact.engine != engine:
+            raise ValueError("The engine and model do not match")
         self.worker = Path(worker)
         self.model_path = Path(model_path)
         self.timeout_seconds = timeout_seconds

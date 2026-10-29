@@ -100,6 +100,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--output", default="build/smoke", help="where to write")
     parser.add_argument("--timeout", type=float, default=1800.0)
+    parser.add_argument("--require-text", action="store_true",
+                        help="fail if no engine returns nonempty text")
     args = parser.parse_args(argv)
 
     from hebrew_workbench.engine.models import MODEL_ARTIFACTS
@@ -142,10 +144,11 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     failures = 0
+    nonempty = 0
     for identifier, artifact, model_path in engines:
         print(f"reading with {identifier} ...", flush=True)
-        engine = _engine_for(artifact, model_path, identifier, args.timeout)
         try:
+            engine = _engine_for(artifact, model_path, identifier, args.timeout)
             reading = read_with(engine, document)
         except Exception as exc:  # noqa: BLE001 - one engine does not stop the others
             message = f"{type(exc).__name__}: {exc}"
@@ -155,7 +158,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             failures += 1
             continue
-        name = artifact.filename.rsplit(".", 1)[0]
+        nonempty += bool(reading["text"].strip())
+        name = "smoke-" + artifact.filename.rsplit(".", 1)[0]
         (output / f"{name}.txt").write_text(reading["text"], encoding="utf-8")
         (output / f"{name}.json").write_text(
             json.dumps(reading, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -183,13 +187,9 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(f"the readings are in {output}")
-    if engines and failures == len(engines):
-        # Every engine that was asked to read the page failed.  The
-        # point of this test is that a real page is read, and a build
-        # that read nothing is a build that has to fail.
+    if failures or (args.require_text and not nonempty):
         print(
-            "no engine could read the page: "
-            f"{failures} of {len(engines)} engines failed",
+            f"smoke test failed: {failures} engine errors, {nonempty} nonempty readings",
             file=sys.stderr,
         )
         return 1

@@ -275,14 +275,15 @@ def install_artifact(
                 request = urllib.request.Request(
                     url, headers={"User-Agent": "HebrewNotesWorkbench/0.2"}
                 )
-                with urllib.request.urlopen(request, timeout=timeout) as response:
+                with urllib.request.urlopen(request, timeout=min(timeout, 5.0) if cancel else timeout) as response:
                     total = int(response.headers.get("Content-Length") or 0)
                     done = 0
                     with open(temp_path, "wb") as stream:
                         while True:
                             if cancel and cancel():
                                 raise InstallCancelled("ההורדה בוטלה.")
-                            chunk = response.read(1024 * 256)
+                            read = getattr(response, "read1", response.read)
+                            chunk = read(1024 * 256)
                             if not chunk:
                                 break
                             stream.write(chunk)
@@ -297,12 +298,16 @@ def install_artifact(
                         f"הקובץ שהורד אינו תואם לפרסום ({problem}). "
                         "הקובץ נמחק ולא ייעשה בו שימוש."
                     )
+                if cancel and cancel():
+                    raise InstallCancelled("ההורדה בוטלה.")
                 shutil.move(str(temp_path), str(target))
                 return target
             except InstallCancelled:
                 # A download that was stopped is not a source that failed.
                 raise
             except Exception as exc:
+                if cancel and cancel():
+                    raise InstallCancelled("ההורדה בוטלה.") from exc
                 temp_path.unlink(missing_ok=True)
                 failures.append(f"{url}: {exc}")
         details = " | ".join(failures)

@@ -45,6 +45,38 @@ class SmokeTestTests(unittest.TestCase):
     counted in a rate, and the report says so.
     """
 
+    def test_smoke_failure_and_empty_reading_exit_status(self) -> None:
+        import contextlib
+        import io
+        import json
+        import tempfile
+        from unittest.mock import patch
+        from tools import smoke_test
+        from hebrew_workbench.engine.models import MODEL_ARTIFACTS
+
+        for fails, text, strict, expected in (
+            (False, "raw reading", True, 0),
+            (False, "", True, 1),
+            (False, "", False, 0),
+            (True, "raw reading", True, 1),
+        ):
+            with self.subTest(fails=fails, text=text, strict=strict), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                document = root / "page.pdf"
+                document.touch()
+                for identifier in ("kraken-ppocrv6-small", "mishkefet-v1"):
+                    (root / MODEL_ARTIFACTS[identifier].filename).touch()
+                reading = dict(text=text, engine="test", lines=1, characters=len(text), seconds=0)
+                outputs = [RuntimeError("broken engine"), reading] if fails else [reading, reading]
+                args = ["--document", str(document), "--models", str(root), "--output", str(root / "out")]
+                if strict:
+                    args.append("--require-text")
+                with patch.object(smoke_test, "_engine_for"), patch.object(smoke_test, "read_with", side_effect=outputs), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(smoke_test.main(args), expected)
+                report = json.loads((root / "out" / "smoke-test.json").read_text())
+                self.assertEqual(len(report["engines"]), 2)
+                self.assertTrue((root / "out" / "smoke-mishkefet-v1.txt").exists())
+
     def test_the_page_of_the_project_is_read_by_the_tool(self) -> None:
         document = (
             REPO_ROOT
