@@ -235,8 +235,9 @@ jobs:
             } else {
               "$base-one-click"
             }
+            $resolvedPayload = (Resolve-Path $payload -ErrorAction Stop).Path
             python -m PyInstaller --noconfirm --clean --onefile --windowed `
-              --add-data "$payload;." `
+              --add-data "$resolvedPayload;." `
               --distpath release `
               --workpath "build/one-click-build-$edition" `
               --specpath "build/one-click-spec-$edition" `
