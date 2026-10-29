@@ -29,6 +29,39 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 class MishkefetEngineTests(unittest.TestCase):
     """The contract of the engine."""
 
+    def test_timed_out_inference_keeps_its_lock_until_worker_finishes(self) -> None:
+        import threading
+        from unittest.mock import patch
+        from hebrew_workbench.engine.base import EngineTimeout, PageResult
+
+        engine = MishkefetEngine(None)
+        entered = threading.Event()
+        release = threading.Event()
+        finished = threading.Event()
+        calls = []
+
+        def read(number, image):
+            calls.append(number)
+            entered.set()
+            release.wait(5)
+            finished.set()
+            return PageResult(number=number, text="read")
+
+        try:
+            with patch.object(engine, "_recognize_page_now", side_effect=read):
+                with self.assertRaises(EngineTimeout):
+                    engine._recognize_page(1, None, budget=0.03)
+                self.assertTrue(entered.is_set())
+                with self.assertRaises(EngineTimeout):
+                    engine._recognize_page(2, None, budget=0.03)
+                self.assertEqual(calls, [1])
+                release.set()
+                self.assertTrue(finished.wait(2))
+                self.assertEqual(engine._recognize_page(3, None, budget=1).text, "read")
+                self.assertEqual(calls, [1, 3])
+        finally:
+            release.set()
+
     def test_an_engine_without_a_model_is_not_available(self) -> None:
         engine = MishkefetEngine(None)
         self.assertFalse(engine.available())

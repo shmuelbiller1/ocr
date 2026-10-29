@@ -133,6 +133,7 @@ class MishkefetEngine:
         self.artifact_id = artifact_id
         self.timeout_seconds = timeout_seconds
         self._recognizer = None
+        self._page_lock = threading.Lock()
 
     # -- availability ------------------------------------------------------
     def manifest(self) -> EngineManifest:
@@ -251,8 +252,12 @@ class MishkefetEngine:
         the same way the other engine does it.
         """
         if budget is None:
-            return self._recognize_page_now(number, image)
+            with self._page_lock:
+                return self._recognize_page_now(number, image)
 
+        started = time.monotonic()
+        if not self._page_lock.acquire(timeout=max(0.0, budget)):
+            raise EngineTimeout(f"הזיהוי של עמוד {number} עבר את מגבלת הזמן.")
         outcome: dict = {}
 
         def work() -> None:
@@ -260,12 +265,18 @@ class MishkefetEngine:
                 outcome["page"] = self._recognize_page_now(number, image)
             except BaseException as exc:  # noqa: BLE001 - reported below
                 outcome["error"] = exc
+            finally:
+                self._page_lock.release()
 
         thread = threading.Thread(
             target=work, name=f"mishkefet-page-{number}", daemon=True
         )
-        thread.start()
-        thread.join(budget)
+        try:
+            thread.start()
+        except BaseException:
+            self._page_lock.release()
+            raise
+        thread.join(max(0.0, budget - (time.monotonic() - started)))
         if thread.is_alive():
             raise EngineTimeout(
                 f"הזיהוי של עמוד {number} עבר את מגבלת הזמן של {self.timeout_seconds:.0f} שניות."

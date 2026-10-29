@@ -861,7 +861,7 @@ class MainWindow(QMainWindow):
 
             return install_artifact(artifact, progress=report, cancel=cancel)
 
-        self.task = TaskThread(work, self)
+        self.task = TaskThread(work, self, completion_wins=True)
         self.task.progress.connect(self._on_task_progress)
         self.task.succeeded.connect(self._on_model_installed)
         self.task.failed.connect(self._on_task_failed)

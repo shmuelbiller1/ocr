@@ -22,10 +22,12 @@ class TaskThread(QThread):
     failed = Signal(str)
     cancelled = Signal()
 
-    def __init__(self, function: Callable[[Callable[[str], None], Callable[[], bool]], object], parent=None) -> None:
+    def __init__(self, function: Callable[[Callable[[str], None], Callable[[], bool]], object], parent=None, *, completion_wins: bool = False) -> None:
         super().__init__(parent)
         self._function = function
         self._cancelled = False
+        # Committed installs cannot be rolled back by a late cancel request.
+        self._completion_wins = completion_wins
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -46,7 +48,7 @@ class TaskThread(QThread):
                 return
             self.failed.emit(str(exc))
             return
-        if self._cancelled:
+        if self._cancelled and not self._completion_wins:
             self.cancelled.emit()
             return
         self.succeeded.emit(result)
