@@ -202,42 +202,66 @@ jobs:
         run: |
           python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download.log
           if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
-      - name: Build and verify a one-click offline Windows EXE
+      - name: Download the additional verified models for the full noncommercial edition
         shell: pwsh
         run: |
-          # Assemble the verified Apache-2.0 model and the complete
-          # Windows app before building the single self-contained EXE.
+          # The full edition is an optional separate download. All five
+          # files must pass their pinned checksums or the build fails.
+          foreach ($id in @('kraken-ppocrv6-medium', 'mishkefet-v1',
+                            'mishkefet-char-lm', 'mishkefet-word-lm')) {
+            python tools/download_model.py --model $id --target .cache/models
+            if ($LASTEXITCODE -ne 0) { throw "Model failed verification: $id" }
+          }
+      - name: Build and verify both one-click offline Windows EXEs
+        shell: pwsh
+        run: |
           $archive = Get-ChildItem 'release' -Filter '*-win64.zip' | Select-Object -First 1
           if (-not $archive) { throw 'the complete release ZIP is missing' }
-          python tools/build_one_click.py `
-            --archive $archive.FullName `
-            --model .cache/models/small.safetensors `
-            --output build/one-click-payload.zip
-          if ($LASTEXITCODE -ne 0) { throw 'the one-click offline payload could not be prepared' }
-          $oneClickBase = $archive.Name -replace '-win64\.zip$', '-one-click'
-          python -m PyInstaller --noconfirm --clean --onefile --windowed `
-            --add-data "build/one-click-payload.zip;." `
-            --distpath release `
-            --workpath build/one-click-launcher `
-            --specpath build/one-click-launcher `
-            --name $oneClickBase tools/portable_launcher.py
-          if ($LASTEXITCODE -ne 0) { throw 'the single-click offline EXE could not be built' }
-          $oneClick = Join-Path 'release' ($oneClickBase + '.exe')
-          if (-not (Test-Path $oneClick)) { throw 'the one-click EXE is missing' }
-          # Test an actual downloaded-style onefile EXE, with no network calls.
-          pwsh -File tools/run_windows_exe.ps1 `
-            -Exe $oneClick -Report 'one-click-selftest.json' `
-            -StdOut 'one-click-out.txt' -StdErr 'one-click-err.txt' `
-            -TimeoutSeconds 300
-          if ($LASTEXITCODE -ne 0) { throw 'the one-click EXE did not start' }
-          if (-not (Test-Path 'one-click-selftest.json')) { throw 'offline self-test report missing' }
-          $check = Get-Content 'one-click-selftest.json' -Raw | ConvertFrom-Json
-          if (-not $check.ok) { throw 'offline application self-test failed' }
+          $base = $archive.Name -replace '-win64\.zip$', ''
+          # A small permissively licensed edition and a full edition
+          # with Mishkefet + its optional language models (noncommercial).
+          foreach ($edition in @('lite', 'full')) {
+            $payload = "build/one-click-$edition/one-click-payload.zip"
+            $modelArgs = @('--archive', $archive.FullName,
+                           '--model', '.cache/models/small.safetensors',
+                           '--output', $payload)
+            if ($edition -eq 'full') {
+              $modelArgs += @('--full-models-dir', '.cache/models')
+            }
+            python tools/build_one_click.py @modelArgs
+            if ($LASTEXITCODE -ne 0) { throw "Model packaging failed: $edition" }
+            $name = if ($edition -eq 'full') {
+              "$base-all-models-noncommercial-one-click"
+            } else {
+              "$base-one-click"
+            }
+            python -m PyInstaller --noconfirm --clean --onefile --windowed `
+              --add-data "$payload;." `
+              --distpath release `
+              --workpath "build/one-click-build-$edition" `
+              --specpath "build/one-click-spec-$edition" `
+              --name $name tools/portable_launcher.py
+            if ($LASTEXITCODE -ne 0) { throw "One-click EXE build failed: $edition" }
+            $exe = Join-Path 'release' ($name + '.exe')
+            $report = "one-click-$edition-selftest.json"
+            pwsh -File tools/run_windows_exe.ps1 `
+              -Exe $exe -Report $report `
+              -StdOut "one-click-$edition-out.txt" `
+              -StdErr "one-click-$edition-err.txt" `
+              -TimeoutSeconds 300
+            if ($LASTEXITCODE -ne 0) { throw "Offline EXE failed first launch: $edition" }
+            if (-not (Test-Path $report)) { throw "Offline report missing: $edition" }
+            $check = Get-Content $report -Raw | ConvertFrom-Json
+            if (-not $check.ok) { throw "Offline selftest failed: $edition" }
+          }
           $root = Join-Path $env:LOCALAPPDATA 'HebrewNotesWorkbench/one-click'
-          $models = @(Get-ChildItem $root -Filter 'small.safetensors' -Recurse -File)
-          if ($models.Count -eq 0) { throw 'the one-click EXE did not unpack the model' }
-          if (-not ($models | Where-Object Length -eq 13065380)) {
-            throw 'the unpacked model has the wrong size'
+          $manifests = @(Get-ChildItem $root -Filter OFFLINE-MODELS.json -Recurse -File)
+          if ($manifests.Count -lt 2) { throw 'Both offline editions were not unpacked' }
+          $types = @($manifests | ForEach-Object {
+            (Get-Content $_.FullName -Raw | ConvertFrom-Json).edition
+          })
+          if ('lite' -notin $types -or 'full-noncommercial' -notin $types) {
+            throw 'The extracted model editions are incomplete'
           }
       - name: Check the release as a user gets it
         shell: pwsh
