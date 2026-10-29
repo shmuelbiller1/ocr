@@ -380,6 +380,25 @@ jobs:
         continue-on-error: true
         run: |
           python tools/inspect_dataset.py --cache .cache/pinkas 2>&1 | tee corpus-structure.log || true
+      - name: Read a real page of modern handwriting
+        run: |
+          set -o pipefail
+          # A real scan of contemporary handwritten Hebrew.  The page has
+          # no transcript that somebody else checked, so nothing is
+          # measured here: the readings of every engine are published, so
+          # that they can be compared on the same real material.
+          python tools/smoke_test.py \
+            --document benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf \
+            --models .cache/models \
+            --engines kraken-ppocrv6-small kraken-ppocrv6-medium mishkefet-v1 \
+            --output build/smoke 2>&1 | tee smoke-test.log
+          if [ "$?" -ne 0 ]; then throw 'the reading of the real page failed'; fi
+      - name: Publish the readings of the real page
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-readings
+          path: build/smoke
       - name: Write the results into the documentation
         if: always()
         continue-on-error: true

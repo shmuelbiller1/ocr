@@ -949,6 +949,11 @@ class MainWindow(QMainWindow):
         """The user changed the plugins: look at them again."""
         self.refresh_engines()
         self._refresh_suggestion_modules()
+        # The proposals that are shown were made by the modules that
+        # were before, and they are not good any more: the user has to
+        # check the text again.  This happens when the plugins really
+        # change, and not when the screen is only shown.
+        self._clear_the_proposals()
 
     def _refresh_suggestion_modules(self) -> None:
         """The modules of proposals come from the plugins as well."""

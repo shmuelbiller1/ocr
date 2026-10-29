@@ -17,6 +17,7 @@ TOOLS = (
     "build_release.py",
     "download_model.py",
     "publish_diagnostics.py",
+    "smoke_test.py",
 )
 
 
@@ -35,6 +36,62 @@ class ToolTests(unittest.TestCase):
                     0,
                     f"{name} does not start: {result.stderr[-500:]}",
                 )
+
+
+class SmokeTestTests(unittest.TestCase):
+    """The smoke test reads a real page and says what it found.
+
+    A page without a transcript that somebody else checked is never
+    counted in a rate, and the report says so.
+    """
+
+    def test_the_page_of_the_project_is_read_by_the_tool(self) -> None:
+        document = (
+            REPO_ROOT
+            / "benchmark"
+            / "smoke_test"
+            / "pages"
+            / "scan-2026-10-28-221624.pdf"
+        )
+        self.assertTrue(document.is_file(), "the real page is not in the repository")
+
+    def test_a_model_that_is_not_there_is_named_and_nothing_is_measured(self) -> None:
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            document = root / "page.pdf"
+            document.write_bytes(b"%PDF-1.4\n")
+            output = root / "out"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "tools" / "smoke_test.py"),
+                    "--document",
+                    str(document),
+                    "--models",
+                    str(root / "no-models-here"),
+                    "--engines",
+                    "kraken-ppocrv6-small",
+                    "mishkefet-v1",
+                    "--output",
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr[-500:])
+            report = json.loads(
+                (output / "smoke-test.json").read_text(encoding="utf-8")
+            )
+            # The two models are not there, and that is said and not
+            # hidden.
+            self.assertEqual(len(report["skipped"]), 2)
+            self.assertEqual(report["engines"], [])
+            # And the report says that no rate was measured.
+            self.assertIn("NOT verified", report["note"])
 
 
 if __name__ == "__main__":

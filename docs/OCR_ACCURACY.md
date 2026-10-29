@@ -48,6 +48,26 @@ section are empty, and the build says so on every run.
   who is not the one who wrote it down.  A page without that check is
   left out of the rate and is named in the report.
 
+### A real page that is read but not measured
+
+There is one **real** page in the repository:
+`benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf` is a scan of
+contemporary handwritten Hebrew that was given to the project so that
+the program could be tried on the material it is made for.
+
+Every build reads that page with every engine and publishes what each
+of them read, as the artefact `smoke-test-readings`.  **No rate is
+calculated from it.**  The page has no transcript that somebody else
+checked, and a rate without such a transcript is not a measurement of
+the engine - it would be a measurement of the transcript.  The accuracy
+of the recognition on modern school handwriting therefore stays
+**unverified** until a page with a checked transcript is added to
+`benchmark/modern_school/`.
+
+The readings are published so that the engines can be compared on real
+material, and so that a person can look at what the program reads on a
+page and judge it.
+
 ## The diagnostic corpus: the old handwriting
 
 The corpus is the *Pinkas dataset*: 30 pages of early modern

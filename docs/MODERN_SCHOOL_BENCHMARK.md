@@ -25,6 +25,15 @@ this repository claims a number for the recognition of modern school
 handwriting, because there is no page with a verified transcript to
 measure it on.
 
+There **is** one real page in the repository,
+`benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf`: a scan of
+contemporary handwritten Hebrew that was given to the project.  Every
+build reads it with every engine and publishes the readings, so that
+the engines can be compared on real material and a person can look at
+what the program reads.  It is not counted in any rate, because it has
+no transcript that somebody else checked - see
+`benchmark/smoke_test/README.md`.
+
 ## Why the historical pages are only a diagnostic
 
 The *Pinkas dataset* (early modern Hebrew and Yiddish records of
