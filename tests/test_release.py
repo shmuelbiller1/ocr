@@ -471,6 +471,13 @@ class PublishTheReleaseTests(unittest.TestCase):
         self.assertLess(calls.index("-F draft=true"), calls.index("release upload"))
         self.assertGreater(calls.index("-F draft=false"), calls.rindex("release upload"))
 
+    @unittest.skipIf(os.name == "nt", "release publication runs on Linux")
+    def test_marking_a_release_draft_preserves_its_tag(self) -> None:
+        """GitHub can replace an omitted draft tag with an untagged UUID."""
+        calls, _ = self._run_the_script(a_release_is_already_there=True)
+        draft_call = next(line for line in calls.splitlines() if "-F draft=true" in line)
+        self.assertIn("-f tag_name=v0.2.0", draft_call)
+
     @unittest.skipIf(
         os.name == "nt",
         "the release is made by the runner of Linux, and the shell of the "

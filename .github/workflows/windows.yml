@@ -675,7 +675,7 @@ jobs:
             # matching checksum have been replaced successfully. If a
             # GitHub upload or API call fails, set -e leaves it a draft
             # instead of exposing mismatched download/checksum pairs.
-            gh api "repos/${{ github.repository }}/releases/$existing" -X PATCH -F draft=true
+            gh api "repos/${{ github.repository }}/releases/$existing" -X PATCH -F draft=true -f tag_name="$TAG"
             # The file is put there under a temporary name first, and
             # the file that was published before is taken away only
             # when the new one is there.  `gh release upload --clobber`
