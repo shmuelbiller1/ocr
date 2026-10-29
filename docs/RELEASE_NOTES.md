@@ -88,8 +88,10 @@ This is an offline Windows program for Hebrew handwriting: import a scan,
 recognise the text, correct it, and print it.  Python is not needed.  The
 regular ZIP requires recognition weights to be installed when the user asks;
 the one-click editions already include the models listed above, and
-the model file is checked against the digest published by its authors.  Nothing is uploaded anywhere.  Application/dependency licence texts and model-attribution notices are in
-the folder LICENCES; the Mishkefet notice links to its full licence online.
+the model file is checked against the digest published by its authors.  Nothing is uploaded anywhere.  Application/dependency licence texts are in `LICENCES`. Bundled model source
+and attribution details are in `models/MODEL-SOURCE.txt` and
+`models/OFFLINE-MODELS.json`. In the all-models edition,
+`LICENCES/MISHKEFET-MODEL-NOTICE.txt` links to the full Mishkefet licence online.
 
 The program asks before it closes a window with work that was not saved,
 and before it replaces a file that is already there.
