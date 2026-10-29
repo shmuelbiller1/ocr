@@ -220,7 +220,8 @@ class MishkefetEngine:
             duration_seconds=round(time.monotonic() - started, 2),
             manifest=self.manifest(),
             assisted_text=(None if self.mode == "raw" else
-                           "\n".join(page.assisted_text or "" for page in pages)),
+                           "\n".join(page.assisted_text for page in pages
+                                     if (page.assisted_text or "").strip())),
             decoding_mode=self.mode,
         )
 
@@ -336,7 +337,8 @@ class MishkefetEngine:
                 texts, confidences = recognizer.read(crops, return_confidence=True)
             finally:
                 recognizer.beam_width = width
-            assisted = "\n".join(recognizer.read_tta(crops))
+            alternative = ((line or "").strip() for line in recognizer.read_tta(crops))
+            assisted = "\n".join(line for line in alternative if line)
 
         lines: list[LineResult] = []
         for text, confidence, box in zip(texts, confidences, boxes):

@@ -64,6 +64,19 @@ class DecodingTests(unittest.TestCase):
                 else:
                     recognizer.read_tta.assert_not_called()
 
+    def test_assisted_serialization_uses_the_same_blank_line_policy_as_raw(self):
+        engine = MishkefetEngine(mode="beam")
+        recognizer = Mock(beam_width=12)
+        recognizer.read.return_value = ([" raw ", ""], [0.7, 0.0])
+        recognizer.read_tta.return_value = [" alternative ", "  "]
+        engine._recognizer = recognizer
+        box = types.SimpleNamespace(x=0, y=0, w=10, h=5)
+        segment = types.SimpleNamespace(segment_page=lambda image: ([1, 2], [box, box], 0))
+        with patch.dict("sys.modules", {"hebrew_workbench.engine.vendor.hebocr.page.segment": segment}):
+            page = engine._recognize_page_now(1, object())
+        self.assertEqual(page.text, "raw")
+        self.assertEqual(page.assisted_text, "alternative")
+
     def test_beam_setting_is_restored_if_raw_reading_fails(self):
         engine = MishkefetEngine(mode="beam")
         recognizer = Mock(beam_width=12)
