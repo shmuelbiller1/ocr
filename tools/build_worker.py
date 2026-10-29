@@ -29,7 +29,10 @@ def build_arguments(profile: str, distpath: Path, workpath: Path, package: Path)
     if profile == "baseline":
         args += ["--collect-all", "kraken", "--collect-all", "torchvision"]
     else:
-        args += ["--copy-metadata", "kraken"]
+        # The pinned torchvision uses _C_stable/image_stable native files;
+        # PyInstaller 6.16 hooks still look for the older _C/image names.
+        # Its complete collection is proven necessary by packaged CI.
+        args += ["--collect-all", "torchvision", "--copy-metadata", "kraken"]
         for module in MODEL_MODULES:
             args += ["--hidden-import", module]
         for module in EXCLUDED_MODULES:

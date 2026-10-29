@@ -20,7 +20,8 @@ class WorkerPackagingTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.touch()
             args = build_arguments('inference', root / 'dist', root / 'build', root)
-            self.assertNotIn('--collect-all', args)
+            self.assertEqual(args.count('--collect-all'), 1)
+            self.assertEqual(args[args.index('--collect-all') + 1], 'torchvision')
             self.assertIn('--copy-metadata', args)
             for module in MODEL_MODULES:
                 self.assertIn(module, args)
