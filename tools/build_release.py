@@ -66,6 +66,11 @@ COMPONENTS = [
         "Apache-2.0",
         "https://github.com/opencv/opencv/blob/4.x/LICENSE",
     ),
+    (
+        "heb-ocr (the code of the second engine, vendored in the program)",
+        "MIT",
+        "https://github.com/itayinbarr/heb-ocr",
+    ),
 ]
 
 #: The licence texts that are not inside the packages, with the place
@@ -85,6 +90,16 @@ LICENCE_TEXTS = [
         "PSF-LICENSE.txt",
         "https://www.python.org/psf/license/",
         "PYTHON SOFTWARE FOUNDATION LICENSE",
+    ),
+    (
+        # The licence of the code of the second engine, which is
+        # vendored in the program.  The text is in the repository and is
+        # never fetched from the network: an address that is empty says
+        # that there is nothing to fetch, and a release without the text
+        # is not made.
+        "HEB-OCR-MIT.txt",
+        "",
+        "MIT License",
     ),
 ]
 
@@ -422,6 +437,12 @@ def download_licence_texts(target: Path, fetch=fetch_text) -> list[str]:
         path = target / name
         if path.is_file():
             continue
+        if not url:
+            # The text is in the repository and is never fetched.  Its
+            # absence is a failure of the release, not something that
+            # the network can mend.
+            missing.append(name)
+            continue
         try:
             text = fetch(url)
         except Exception:
@@ -480,8 +501,10 @@ def copy_repository_licences(licences: Path) -> list[str]:
     The texts of the LGPL, of the GPL and of Python are in the
     repository, so that the release does not need a network, and so
     that a program that is given to somebody always carries them.  The
-    texts are checked before they are used, and a text that does not
-    look like the licence it claims to be is not copied.
+    text of the licence of the code of the second engine is in the
+    repository as well, and it has to be in the release for the same
+    reason.  The texts are checked before they are used, and a text that
+    does not look like the licence it claims to be is not copied.
     """
     repository = REPO_ROOT / "docs" / "licences"
     copied: list[str] = []

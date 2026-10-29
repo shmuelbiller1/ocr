@@ -695,6 +695,10 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 0)
         self.cancel_action.setEnabled(True)
         self.run_ocr_action.setEnabled(False)
+        # While the recognition runs, the editor is closed: the result
+        # of the recognition replaces the text of the editor, and what
+        # the user writes in the meantime would be lost.
+        self.editor.setReadOnly(True)
 
         def work(progress, cancel):
             return self.registry.transcribe(entry.file_path, progress=progress, cancel=cancel)
@@ -775,6 +779,8 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 1)
         self.cancel_action.setEnabled(False)
         self.run_ocr_action.setEnabled(True)
+        # The editor is open again: the work is over.
+        self.editor.setReadOnly(False)
         self.task = None
 
     def cancel_task(self) -> None:
@@ -840,7 +846,7 @@ class MainWindow(QMainWindow):
 
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
-        self.cancel_action.setEnabled(False)
+        self.cancel_action.setEnabled(True)
 
         def work(progress, cancel):
             def report(done, total):
@@ -849,12 +855,13 @@ class MainWindow(QMainWindow):
                 else:
                     progress(f"מוריד את המודל: {done // (1024 * 1024)}MB")
 
-            return install_artifact(artifact, progress=report)
+            return install_artifact(artifact, progress=report, cancel=cancel)
 
         self.task = TaskThread(work, self)
         self.task.progress.connect(self._on_task_progress)
         self.task.succeeded.connect(self._on_model_installed)
         self.task.failed.connect(self._on_task_failed)
+        self.task.cancelled.connect(self._on_task_cancelled)
         self.task.finished.connect(self._on_task_finished)
         self.task.start()
 
@@ -933,9 +940,10 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self.plugins, self)
         dialog.changed.connect(self._on_plugins_changed)
         dialog.exec()
-        # The dialog reads the plugins again, so the engines of the
-        # window are old even when the user changed nothing.
-        self._on_plugins_changed()
+        # The dialog tells the window when something really changed, so
+        # that the plugins are not read again for nothing: a plugin that
+        # is read again is a new object, and the engine that is running
+        # would be an old one.
 
     def _on_plugins_changed(self) -> None:
         """The user changed the plugins: look at them again."""
@@ -1352,19 +1360,16 @@ class MainWindow(QMainWindow):
             )
             return
         if written:
-            self.statusBar().showMessage(
-                f"המילה {suggestion.original} נשמרה במילון שלך.", 6000
-            )
+            message = f"המילה {suggestion.original} נשמרה במילון שלך."
         elif getattr(module, "dictionary_path", None) is None:
-            self.statusBar().showMessage(
+            message = (
                 f"המילה {suggestion.original} נשמרה להפעלה הזאת בלבד, "
-                "כי לא נבחר מילון.",
-                8000,
+                "כי לא נבחר מילון."
             )
         else:
-            self.statusBar().showMessage(
-                f"המילה {suggestion.original} נשמרה להפעלה הזאת בלבד, כי אי אפשר לכתוב למילון.",
-                8000,
+            message = (
+                f"המילה {suggestion.original} נשמרה להפעלה הזאת בלבד, "
+                "כי אי אפשר לכתוב למילון."
             )
         # The word is in the word list of the user, and the proposals
         # of the other documents about it are not good any more: they
@@ -1374,6 +1379,10 @@ class MainWindow(QMainWindow):
         # The proposals are made again, so that the word is not proposed
         # any more.
         self.check_suggestions()
+        # The message of the word is shown after the check of the
+        # proposals, because the check has a message of its own, and the
+        # user has to know that the word was kept.
+        self.statusBar().showMessage(message, 8000)
 
     def undo_last_batch(self) -> None:
         """Take back the last group of changes, as one action."""

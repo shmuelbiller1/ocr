@@ -99,6 +99,28 @@ class ModelTests(unittest.TestCase):
                 install_artifact(artifact, target_dir)
             self.assertEqual(list(target_dir.glob("*")), [])
 
+    def test_the_download_can_be_stopped(self) -> None:
+        """The user has to be able to stop the download of a model."""
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "model.bin"
+            source.write_bytes(b"model weights")
+            artifact = make_artifact(source)
+            target_dir = Path(folder) / "models"
+            with self.assertRaises(InstallError):
+                install_artifact(artifact, target_dir, cancel=lambda: True)
+            # Nothing is left behind: a file that was not finished is
+            # never mistaken for a model.
+            self.assertEqual(list(target_dir.glob("*")), [])
+
+    def test_the_download_continues_when_nothing_asks_to_stop_it(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "model.bin"
+            source.write_bytes(b"model weights")
+            artifact = make_artifact(source)
+            target_dir = Path(folder) / "models"
+            installed = install_artifact(artifact, target_dir, cancel=lambda: False)
+            self.assertTrue(installed.is_file())
+
     def test_known_models_declare_a_license_and_a_size(self) -> None:
         for artifact in models.MODEL_ARTIFACTS.values():
             self.assertTrue(artifact.license)

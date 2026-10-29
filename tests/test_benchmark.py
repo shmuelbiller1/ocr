@@ -249,8 +249,6 @@ class AccuracyTests(unittest.TestCase):
         self.assertAlmostEqual(total_wer, 0.0099, places=4)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class PageNamesTests(unittest.TestCase):
@@ -434,3 +432,7 @@ class ConsoleTests(unittest.TestCase):
         # The function does nothing with the streams of the program, and
         # it does not stop when a stream cannot be changed.
         use_utf8()
+
+
+if __name__ == "__main__":
+    unittest.main()

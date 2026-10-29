@@ -217,12 +217,16 @@ def install_artifact(
     destination: str | Path | None = None,
     progress: Callable[[int, int], None] | None = None,
     timeout: float = 600.0,
+    cancel: Callable[[], bool] | None = None,
 ) -> Path:
     """Download a model file and verify it.
 
     The file is written to a temporary name first and only moved into
     place after every check passed, so an interrupted download can never
     be mistaken for a good model.
+
+    The download can be stopped: the ``cancel`` callable is asked at
+    every step, and a download that was stopped leaves nothing behind.
     """
     target_dir = Path(destination) if destination else models_directory()
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -248,6 +252,8 @@ def install_artifact(
             done = 0
             with open(temp_path, "wb") as stream:
                 while True:
+                    if cancel and cancel():
+                        raise InstallError("ההורדה בוטלה.")
                     chunk = response.read(1024 * 256)
                     if not chunk:
                         break

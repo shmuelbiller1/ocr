@@ -540,6 +540,7 @@ class SuggestionSession:
         last = max(batches)
         result = self.current_text if text is None else text
         self.last_undo_skipped = []
+        taken_back_changes: list[AcceptedChange] = []
         for change in reversed(list(self.accepted)):
             if change.batch != last:
                 continue
@@ -552,6 +553,7 @@ class SuggestionSession:
                 + change.original
                 + result[place + len(change.replacement) :]
             )
+            taken_back_changes.append(change)
             shift = len(change.original) - len(change.replacement)
             # The end of the text that this change replaces: a change
             # that was inside it keeps its place.
@@ -572,11 +574,13 @@ class SuggestionSession:
         # before they are taken out of the list: a change that is still
         # accepted is still covering the changes that it covered, and
         # only a change that was really taken back stops covering them.
-        taken_back = {
-            change.identifier for change in self.accepted if change.batch == last
-        }
+        taken_back = {change.identifier for change in taken_back_changes}
+        # A change of the group that could not be taken back stays in
+        # the history: it is still in the text, and the user has to be
+        # able to hear about it again, and to try to take it back.
+        taken_back_ids = {id(change) for change in taken_back_changes}
         self.accepted = [
-            change for change in self.accepted if change.batch != last
+            change for change in self.accepted if id(change) not in taken_back_ids
         ]
         for change in self.accepted:
             if change.covered_by in taken_back:
@@ -656,7 +660,13 @@ class SuggestionSession:
                 if other is not change and other.position >= was:
                     other.position += shift
         self.current_text = result
-        self.accepted = []
+        # A correction that could not be taken back stays in the
+        # history: it is still in the text, and the user has to be able
+        # to try to take it back another time.
+        skipped_ids = {id(change) for change in self.last_undo_skipped}
+        self.accepted = [
+            change for change in self.accepted if id(change) in skipped_ids
+        ]
         self._round_shifts = []
         # The proposals of the last round have the places of the text
         # as it was before the corrections were taken back, and they
