@@ -91,6 +91,8 @@ class DocumentEntry:
     #: The text as the recognition gave it, before any correction.  It
     #: is kept so that the user can go back to it.
     original_transcription: str = ""
+    assisted_transcription: str | None = None
+    decoding_mode: str = "raw"
     engine_name: str = ""
     notes: str = ""
     #: The corrections that the user accepted, in the order they were
@@ -121,6 +123,8 @@ class DocumentEntry:
             "transcription": self.transcription,
             "original_transcription": self.original_transcription,
             "engine_name": self.engine_name,
+            "assisted_transcription": self.assisted_transcription,
+            "decoding_mode": self.decoding_mode,
             "notes": self.notes,
             "changes": list(self.changes),
             "edited": bool(self.edited),
@@ -134,6 +138,9 @@ class DocumentEntry:
             transcription=str(data.get("transcription", "")),
             original_transcription=str(data.get("original_transcription", "")),
             engine_name=str(data.get("engine_name", "")),
+            assisted_transcription=(str(data["assisted_transcription"])
+                                    if data.get("assisted_transcription") is not None else None),
+            decoding_mode=str(data.get("decoding_mode", "raw")),
             notes=str(data.get("notes", "")),
             changes=_read_changes(data.get("changes", [])),
             edited=bool(data.get("edited", False)),

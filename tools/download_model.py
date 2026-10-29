@@ -27,6 +27,9 @@ from hebrew_workbench.engine.models import (  # noqa: E402
     verify_file,
 )
 
+from hebrew_workbench.engine.mishkefet_decoding import DECODING_ARTIFACTS
+
+DOWNLOADS = {**MODEL_ARTIFACTS, **DECODING_ARTIFACTS}
 
 def main(argv: list[str] | None = None) -> int:
     # The console of Windows cannot write Hebrew in the code page
@@ -37,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--model",
         default="kraken-ppocrv6-small",
-        choices=sorted(MODEL_ARTIFACTS),
+        choices=sorted(DOWNLOADS),
         help="which model to download",
     )
     parser.add_argument("--target", help="where to put the file")
@@ -48,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    artifact = MODEL_ARTIFACTS[args.model]
+    artifact = DOWNLOADS[args.model]
     target = Path(args.target) if args.target else models_directory()
     print(artifact.summary())
     try:

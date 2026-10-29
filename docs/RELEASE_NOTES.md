@@ -66,7 +66,7 @@ the press of the user.
 There is a second engine, *Mishkefet-v1*, which was written for modern
 Hebrew cursive: its code (MIT) is shipped with the program, and its
 weights (CC-BY-NC-SA-4.0, non-commercial) are installed by the user and
-checked against a SHA-256 digest.  It reads with the best path alone,
+checked against a SHA-256 digest.  Its default/raw benchmark profile reads with the best path alone,
 without a dictionary and without a language model, so that a measurement
 measures the engine and not the word list.  The search that led to it and
 the models that were not used are in `docs/ENGINES.md`.
@@ -87,3 +87,12 @@ The editor is closed while the recognition runs, so that what the user
 writes in the meantime is not lost when the result replaces the text.
 The download of a model can be stopped, and a download that was stopped
 leaves nothing behind.
+
+## Experimental decoding comparison
+
+Settings now exposes Raw (default), Beam + three scales, and Assisted with
+optional non-commercial character/word models, installed separately after
+licence confirmation and verified against pinned hashes. Both raw and alternative
+readings are retained and shown side by side; applying the alternative requires
+confirmation and can be undone. These profiles do not change the raw benchmark
+or establish an accuracy improvement on school notes. See `docs/ASSISTED_DECODING.md`.

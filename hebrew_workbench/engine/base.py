@@ -81,6 +81,7 @@ class PageResult:
     text: str
     confidence: float | None = None
     lines: tuple[LineResult, ...] = ()
+    assisted_text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +103,8 @@ class OCRResult:
     pages: tuple[PageResult, ...] = ()
     duration_seconds: float = 0.0
     manifest: EngineManifest | None = None
+    assisted_text: str | None = None
+    decoding_mode: str = "raw"
 
 
 class EngineError(RuntimeError):

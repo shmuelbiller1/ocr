@@ -396,6 +396,22 @@ jobs:
             --engines kraken-ppocrv6-small kraken-ppocrv6-medium mishkefet-v1 \
             --output build/smoke 2>&1 | tee smoke-test.log
           if [ "$?" -ne 0 ]; then throw 'the reading of the real page failed'; fi
+      - name: Compare optional assisted decoding on the supplied scan
+        run: |
+          set -o pipefail
+          python tools/download_model.py --model mishkefet-char-lm --target .cache/models
+          python tools/download_model.py --model mishkefet-word-lm --target .cache/models
+          python tools/compare_mishkefet.py \
+            --document benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf \
+            --model .cache/models/mishkefet-v1.pt \
+            --output build/decoding-comparison 2>&1 | tee decoding-comparison.log
+      - name: Publish decoding comparison (not raw benchmark scores)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mishkefet-decoding-comparison
+          path: build/decoding-comparison
+          if-no-files-found: warn
       - name: Publish the readings of the real page
         if: always()
         uses: actions/upload-artifact@v4
@@ -448,7 +464,7 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/smoke-small.txt build/smoke/smoke-medium.txt build/smoke/smoke-mishkefet-v1.txt build/smoke/smoke-test.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/smoke-small.txt build/smoke/smoke-medium.txt build/smoke/smoke-mishkefet-v1.txt build/smoke/smoke-test.json decoding-comparison.log build/decoding-comparison/decoding-comparison.json build/decoding-comparison/decoding-raw.txt build/decoding-comparison/decoding-comparison-raw.txt build/decoding-comparison/decoding-assisted.txt
 
   ocr-worker-windows:
     name: OCR worker (Windows)
@@ -495,6 +511,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
           python tools/download_model.py --model mishkefet-v1 --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download-mishkefet.log
           if ($LASTEXITCODE -ne 0) { throw 'the model of the second engine could not be downloaded' }
+      - name: Install optional decoding files for packaged-worker verification
+        shell: pwsh
+        run: |
+          python tools/download_model.py --model mishkefet-char-lm --target .cache/models
+          if ($LASTEXITCODE -ne 0) { throw 'character LM unavailable' }
+          python tools/download_model.py --model mishkefet-word-lm --target .cache/models
+          if ($LASTEXITCODE -ne 0) { throw 'word LM unavailable' }
       - name: Build the OCR worker
         shell: pwsh
         run: |
@@ -521,7 +544,7 @@ jobs:
       - name: Recognise a page with the packaged worker and the second engine
         shell: pwsh
         run: |
-          $job = @{ document = (Resolve-Path 'samples\scan_page_1.png').Path; model_path = (Resolve-Path '.cache\models\mishkefet-v1.pt').Path; engine = 'mishkefet' } | ConvertTo-Json
+          $job = @{ document = (Resolve-Path 'samples\scan_page_1.png').Path; model_path = (Resolve-Path '.cache\models\mishkefet-v1.pt').Path; engine = 'mishkefet'; decoding_mode = 'assisted' } | ConvertTo-Json
           $job | Set-Content -Encoding utf8 job-mishkefet.json
           $process = Start-Process -FilePath 'dist\ocr-worker\ocr-worker.exe' `
             -ArgumentList '--job','job-mishkefet.json','--result','result-mishkefet.json' `
@@ -531,6 +554,8 @@ jobs:
           if (-not (Test-Path 'result-mishkefet.json')) { throw 'The worker did not write a result for the second engine' }
           $result = Get-Content 'result-mishkefet.json' -Raw | ConvertFrom-Json
           if ($result.error) { Write-Output "::error title=Worker::$($result.error)"; throw 'The worker reported an error for the second engine' }
+          if (-not $result.text.Trim() -or -not $result.assisted_text.Trim()) { throw 'raw or assisted reading empty' }
+          if ($result.decoding_mode -ne 'assisted') { throw 'assisted mode was not used' }
           Write-Output "::warning title=Worker::the second engine recognised $($result.text.Length) characters in $($result.duration_seconds) seconds"
       - name: Upload the OCR worker
         uses: actions/upload-artifact@v4
@@ -541,7 +566,7 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log check-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log check-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json result-mishkefet.json
 
   release:
     name: Publish the release

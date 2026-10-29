@@ -30,6 +30,28 @@ class SettingsDialogTests(unittest.TestCase):
         self.app.processEvents()
         self.temporary.cleanup()
 
+    def test_mishkefet_modes_are_explicit_persisted_and_not_globally_applied(self) -> None:
+        active = self.dialog.active_boxes["ocr"]
+        active.setCurrentIndex(active.findData("mishkefet-worker"))
+        self.assertTrue(self.dialog.decoding_box.isEnabled())
+        self.assertEqual(self.dialog.decoding_box.currentData(), "raw")
+        self.dialog.decoding_box.setCurrentIndex(self.dialog.decoding_box.findData("assisted"))
+        self.assertEqual(self.registry.settings.option("mishkefet-worker", "decoding_mode"), "assisted")
+        self.assertIsNone(self.registry.settings.option("mishkefet", "decoding_mode"))
+        active.setCurrentIndex(active.findData("kraken"))
+        self.assertFalse(self.dialog.decoding_box.isEnabled())
+        self.assertEqual(self.dialog.decoding_box.currentData(), "raw")
+        active.setCurrentIndex(active.findData("mishkefet-worker"))
+        self.assertEqual(self.dialog.decoding_box.currentData(), "assisted")
+
+    def test_language_model_download_only_emits_on_explicit_request(self) -> None:
+        requests = []
+        self.dialog.install_decoding_requested.connect(lambda: requests.append(True))
+        self.dialog.refresh()
+        self.assertEqual(requests, [])
+        self.dialog.install_decoding_button.click()
+        self.assertEqual(requests, [True])
+
     def test_the_plugins_are_shown(self) -> None:
         names = [
             self.dialog.table.item(row, 0).text()

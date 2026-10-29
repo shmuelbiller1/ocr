@@ -67,11 +67,12 @@ well, next to the numbers.
 
 The numbers of the leaderboard are read with a character language model, a
 word language model, a beam of twelve candidates and three or five readings
-of every line at different widths.  This program reads the **best path
+of every line at different widths.  The default/raw benchmark profile reads the **best path
 alone**, because a measurement with a dictionary in it measures the
 dictionary and not the engine, and because the program never rewrites the
 text of a recognition.  The author of the model publishes the greedy
-number as well: **0.261** against the **0.175** of the full reading.  The
+median as well: **0.239** against the **0.175** of the full reading
+(the greedy micro CER is 0.261, a different aggregation). The
 rate that this program measures is therefore the greedy rate, and it is
 higher than the number of the leaderboard.
 
@@ -101,3 +102,11 @@ errors of a real hand.
   one.  A file that does not match is deleted and is never used.
 * The weights of a model with a non-commercial licence are not bundled
   with the program and are not redistributed by it.
+
+## Optional experimental decoding
+
+The app now exposes beam/TTA and language-assisted profiles separately from
+raw recognition. Both retain the raw reading and require explicit approval
+to use the alternative. See [ASSISTED_DECODING.md](ASSISTED_DECODING.md) for
+settings, licence/integrity details and same-page comparisons. No improvement
+on modern school handwriting is claimed without a checked transcript.

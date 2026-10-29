@@ -185,3 +185,11 @@ benchmark/modern_school/       the corpus of the handwriting of today
   proposal is accepted, refused and undone.
 - `docs/PLUGINS.md` - how to add another engine or another word list, and
   what the program does with a plugin that does not work.
+
+### Experimental assisted Mishkefet decoding
+
+Settings offers Raw (default), Beam + three scales, and Assisted (optional
+character/word language models). Both readings are preserved side by side;
+the alternative is never auto-applied. Additional files are non-commercial,
+separately downloaded and digest-verified. See [the guide](docs/ASSISTED_DECODING.md).
+Accuracy improvement on your pages remains unverified.
