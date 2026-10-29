@@ -19,6 +19,8 @@ TOOLS = (
     "publish_diagnostics.py",
     "smoke_test.py",
     "compare_mishkefet.py",
+    "build_worker.py",
+    "verify_worker_bundle.py",
 )
 
 

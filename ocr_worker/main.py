@@ -44,6 +44,35 @@ def _engine_of(job: dict):
     raise ValueError(f"unknown engine: {name}")
 
 
+def _install_offline_guard(attempts: list) -> None:
+    """Deny non-loopback Python socket access during packaged offline checks.
+
+    Local IPC is allowed. This is not an OS firewall for native libraries.
+    Every denied attempt is reported even if a dependency catches the error.
+    """
+    import ipaddress
+
+    def guard(event, args):
+        host = None
+        if event == "socket.getaddrinfo":
+            host = args[0]
+        elif event in ("socket.connect", "socket.sendto"):
+            address = args[-1]
+            if isinstance(address, tuple):
+                host = address[0]
+        if host is None or host in ("localhost", "127.0.0.1", "::1"):
+            return
+        try:
+            if ipaddress.ip_address(host).is_loopback:
+                return
+        except ValueError:
+            pass
+        attempts.append({"event": event, "host": str(host)})
+        raise OSError("Offline check: outbound network access is forbidden")
+
+    sys.addaudithook(guard)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Hebrew Notes Workbench OCR worker")
     parser.add_argument("--job", required=True, help="path of the job description")
@@ -53,8 +82,13 @@ def main(argv: list[str] | None = None) -> int:
     job_path = Path(args.job)
     result_path = Path(args.result)
 
+    attempts = []
+    offline_check = False
     try:
         job = json.loads(job_path.read_text(encoding="utf-8"))
+        offline_check = job.get("offline_check") is True
+        if offline_check:
+            _install_offline_guard(attempts)
         engine = _engine_of(job)
         result = engine.recognize(job["document"])
         payload = {
@@ -88,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
         print(message, file=sys.stderr)
         payload = {"error": message, "traceback": traceback.format_exc()}
 
+    if offline_check:
+        payload["offline_check"] = {"enabled": True, "blocked_attempts": attempts}
     result_path.parent.mkdir(parents=True, exist_ok=True)
     result_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return 0 if "error" not in payload else 1
