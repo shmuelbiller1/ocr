@@ -672,9 +672,17 @@ jobs:
         run: |
           set -euo pipefail
           cd release
+          # Do not treat an unmatched *.exe as a literal filename when
+          # tests or a ZIP-only release provide no EXE files.
+          shopt -s nullglob
+          archives=(./*.zip ./*.exe)
+          if [ ${#archives[@]} -eq 0 ]; then
+            echo "No ZIP or EXE release assets were produced" >&2
+            exit 1
+          fi
           # One digest file for every archive, with the name of the
           # archive inside it.
-          for archive in ./*.zip ./*.exe; do
+          for archive in "${archives[@]}"; do
             name="$(basename "$archive")"
             sha256sum "$name" > "${name}.sha256"
           done
