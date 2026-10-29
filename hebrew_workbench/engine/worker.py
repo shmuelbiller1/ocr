@@ -80,6 +80,22 @@ def make_worker_engine(options: dict | None = None) -> "WorkerEngine":
     return WorkerEngine(worker, model_path, artifact_id=artifact_id, engine=engine)
 
 
+def _display_name(engine: str, artifact_id: str) -> str:
+    """The name of an engine as it is shown to the user.
+
+    The licence of the model is part of the name.  The worker can run
+    more than one engine, and a name that says "Apache-2.0" next to a
+    model whose licence is not a commercial one would be a lie.
+    """
+    from .models import MODEL_ARTIFACTS
+
+    artifact = MODEL_ARTIFACTS.get(artifact_id)
+    licence = artifact.license if artifact is not None else "Apache-2.0"
+    if engine == "mishkefet":
+        return f"Mishkefet-v1 (modern Hebrew cursive, {licence})"
+    return f"kraken PP-OCRv6 (worker, {licence})"
+
+
 class WorkerEngine:
     """An OCR engine that runs the recognition worker as a subprocess."""
 
@@ -100,6 +116,10 @@ class WorkerEngine:
         self.artifact_id = artifact_id
         #: The engine that reads the model: ``kraken`` or ``mishkefet``.
         self.engine = engine
+        #: The name that is shown to the user.  It carries the licence
+        #: of the model, so that the licence of one model is never
+        #: shown next to the name of another one.
+        self.name = _display_name(engine, artifact_id)
 
     def manifest(self) -> EngineManifest:
         if self.engine == "mishkefet":

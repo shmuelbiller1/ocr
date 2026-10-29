@@ -26,7 +26,7 @@ Three rules follow from that, and they decide what is acceptable:
 
 | Model | What it is | Licence | Verdict |
 | --- | --- | --- | --- |
-| **Mishkefet-v1** (`itayinbar/Mishkefet-v1`, code in `itayinbarr/heb-ocr`) | A 30-million-parameter CTC recogniser written **for modern Hebrew cursive**. On the public Hebrew handwriting leaderboard it leads the full-page mode and is second on the line mode, with a character error rate of 0.175 on the lines of the benchmark. It runs on the processor. | Weights: **CC-BY-NC-SA-4.0** (not commercial). Code: MIT. | **Used**, as the second engine. The code is shipped with the program; the weights are fetched by the user, on request, and checked against a digest. The licence is shown before the download. |
+| **Mishkefet-v1** (`itayinbar/Mishkefet-v1`, code in `itayinbarr/heb-ocr`) | A 30-million-parameter CTC recogniser written **for modern Hebrew cursive**. On the public Hebrew handwriting leaderboard it has the **best page error rate** of the board (0.331) and is **second of nine** in the line mode (a median error rate of 0.175). The only model ahead of it in the line mode is a cloud model of a company, which this program may not use. It runs on the processor. | Weights: **CC-BY-NC-SA-4.0** (not commercial). Code: MIT. | **Used**, as the second engine. The code is shipped with the program; the weights are fetched by the user, on request, and checked against a digest. The licence is shown before the download. |
 | **kraken + PP-OCRv6** (small and medium) | A multilingual recogniser that reads 43 languages, among them Hebrew. | Apache-2.0 (code and weights) | **Used**, as the first engine. The weights are fetched by the user and checked against two digests. |
 | `cyttic/hebrew-ocr-android` | ONNX models of a TrOCR line recogniser for Hebrew, with a detector and a character language model. | **No licence is written on the model files.** | **Not used.** A file without a licence is a file that nobody may redistribute, and the conditions of the use are unknown. |
 | `sivan22/testing-trOCR-hebrew-handwritten` | A TrOCR fine-tuned for Hebrew handwriting. | **No licence is written on the model.** | **Not used**, for the same reason. |
@@ -62,6 +62,18 @@ comparison with the numbers of kraken, which was not trained on it.
 The clean comparison is the corpus of the modern school handwriting, and
 that corpus is still empty.  This is written in `docs/OCR_ACCURACY.md` as
 well, next to the numbers.
+
+## What the decoding does to the numbers
+
+The numbers of the leaderboard are read with a character language model, a
+word language model, a beam of twelve candidates and three or five readings
+of every line at different widths.  This program reads the **best path
+alone**, because a measurement with a dictionary in it measures the
+dictionary and not the engine, and because the program never rewrites the
+text of a recognition.  The author of the model publishes the greedy
+number as well: **0.261** against the **0.175** of the full reading.  The
+rate that this program measures is therefore the greedy rate, and it is
+higher than the number of the leaderboard.
 
 ## The material that could be measured
 

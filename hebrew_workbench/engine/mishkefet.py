@@ -203,10 +203,14 @@ class MishkefetEngine:
     def _load_recognizer(self):
         if self._recognizer is not None:
             return self._recognizer
-        from .vendor.hebocr.recognize import Recognizer
-
         if self.model_path is None:
             raise EngineUnavailable("קובץ המודל של Mishkefet אינו מותקן.")
+        # The file is checked before the library that reads it is even
+        # loaded, so that a file that was replaced after the download
+        # never reaches the code that runs what is inside the file.
+        self._verify_checkpoint()
+        from .vendor.hebocr.recognize import Recognizer
+
         try:
             self._recognizer = Recognizer(str(self.model_path), device="cpu")
         except Exception as exc:
@@ -214,6 +218,28 @@ class MishkefetEngine:
                 f"לא ניתן לטעון את מודל Mishkefet: {exc}"
             ) from exc
         return self._recognizer
+
+    def _verify_checkpoint(self) -> None:
+        """Check the checkpoint against the digest that the project pinned.
+
+        The file is checked again when it is loaded, and not only when it
+        is downloaded.  A file that was replaced after the download would
+        otherwise reach ``torch.load``, which runs the code that is inside
+        the file, and the code of the checkpoint is not ours to trust.
+        """
+        from .models import MODEL_ARTIFACTS, verify_file
+
+        artifact = MODEL_ARTIFACTS.get(self.artifact_id)
+        if artifact is None:
+            raise EngineFailure(
+                f"מנוע הזיהוי אינו יודע את המודל {self.artifact_id!r}."
+            )
+        problem = verify_file(self.model_path, artifact)
+        if problem is not None:
+            raise EngineFailure(
+                "קובץ המודל של Mishkefet אינו תואם למה שנעוץ בפרויקט "
+                f"({problem}). המודל לא נטען."
+            )
 
     def _recognize_page(
         self, number: int, image, budget: float | None = None

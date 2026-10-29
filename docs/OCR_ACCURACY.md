@@ -132,7 +132,7 @@ by the model authors and against the SHA-256 digest pinned in
 | Script | Hebrew, modern cursive - the material of the program |
 | Device | CPU only, no GPU and no cloud service |
 | Size of the model | 115.3 MB, checked against the SHA-256 `0dfb82e4…f6fd850b88` |
-| Published results of the model authors | A character error rate of 0.175 on the lines of the public Hebrew handwriting benchmark, and the first place in the full-page mode of that benchmark |
+| Published results of the model authors | A median character error rate of 0.175 on the lines of the public Hebrew handwriting benchmark (second of nine, behind a cloud model alone) and the best page error rate of that benchmark, 0.331.  The same numbers with the best path alone, without the language models and without the beam, are 0.261 - and those are the numbers this program measures |
 
 The weights of this model are **not** bundled with the program and are not
 redistributed by it: the user fetches them, on request, from the place

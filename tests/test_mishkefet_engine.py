@@ -81,6 +81,77 @@ class MishkefetEngineTests(unittest.TestCase):
                     os.environ["HEBREW_WORKBENCH_MODELS"] = original
 
 
+class TheCheckpointIsCheckedTests(unittest.TestCase):
+    """The file of the model is checked again when it is loaded.
+
+    The checkpoint is read by ``torch.load``, which runs the code that
+    is inside the file.  The digest that the project pinned is therefore
+    checked again before the file is read, and not only when it is
+    downloaded.
+    """
+
+    def _artifact(self, data: bytes, digest: str):
+        import dataclasses
+
+        original = models.MODEL_ARTIFACTS["mishkefet-v1"]
+        patched = dataclasses.replace(
+            original,
+            size_bytes=len(data),
+            sha256=digest,
+            md5=None,
+        )
+        models.MODEL_ARTIFACTS["mishkefet-v1"] = patched
+        self.addCleanup(
+            models.MODEL_ARTIFACTS.__setitem__, "mishkefet-v1", original
+        )
+        return patched
+
+    def test_a_checkpoint_with_the_right_digest_passes_the_check(self) -> None:
+        import hashlib
+        import tempfile
+
+        data = b"the model, more or less"
+        digest = hashlib.sha256(data).hexdigest()
+        self._artifact(data, digest)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "mishkefet-v1.pt"
+            path.write_bytes(data)
+            engine = MishkefetEngine(path)
+            self.assertIsNone(engine._verify_checkpoint())
+
+    def test_a_checkpoint_that_was_replaced_is_not_loaded(self) -> None:
+        import hashlib
+        import tempfile
+
+        from hebrew_workbench.engine.base import EngineFailure
+
+        data = b"something else entirely"
+        self._artifact(data, hashlib.sha256(b"the real model").hexdigest())
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "mishkefet-v1.pt"
+            path.write_bytes(data)
+            engine = MishkefetEngine(path)
+            with self.assertRaises(EngineFailure) as caught:
+                engine._load_recognizer()
+            message = str(caught.exception)
+            self.assertIn("SHA-256", message)
+            self.assertIn("לא נטען", message)
+
+    def test_the_vendored_code_is_not_changed(self) -> None:
+        """The file that came with the model is used as it was
+        published.  The check happens in our own code."""
+        source = (
+            REPO_ROOT
+            / "hebrew_workbench"
+            / "engine"
+            / "vendor"
+            / "hebocr"
+            / "recognize.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("weights_only=False", source)
+        self.assertNotIn("verify_file", source)
+
+
 def engine_manifest() -> EngineManifest:
     return build_manifest(None, "mishkefet-v1")
 
@@ -160,6 +231,34 @@ class ThePluginTests(unittest.TestCase):
                 self.assertEqual(manifest.options.get("model_id"), "mishkefet-v1")
             if manifest.id == "mishkefet-worker":
                 self.assertEqual(manifest.options.get("engine"), "mishkefet")
+
+
+class TheNameOfTheWorkerEngineTests(unittest.TestCase):
+    """The name that is shown to the user tells which engine it is.
+
+    The worker can run more than one engine, and the licence of the
+    model is part of the name, so that the licence of one model is never
+    shown next to the name of another one.
+    """
+
+    def test_the_worker_of_the_second_engine_says_its_own_name(self) -> None:
+        from hebrew_workbench.engine.worker import WorkerEngine
+
+        engine = WorkerEngine(
+            "ocr-worker.exe",
+            "mishkefet-v1.pt",
+            artifact_id="mishkefet-v1",
+            engine="mishkefet",
+        )
+        self.assertIn("Mishkefet-v1", engine.name)
+        self.assertIn("CC-BY-NC-SA-4.0", engine.name)
+        self.assertNotIn("Apache-2.0", engine.name)
+
+    def test_the_worker_of_the_first_engine_still_says_its_own_name(self) -> None:
+        from hebrew_workbench.engine.worker import WorkerEngine
+
+        engine = WorkerEngine("ocr-worker.exe", "small.safetensors")
+        self.assertEqual(engine.name, "kraken PP-OCRv6 (worker, Apache-2.0)")
 
 
 if __name__ == "__main__":
