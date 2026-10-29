@@ -425,6 +425,18 @@ class PublishTheReleaseTests(unittest.TestCase):
 
     @unittest.skipIf(
         os.name == "nt",
+        "the release is made by the Linux runner",
+    )
+    def test_existing_release_is_draft_during_asset_replacement(self) -> None:
+        """Do not show new checksums beside old executables to users."""
+        calls, _ = self._run_the_script(a_release_is_already_there=True)
+        self.assertIn("-F draft=true", calls)
+        self.assertIn("-F draft=false", calls)
+        self.assertLess(calls.index("-F draft=true"), calls.index("release upload"))
+        self.assertGreater(calls.index("-F draft=false"), calls.rindex("release upload"))
+
+    @unittest.skipIf(
+        os.name == "nt",
         "the release is made by the runner of Linux, and the shell of the "
         "Windows runner is not the shell of that runner",
     )
