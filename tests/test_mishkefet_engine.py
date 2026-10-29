@@ -291,7 +291,7 @@ class TheNameOfTheWorkerEngineTests(unittest.TestCase):
         from hebrew_workbench.engine.worker import WorkerEngine
 
         engine = WorkerEngine("ocr-worker.exe", "small.safetensors")
-        self.assertEqual(engine.name, "kraken PP-OCRv6 (worker, Apache-2.0)")
+        self.assertEqual(engine.name, "kraken PP-OCRv6 small (worker, Apache-2.0)")
 
 
 if __name__ == "__main__":

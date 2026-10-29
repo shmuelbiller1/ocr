@@ -338,7 +338,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_the_release_is_made_of_the_program_that_was_checked(self) -> None:
         """The archive of the user is the one that was unpacked and started."""
-        self.assertIn("needs: [test-and-package]", self.text)
+        self.assertIn("needs: [test-and-package, unit-tests, ocr-engine, ocr-worker-windows]", self.text)
         self.assertIn("name: HebrewNotesWorkbench-release", self.text)
 
     def test_the_release_may_write_to_the_repository(self) -> None:
@@ -425,18 +425,6 @@ class PublishTheReleaseTests(unittest.TestCase):
 
     @unittest.skipIf(
         os.name == "nt",
-        "the release is made by the Linux runner",
-    )
-    def test_existing_release_is_draft_during_asset_replacement(self) -> None:
-        """Do not show new checksums beside old executables to users."""
-        calls, _ = self._run_the_script(a_release_is_already_there=True)
-        self.assertIn("-F draft=true", calls)
-        self.assertIn("-F draft=false", calls)
-        self.assertLess(calls.index("-F draft=true"), calls.index("release upload"))
-        self.assertGreater(calls.index("-F draft=false"), calls.rindex("release upload"))
-
-    @unittest.skipIf(
-        os.name == "nt",
         "the release is made by the runner of Linux, and the shell of the "
         "Windows runner is not the shell of that runner",
     )
@@ -470,6 +458,18 @@ class PublishTheReleaseTests(unittest.TestCase):
     def test_the_release_is_made_only_when_there_is_none(self) -> None:
         self.assertIn("gh release create", self.script)
         self.assertIn("--verify-tag", self.script)
+
+    @unittest.skipIf(
+        os.name == "nt",
+        "the release is made by the Linux runner",
+    )
+    def test_existing_release_is_draft_during_asset_replacement(self) -> None:
+        """Do not show new checksums beside old executables to users."""
+        calls, _ = self._run_the_script(a_release_is_already_there=True)
+        self.assertIn("-F draft=true", calls)
+        self.assertIn("-F draft=false", calls)
+        self.assertLess(calls.index("-F draft=true"), calls.index("release upload"))
+        self.assertGreater(calls.index("-F draft=false"), calls.rindex("release upload"))
 
     @unittest.skipIf(
         os.name == "nt",

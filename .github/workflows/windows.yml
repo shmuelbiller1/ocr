@@ -138,10 +138,7 @@ jobs:
       - name: Build the recognition worker
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onedir --console `
-            --collect-all kraken `
-            --collect-all torchvision `
-            --name ocr-worker ocr_worker/main.py 2>&1 | Tee-Object -FilePath build-worker.log
+          python tools/build_worker.py --profile inference --report worker-build.json 2>&1 | Tee-Object -FilePath build-worker.log
           if ($LASTEXITCODE -ne 0) { throw 'the recognition worker could not be built' }
       - name: Verify the executable exists
         if: always()
@@ -202,15 +199,9 @@ jobs:
         run: |
           python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download.log
           if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
-      - name: Download the additional verified models for the full noncommercial edition
-        shell: pwsh
-        run: |
-          # The full edition is an optional separate download. All five
-          # files must pass their pinned checksums or the build fails.
-          foreach ($id in @('kraken-ppocrv6-medium', 'mishkefet-v1',
-                            'mishkefet-char-lm', 'mishkefet-word-lm')) {
-            python tools/download_model.py --model $id --target .cache/models
-            if ($LASTEXITCODE -ne 0) { throw "Model failed verification: $id" }
+          foreach ($model in @('kraken-ppocrv6-medium', 'mishkefet-v1', 'mishkefet-char-lm', 'mishkefet-word-lm')) {
+            python tools/download_model.py --model $model --target .cache/models
+            if ($LASTEXITCODE -ne 0) { throw "model setup failed: $model" }
           }
       - name: Build and verify both one-click offline Windows EXEs
         shell: pwsh
@@ -290,28 +281,21 @@ jobs:
             -Report (Join-Path $folder 'selftest.json') `
             -StdOut 'release-selftest-out.txt' `
             -StdErr 'release-selftest-err.txt'
+          $selftestExit = $LASTEXITCODE
           if (-not (Test-Path (Join-Path $folder 'selftest.json'))) {
             Write-Output '::error title=Release::the unpacked program did not write its report'
             throw 'the unpacked program did not start'
           }
-          # The worker reads a page from the unpacked folder.
-          $job = @{ document = (Resolve-Path 'samples\scan_page_1.png').Path; model_path = (Resolve-Path '.cache\models\small.safetensors').Path } | ConvertTo-Json
-          $job | Set-Content -Encoding utf8 release-job.json
-          $process = Start-Process -FilePath $worker.FullName `
-            -ArgumentList '--job','release-job.json','--result','release-result.json' `
-            -Wait -PassThru -RedirectStandardOutput 'release-worker-out.txt' -RedirectStandardError 'release-worker-err.txt'
-          Write-Host "worker exit code: $($process.ExitCode)"
-          if (Test-Path 'release-worker-err.txt') {
-            Get-Content 'release-worker-err.txt' | Select-Object -Last 20 |
-              ForEach-Object { Write-Output "::warning title=Release worker::$_" }
+          Copy-Item (Join-Path $folder 'selftest.json') 'release-selftest.json'
+          $selftest = Get-Content 'release-selftest.json' -Raw | ConvertFrom-Json -ErrorAction Stop
+          if ($selftestExit -ne 0 -or $selftest.ok -ne $true) {
+            throw 'the unpacked application self-test failed'
           }
-          if (-not (Test-Path 'release-result.json')) { throw 'the unpacked worker did not write a result' }
-          $result = Get-Content 'release-result.json' -Raw | ConvertFrom-Json
-          if ($result.error) {
-            Write-Output "::error title=Release worker::$($result.error)"
-            throw 'the unpacked worker reported an error'
-          }
-          Write-Output "::warning title=Release worker::recognised $($result.text.Length) characters from the unpacked folder"
+          python tools/verify_worker_bundle.py `
+            --worker $worker.FullName --models .cache/models `
+            --pdf benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf `
+            --image samples/scan_page_1.png --report release-offline-check.json
+          if ($LASTEXITCODE -ne 0) { throw 'the unpacked offline worker checks failed' }
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
@@ -319,7 +303,7 @@ jobs:
         run: |
           Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-err.txt release-worker-out.txt release-worker-err.txt release-result.json
+          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-out.txt.exit.txt release-selftest-err.txt release-selftest.json release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
@@ -560,6 +544,8 @@ jobs:
           # written with OpenCV.  The package is Apache-2.0 and it does
           # not need a display.
           python -m pip install "opencv-python-headless==4.12.0.88" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          # Match the desktop PDF runtime: the independent worker now tests PDFs too.
+          python -m pip install "pypdfium2==4.30.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           python -m pip install "pyinstaller==6.16.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
       - name: Check that torch and torchvision belong together
         shell: pwsh
@@ -571,6 +557,8 @@ jobs:
         run: |
           python tools/download_model.py --model kraken-ppocrv6-small --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download.log
           if ($LASTEXITCODE -ne 0) { throw 'the model could not be downloaded' }
+          python tools/download_model.py --model kraken-ppocrv6-medium --target .cache/models
+          if ($LASTEXITCODE -ne 0) { throw 'medium model unavailable' }
           python tools/download_model.py --model mishkefet-v1 --target .cache/models 2>&1 | Out-File -Encoding utf8 model-download-mishkefet.log
           if ($LASTEXITCODE -ne 0) { throw 'the model of the second engine could not be downloaded' }
       - name: Install optional decoding files for packaged-worker verification
@@ -580,45 +568,35 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'character LM unavailable' }
           python tools/download_model.py --model mishkefet-word-lm --target .cache/models
           if ($LASTEXITCODE -ne 0) { throw 'word LM unavailable' }
+      - name: Build the previous worker as the comparison baseline
+        shell: pwsh
+        run: |
+          python tools/build_worker.py --profile baseline --distpath build/baseline-dist --workpath build/baseline-work --report baseline-build.json 2>&1 | Tee-Object -FilePath build-baseline.log
+          if ($LASTEXITCODE -ne 0) { throw 'the baseline worker could not be built' }
       - name: Build the OCR worker
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onedir --console `
-            --collect-all kraken `
-            --collect-all torchvision `
-            --name ocr-worker ocr_worker/main.py 2>&1 | Tee-Object -FilePath build-worker.log
+          python tools/build_worker.py --profile inference --report worker-build.json 2>&1 | Tee-Object -FilePath build-worker.log
           if ($LASTEXITCODE -ne 0) { throw 'the worker could not be built' }
-      - name: Recognise a page with the packaged worker
+      - name: Compare baseline and inference bundles offline on all models
         shell: pwsh
         run: |
-          $job = @{ document = (Resolve-Path 'samples\scan_page_1.png').Path; model_path = (Resolve-Path '.cache\models\small.safetensors').Path } | ConvertTo-Json
-          $job | Set-Content -Encoding utf8 job.json
-          $process = Start-Process -FilePath 'dist\ocr-worker\ocr-worker.exe' `
-            -ArgumentList '--job','job.json','--result','result.json' `
-            -Wait -PassThru -RedirectStandardOutput 'worker-out.txt' -RedirectStandardError 'worker-err.txt'
-          Write-Host "exit code: $($process.ExitCode)"
-          if (Test-Path 'worker-out.txt') { Get-Content 'worker-out.txt' | ForEach-Object { Write-Output "::warning title=Worker::$_" } }
-          if (Test-Path 'worker-err.txt') { Get-Content 'worker-err.txt' | Select-Object -Last 20 | ForEach-Object { Write-Output "::warning title=Worker::$_" } }
-          if (-not (Test-Path 'result.json')) { throw 'The worker did not write a result' }
-          $result = Get-Content 'result.json' -Raw | ConvertFrom-Json
-          if ($result.error) { Write-Output "::error title=Worker::$($result.error)"; throw 'The worker reported an error' }
-          Write-Output "::warning title=Worker::recognised $($result.text.Length) characters in $($result.duration_seconds) seconds"
-      - name: Recognise a page with the packaged worker and the second engine
-        shell: pwsh
-        run: |
-          $job = @{ document = (Resolve-Path 'samples\scan_page_1.png').Path; model_path = (Resolve-Path '.cache\models\mishkefet-v1.pt').Path; engine = 'mishkefet'; decoding_mode = 'assisted' } | ConvertTo-Json
-          $job | Set-Content -Encoding utf8 job-mishkefet.json
-          $process = Start-Process -FilePath 'dist\ocr-worker\ocr-worker.exe' `
-            -ArgumentList '--job','job-mishkefet.json','--result','result-mishkefet.json' `
-            -Wait -PassThru -RedirectStandardOutput 'worker-mishkefet-out.txt' -RedirectStandardError 'worker-mishkefet-err.txt'
-          Write-Host "exit code: $($process.ExitCode)"
-          if (Test-Path 'worker-mishkefet-err.txt') { Get-Content 'worker-mishkefet-err.txt' | Select-Object -Last 20 | ForEach-Object { Write-Output "::warning title=Worker::$_" } }
-          if (-not (Test-Path 'result-mishkefet.json')) { throw 'The worker did not write a result for the second engine' }
-          $result = Get-Content 'result-mishkefet.json' -Raw | ConvertFrom-Json
-          if ($result.error) { Write-Output "::error title=Worker::$($result.error)"; throw 'The worker reported an error for the second engine' }
-          if (-not $result.text.Trim() -or -not $result.assisted_text.Trim()) { throw 'raw or assisted reading empty' }
-          if ($result.decoding_mode -ne 'assisted') { throw 'assisted mode was not used' }
-          Write-Output "::warning title=Worker::the second engine recognised $($result.text.Length) characters in $($result.duration_seconds) seconds"
+          python tools/verify_worker_bundle.py `
+            --baseline build/baseline-dist/ocr-worker/ocr-worker.exe `
+            --worker dist/ocr-worker/ocr-worker.exe --models .cache/models `
+            --pdf benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf `
+            --image samples/scan_page_1.png --report package-comparison.json
+          if ($LASTEXITCODE -ne 0) { throw 'the slim worker differs, needs network, or failed' }
+      - name: Upload the package audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-packaging-audit
+          path: |
+            package-comparison.json
+            worker-build.json
+            baseline-build.json
+          if-no-files-found: warn
       - name: Upload the OCR worker
         uses: actions/upload-artifact@v4
         with:
@@ -628,14 +606,14 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log check-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json result-mishkefet.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-worker install-engine.log check-engine.log model-download.log build-worker.log worker-out.txt worker-err.txt result.json result-mishkefet.json worker-build.json baseline-build.json build-baseline.log package-comparison.json
 
   release:
     name: Publish the release
     # The release is made of the program that the Windows job built and
     # checked, and not of anything else: the archive of the user is the
     # one that was unpacked and started.
-    needs: [test-and-package]
+    needs: [test-and-package, unit-tests, ocr-engine, ocr-worker-windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
