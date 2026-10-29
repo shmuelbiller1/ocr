@@ -207,6 +207,18 @@ class SettingsDialog(QDialog):
         """Delete only optional language priors after explicit confirmation."""
         from ..engine.models import models_directory
         from ..engine.mishkefet_decoding import DECODING_ARTIFACTS
+        # The one-click offline editions deliberately ship their models.
+        # Removing the included language models would invalidate the
+        # launcher cache and prevent the next start. Other downloaded,
+        # optional language models can still be removed as before.
+        if (models_directory() / "OFFLINE-MODELS.json").is_file():
+            QMessageBox.information(
+                self,
+                "הסרת מודלי השפה",
+                "המודלים האלה הם חלק מהגרסה הלא-מקוונת ונדרשים להפעלתה. "
+                "לא ניתן להסיר אותם מתוך גרסה זו.",
+            )
+            return
         if getattr(self.parent(), "task", None) is not None:
             QMessageBox.information(self, "הסרה", "יש להמתין לסיום המשימה.")
             return
