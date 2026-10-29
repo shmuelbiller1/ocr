@@ -25,6 +25,12 @@ class ReleaseVersionTests(unittest.TestCase):
                          'docs/OCR_ACCURACY.md', 'docs/THIRD_PARTY.md', 'docs/AGENT_BUILD_PLAN.md'):
             with self.subTest(filename=filename):
                 self.assertIn('All Models', (root / filename).read_text(encoding='utf-8'))
+        readme = (root / 'README.md').read_text(encoding='utf-8')
+        for prefix in ('| Handwriting recognition with a real model |',
+                       '| A second engine, written for modern Hebrew cursive |'):
+            row = next(line for line in readme.splitlines() if line.startswith(prefix))
+            self.assertIn('All Models', row)
+            self.assertIn('ZIP', row)
         assisted = (root / 'docs/ASSISTED_DECODING.md').read_text(encoding='utf-8')
         self.assertNotIn('These files are not bundled', assisted)
         self.assertNotIn('These data files are not redistributed by this project', assisted)
