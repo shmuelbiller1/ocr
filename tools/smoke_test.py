@@ -141,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         "skipped": skipped,
     }
 
+    failures = 0
     for identifier, artifact, model_path in engines:
         print(f"reading with {identifier} ...", flush=True)
         engine = _engine_for(artifact, model_path, identifier, args.timeout)
@@ -152,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
             report["engines"].append(
                 {"model": identifier, "error": message}
             )
+            failures += 1
             continue
         name = artifact.filename.rsplit(".", 1)[0]
         (output / f"{name}.txt").write_text(reading["text"], encoding="utf-8")
@@ -181,6 +183,16 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(f"the readings are in {output}")
+    if engines and failures == len(engines):
+        # Every engine that was asked to read the page failed.  The
+        # point of this test is that a real page is read, and a build
+        # that read nothing is a build that has to fail.
+        print(
+            "no engine could read the page: "
+            f"{failures} of {len(engines)} engines failed",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

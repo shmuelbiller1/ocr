@@ -319,6 +319,9 @@ jobs:
             # written with OpenCV.  The package is Apache-2.0 and it does
             # not need a display.
             python -m pip install "opencv-python-headless==4.12.0.88"
+            # The pages of a PDF are read with pypdfium2, and the real
+            # page of the smoke test is a PDF.
+            python -m pip install "pypdfium2==4.30.0"
           } 2>&1 | tee install-engine.log
       - name: Check that torch and torchvision belong together
         run: |
