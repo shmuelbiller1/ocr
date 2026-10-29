@@ -133,6 +133,7 @@ class WorkerEngine:
         self.name = _display_name(engine, artifact_id)
 
     def configure(self, options: dict) -> None:
+        """Apply an explicit decoding profile supplied by plugin settings."""
         from .mishkefet_decoding import decoding_mode
         mode = decoding_mode(options)
         if self.engine != "mishkefet" and mode != "raw":

@@ -33,6 +33,7 @@ DECODING_ARTIFACTS = {
 
 
 def decoding_mode(options: dict) -> str:
+    """Validate the explicit profile; absence always means raw decoding."""
     mode = options.get("decoding_mode", "raw")
     if mode not in MODES:
         raise ValueError(f"Unknown Mishkefet decoding mode: {mode!r}")
@@ -45,6 +46,7 @@ class _DataOnlyUnpickler(pickle.Unpickler):
 
 
 def _load_data(folder: Path, identifier: str) -> dict:
+    """Check exact pinned bytes before data-only deserialization."""
     artifact = DECODING_ARTIFACTS[identifier]
     path = folder / artifact.filename
     try:
@@ -62,6 +64,7 @@ def _load_data(folder: Path, identifier: str) -> dict:
 
 
 def load_language_models(folder: Path):
+    """Restore the author's scoring objects without executable pickle loading."""
     from .vendor.hebocr.lm import CharNGramLM
     from .vendor.hebocr.wordlm import WordUnigramLM
 

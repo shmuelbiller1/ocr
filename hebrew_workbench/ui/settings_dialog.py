@@ -188,6 +188,7 @@ class SettingsDialog(QDialog):
         self.decoding_box.blockSignals(False)
 
     def _on_decoding_changed(self, _index: int) -> None:
+        """Persist the selected Mishkefet plugin's opt-in decoding profile."""
         plugin = self.registry.chosen("ocr") or self.registry.active("ocr")
         if plugin is None or plugin.id not in ("mishkefet", "mishkefet-worker"):
             return
@@ -203,6 +204,7 @@ class SettingsDialog(QDialog):
         self.refresh()
 
     def _remove_decoding_models(self) -> None:
+        """Delete only optional language priors after explicit confirmation."""
         from ..engine.models import models_directory
         from ..engine.mishkefet_decoding import DECODING_ARTIFACTS
         if getattr(self.parent(), "task", None) is not None:

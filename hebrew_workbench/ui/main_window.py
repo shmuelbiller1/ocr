@@ -571,6 +571,7 @@ class MainWindow(QMainWindow):
         self._show_decoding_comparison(None)
 
     def _build_decoding_dock(self) -> None:
+        """Create a read-only comparison pane with an explicit apply action."""
         self.decoding_dock = QDockWidget("Raw / פענוח מסייע — השוואה", self)
         self.decoding_dock.setObjectName("decoding-comparison")
         panel = QWidget()
@@ -600,6 +601,7 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.decoding_dock.toggleViewAction())
 
     def _show_decoding_comparison(self, entry) -> None:
+        """Show only the selected document's saved readings."""
         alternative = getattr(entry, "assisted_transcription", None)
         self.raw_reading.setPlainText(getattr(entry, "original_transcription", ""))
         self.assisted_reading.setPlainText(alternative or "")
@@ -613,6 +615,7 @@ class MainWindow(QMainWindow):
             self.decoding_dock.show()
 
     def use_assisted_reading(self) -> None:
+        """Replace edited text only after confirmation; keep raw text intact."""
         entry = self._shown_entry
         if entry is None or entry.assisted_transcription is None or self._document_is_recognizing():
             return
@@ -940,6 +943,7 @@ class MainWindow(QMainWindow):
         self.task.start()
 
     def install_decoding_models(self) -> None:
+        """Ask for licence acceptance before optional background downloads."""
         from ..engine.mishkefet_decoding import DECODING_ARTIFACTS
         from ..engine.models import install_artifact
         if self.task is not None:

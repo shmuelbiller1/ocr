@@ -141,6 +141,7 @@ class MishkefetEngine:
         self._page_lock = threading.Lock()
 
     def configure(self, options: dict) -> None:
+        """Apply an explicit decoding profile supplied by plugin settings."""
         mode = decoding_mode(options)
         # Do not change a live recognizer while a timed-out inference still runs.
         if not self._page_lock.acquire(blocking=False):

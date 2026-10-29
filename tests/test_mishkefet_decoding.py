@@ -164,6 +164,43 @@ class LanguageModelIntegrityTests(unittest.TestCase):
 
 
 class ComparisonToolTests(unittest.TestCase):
+    def test_reference_collision_is_rejected_without_overwriting(self):
+        import contextlib
+        import io
+        from tools import compare_mishkefet
+        with tempfile.TemporaryDirectory() as folder:
+            reference = Path(folder) / "decoding-raw.txt"
+            reference.write_bytes(b"independent reference\r\n")
+            with patch.object(compare_mishkefet, "MishkefetEngine") as factory, contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    compare_mishkefet.main(["--document", "page.pdf", "--model", "model.pt",
+                                           "--output", folder, "--transcript", str(reference),
+                                           "--verified-by", "reviewer"])
+            factory.assert_not_called()
+            self.assertEqual(reference.read_bytes(), b"independent reference\r\n")
+
+    def test_comparison_preserves_crlf_exactly_in_reference_and_readings(self):
+        import contextlib
+        import io
+        import json
+        from tools import compare_mishkefet
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            text = "first\r\nsecond\r\n"
+            reference = root / "reference.txt"
+            reference.write_bytes(text.encode("utf-8"))
+            factory = Mock()
+            factory.return_value.recognize.side_effect = [
+                OCRResult(text, "engine"), OCRResult(text, "engine", assisted_text=text)]
+            with patch.object(compare_mishkefet, "MishkefetEngine", factory), contextlib.redirect_stdout(io.StringIO()):
+                status = compare_mishkefet.main(["--document", "page.pdf", "--model", "model.pt",
+                    "--output", str(root / "out"), "--transcript", str(reference), "--verified-by", "reviewer"])
+            self.assertEqual(status, 0)
+            self.assertEqual((root / "out" / "decoding-assisted.txt").read_bytes(), text.encode("utf-8"))
+            report = json.loads((root / "out" / "decoding-comparison.json").read_text())
+            self.assertEqual(report["readings"]["assisted"]["cer"], 0)
+            self.assertEqual(report["readings"]["raw"]["cer"], 0)
+
     def test_unverified_report_has_no_scores_and_keeps_outputs_separate(self):
         import contextlib
         import io
