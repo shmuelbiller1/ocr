@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -59,7 +60,10 @@ class SettingsDialogTests(unittest.TestCase):
         models = Path(self.temporary.name) / "offline-models"
         models.mkdir()
         (models / "OFFLINE-MODELS.json").write_text(
-            '{"edition":"full-noncommercial"}', encoding="utf-8"
+            json.dumps({
+                "edition": "full-noncommercial",
+                "models": [{"filename": item.filename} for item in DECODING_ARTIFACTS.values()],
+            }), encoding="utf-8"
         )
         for artifact in DECODING_ARTIFACTS.values():
             (models / artifact.filename).write_bytes(b"bundled test weights")
@@ -73,6 +77,51 @@ class SettingsDialogTests(unittest.TestCase):
             questioned.assert_not_called()
         for artifact in DECODING_ARTIFACTS.values():
             self.assertTrue((models / artifact.filename).is_file())
+
+    def test_lite_edition_can_remove_separately_installed_language_models(self) -> None:
+        """Lite bundles Kraken only; optional downloaded priors are removable."""
+        from PySide6.QtWidgets import QMessageBox
+        from hebrew_workbench.engine.mishkefet_decoding import DECODING_ARTIFACTS
+
+        models = Path(self.temporary.name) / "lite-models"
+        models.mkdir()
+        (models / "OFFLINE-MODELS.json").write_text(
+            json.dumps({"edition": "lite", "models": [{"filename": "small.safetensors"}]}),
+            encoding="utf-8",
+        )
+        for artifact in DECODING_ARTIFACTS.values():
+            (models / artifact.filename).write_bytes(b"separate model")
+        with (
+            patch("hebrew_workbench.engine.models.models_directory", return_value=models),
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.question",
+                  return_value=QMessageBox.Yes) as questioned,
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.information") as shown,
+        ):
+            self.dialog._remove_decoding_models()
+            questioned.assert_called_once()
+            shown.assert_not_called()
+        for artifact in DECODING_ARTIFACTS.values():
+            self.assertFalse((models / artifact.filename).exists())
+        self.assertTrue((models / "OFFLINE-MODELS.json").exists())
+
+    def test_invalid_offline_manifest_does_not_allow_model_deletion(self) -> None:
+        from hebrew_workbench.engine.mishkefet_decoding import DECODING_ARTIFACTS
+
+        models = Path(self.temporary.name) / "bad-manifest-models"
+        models.mkdir()
+        (models / "OFFLINE-MODELS.json").write_text("{", encoding="utf-8")
+        for artifact in DECODING_ARTIFACTS.values():
+            (models / artifact.filename).write_bytes(b"bundled test")
+        with (
+            patch("hebrew_workbench.engine.models.models_directory", return_value=models),
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.warning") as warning,
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.question") as question,
+        ):
+            self.dialog._remove_decoding_models()
+            warning.assert_called_once()
+            question.assert_not_called()
+        for artifact in DECODING_ARTIFACTS.values():
+            self.assertTrue((models / artifact.filename).exists())
 
     def test_separately_installed_language_models_can_still_be_removed(self) -> None:
         from PySide6.QtWidgets import QMessageBox
