@@ -60,7 +60,7 @@ class DocumentTextTests(unittest.TestCase):
             target = Path(folder) / "reviewed.txt"
             with patch.object(QFileDialog, "getSaveFileName", return_value=(str(target), "")):
                 self.window.save_text()
-            self.assertEqual(target.read_text(encoding="utf-8"), 'ר״ת שָׁלוֹם')
+            self.assertEqual(target.read_text(encoding="utf-8-sig"), 'ר״ת שָׁלוֹם')
 
     def test_assisted_output_is_reviewed_and_never_auto_applied(self) -> None:
         from unittest.mock import patch
