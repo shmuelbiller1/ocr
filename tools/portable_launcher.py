@@ -9,12 +9,13 @@ On the first launch, the app is unpacked once to a versioned per-user cache,
 without admin rights, an installer, internet access or a setup dialog.
 Subsequent launches reuse the already unpacked application.
 
-The bundled model is independently checked before every launch.
+All bundled model files are independently checked before every launch.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -30,6 +31,23 @@ MODEL_SHA256 = "3108259779f5abfed3908a1c9eafba64d17e4a2a169368c539ecfeff04c018f3
 MARKER_NAME = ".offline-bundle-ready"
 CHUNK_SIZE = 1024 * 1024
 
+MANIFEST_FILENAME = "OFFLINE-MODELS.json"
+# Independent pinned digests: a cached file is checked every launch.
+FULL_EXTRA_HASHES = {
+    "medium.safetensors": (
+        63_779_644, "15313b51ace64cbfa81f8f6ef25ad64f04e5a6fb7f7823e67b107527bc081ac9"
+    ),
+    "mishkefet-v1.pt": (
+        120_864_761, "0dfb82e440ebfa9dd61f562ad36a83ec41c23904eacd96623c3bd8f6fd850b88"
+    ),
+    "hebrew_char6.pkl": (
+        28_241_531, "60e6b974e797c74e2c543b27bfe1f9b02e8e8960594cfde7dc452553e4be2161"
+    ),
+    "hebrew_words.pkl": (
+        3_796_006, "39f8ed30114125d53a47d4c383e48338bd5f8ffce21ae981e5fd7f99ade08874"
+    ),
+}
+
 
 def _checksum(path: Path) -> str:
     digest = hashlib.sha256()
@@ -40,8 +58,33 @@ def _checksum(path: Path) -> str:
 
 
 def _model_is_verified(app_dir: Path) -> bool:
-    model = app_dir / "models" / MODEL_FILENAME
-    return model.is_file() and model.stat().st_size == MODEL_SIZE and _checksum(model) == MODEL_SHA256
+    """The entire edition must be intact, not merely its first model."""
+    folder = app_dir / "models"
+    manifest_path = folder / MANIFEST_FILENAME
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        edition = manifest["edition"]
+        entries = manifest["models"]
+        if edition not in ("lite", "full-noncommercial"):
+            return False
+        expected = {MODEL_FILENAME: (MODEL_SIZE, MODEL_SHA256)}
+        if edition == "full-noncommercial":
+            expected.update(FULL_EXTRA_HASHES)
+        if not isinstance(entries, list) or len(entries) != len(expected):
+            return False
+        files = [entry["filename"] for entry in entries]
+        if set(files) != set(expected) or len(files) != len(set(files)):
+            return False
+        for filename, (size, digest) in expected.items():
+            path = folder / filename
+            if not path.is_file() or path.stat().st_size != size or _checksum(path) != digest:
+                return False
+            record = next(row for row in entries if row["filename"] == filename)
+            if record["size_bytes"] != size or record["sha256"] != digest:
+                return False
+        return True
+    except (OSError, ValueError, KeyError, TypeError, StopIteration):
+        return False
 
 
 def _is_ready(app_dir: Path, fingerprint: str) -> bool:
@@ -111,7 +154,7 @@ def unpack_once(executable: Path, cache_base: Path | None = None) -> Path:
 
             app_dir = staging / APP_FOLDER
             if not _model_is_verified(app_dir):
-                raise RuntimeError("The bundled OCR model did not pass its SHA-256 check.")
+                raise RuntimeError("At least one bundled OCR model did not pass SHA-256 verification.")
             if not (app_dir / "HebrewNotesWorkbench.exe").is_file():
                 raise RuntimeError("The Windows application is missing from the bundle.")
             if not (app_dir / "ocr-worker" / "ocr-worker.exe").is_file():
