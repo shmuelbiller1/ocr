@@ -11,6 +11,7 @@ Nothing here is required: the program works with no plugins at all.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
@@ -207,6 +208,35 @@ class SettingsDialog(QDialog):
         """Delete only optional language priors after explicit confirmation."""
         from ..engine.models import models_directory
         from ..engine.mishkefet_decoding import DECODING_ARTIFACTS
+        # The one-click offline editions deliberately ship their models.
+        # Removing the included language models would invalidate the
+        # launcher cache and prevent the next start. Other downloaded,
+        # optional language models can still be removed as before.
+        manifest_path = models_directory() / "OFFLINE-MODELS.json"
+        if manifest_path.is_file():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                bundled_models = manifest["models"]
+                if not isinstance(bundled_models, list) or not all(
+                    isinstance(item, dict) and isinstance(item.get("filename"), str)
+                    for item in bundled_models
+                ):
+                    raise ValueError("Invalid offline model manifest")
+                bundled_names = {item["filename"] for item in bundled_models}
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                # An unreadable manifest must not permit deletion of a
+                # file that may be required by the offline launcher.
+                QMessageBox.warning(self, "הסרת מודלי השפה", str(exc))
+                return
+            if any(artifact.filename in bundled_names
+                   for artifact in DECODING_ARTIFACTS.values()):
+                QMessageBox.information(
+                    self,
+                    "הסרת מודלי השפה",
+                    "מודלי השפה האלה כלולים בגרסה הלא-מקוונת ונדרשים להפעלתה. "
+                    "לא ניתן להסיר אותם מתוך גרסה זו.",
+                )
+                return
         if getattr(self.parent(), "task", None) is not None:
             QMessageBox.information(self, "הסרה", "יש להמתין לסיום המשימה.")
             return

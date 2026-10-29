@@ -48,6 +48,20 @@ BUILTIN_MANIFESTS: tuple[PluginManifest, ...] = (
         options={"model_id": "kraken-ppocrv6-small"},
     ),
     PluginManifest(
+        id="kraken-medium-worker",
+        name="Kraken PP-OCRv6 Medium (תהליך נפרד)",
+        version="1.0.0",
+        kind=KIND_OCR,
+        entry="hebrew_workbench.engine.worker:make_worker_engine",
+        license="Apache-2.0",
+        license_url="https://github.com/mittagessen/kraken",
+        description=(
+            "מודל Kraken PP-OCRv6 בינוני לזיהוי כתב יד עברי; רץ בתהליך נפרד."
+        ),
+        builtin=True,
+        options={"model_id": "kraken-ppocrv6-medium"},
+    ),
+    PluginManifest(
         id="mishkefet",
         name="Mishkefet-v1 (כתב יד עברי מודרני, בתוך התוכנה)",
         version="1.0.0",

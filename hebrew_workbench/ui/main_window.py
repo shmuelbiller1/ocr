@@ -54,7 +54,7 @@ from .tasks import TaskThread
 
 #: The plugins that come with the program and that use the models of
 #: kraken.  The model of another plugin is the model of its own maker.
-KRAKEN_PLUGINS = frozenset({"kraken", "kraken-worker"})
+KRAKEN_PLUGINS = frozenset({"kraken", "kraken-worker", "kraken-medium-worker"})
 
 __all__ = ["MainWindow", "run", "SUPPORTED_SUFFIXES"]
 

@@ -98,6 +98,37 @@ the engine, but they are not what the program is made for.
   a document by itself.  Every change is a proposal that is shown first
   and that the user accepts or refuses.
 
+## One-click offline Windows executables
+
+For Windows, **download a single EXE and double-click it**. No installer,
+administrator privileges, Python installation, manual ZIP extraction, or model
+downloads are required. Both editions contain the app, OCR worker, dependencies
+and their licenses:
+
+| Edition | Download asset | Models included | Use |
+| --- | --- | --- | --- |
+| **Lite** | `HebrewNotesWorkbench-<version>-one-click.exe` | Kraken PP-OCRv6 small (Apache-2.0) | Permissive-license lightweight edition |
+| **All Models** | `HebrewNotesWorkbench-<version>-all-models-noncommercial-one-click.exe` | Kraken small and medium, Mishkefet-v1 and its character/word language models | **Noncommercial only**; all OCR modes work offline, including assisted decoding |
+
+The **All Models** edition includes five verified model files in one download.
+It can compare the three OCR models and use Mishkefet's optional beam and
+assisted decoding modes without contacting the model hosts. **The Mishkefet
+weights and both language-model files are licensed CC-BY-NC-SA-4.0.** Their
+original copyright, source, attribution and license link are included. Do not
+use this edition commercially without obtaining separate permission.
+
+A standard PyInstaller one-file launcher automatically unpacks its supporting
+files into a versioned per-user folder at
+`%LOCALAPPDATA%\\HebrewNotesWorkbench\\one-click\\`. Qt's DLLs remain
+separately replaceable there for LGPL compliance. The launcher verifies each
+model before use. Its internal archive is temporarily extracted by PyInstaller
+on each launch, so startup may take time even after the application cache has
+been created. The full edition also uses more disk space.
+
+No online activation or automatic updater is required. Windows can display a
+security warning for an unsigned executable. The existing portable ZIP is
+still available for users who prefer a traditional extracted folder.
+
 ## Running it from source
 
 ```bash

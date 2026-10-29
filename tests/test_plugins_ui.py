@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 if sys.platform.startswith("linux"):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -52,6 +54,91 @@ class SettingsDialogTests(unittest.TestCase):
         self.dialog.install_decoding_button.click()
         self.assertEqual(requests, [True])
 
+    def test_bundled_offline_language_models_cannot_be_removed(self) -> None:
+        """The full one-click edition must still open after using Settings."""
+        from hebrew_workbench.engine.mishkefet_decoding import DECODING_ARTIFACTS
+        models = Path(self.temporary.name) / "offline-models"
+        models.mkdir()
+        (models / "OFFLINE-MODELS.json").write_text(
+            json.dumps({
+                "edition": "full-noncommercial",
+                "models": [{"filename": item.filename} for item in DECODING_ARTIFACTS.values()],
+            }), encoding="utf-8"
+        )
+        for artifact in DECODING_ARTIFACTS.values():
+            (models / artifact.filename).write_bytes(b"bundled test weights")
+        with (
+            patch("hebrew_workbench.engine.models.models_directory", return_value=models),
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.information") as shown,
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.question") as questioned,
+        ):
+            self.dialog._remove_decoding_models()
+            shown.assert_called_once()
+            questioned.assert_not_called()
+        for artifact in DECODING_ARTIFACTS.values():
+            self.assertTrue((models / artifact.filename).is_file())
+
+    def test_lite_edition_can_remove_separately_installed_language_models(self) -> None:
+        """Lite bundles Kraken only; optional downloaded priors are removable."""
+        from PySide6.QtWidgets import QMessageBox
+        from hebrew_workbench.engine.mishkefet_decoding import DECODING_ARTIFACTS
+
+        models = Path(self.temporary.name) / "lite-models"
+        models.mkdir()
+        (models / "OFFLINE-MODELS.json").write_text(
+            json.dumps({"edition": "lite", "models": [{"filename": "small.safetensors"}]}),
+            encoding="utf-8",
+        )
+        for artifact in DECODING_ARTIFACTS.values():
+            (models / artifact.filename).write_bytes(b"separate model")
+        with (
+            patch("hebrew_workbench.engine.models.models_directory", return_value=models),
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.question",
+                  return_value=QMessageBox.Yes) as questioned,
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.information") as shown,
+        ):
+            self.dialog._remove_decoding_models()
+            questioned.assert_called_once()
+            shown.assert_not_called()
+        for artifact in DECODING_ARTIFACTS.values():
+            self.assertFalse((models / artifact.filename).exists())
+        self.assertTrue((models / "OFFLINE-MODELS.json").exists())
+
+    def test_invalid_offline_manifest_does_not_allow_model_deletion(self) -> None:
+        from hebrew_workbench.engine.mishkefet_decoding import DECODING_ARTIFACTS
+
+        models = Path(self.temporary.name) / "bad-manifest-models"
+        models.mkdir()
+        (models / "OFFLINE-MODELS.json").write_text("{", encoding="utf-8")
+        for artifact in DECODING_ARTIFACTS.values():
+            (models / artifact.filename).write_bytes(b"bundled test")
+        with (
+            patch("hebrew_workbench.engine.models.models_directory", return_value=models),
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.warning") as warning,
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.question") as question,
+        ):
+            self.dialog._remove_decoding_models()
+            warning.assert_called_once()
+            question.assert_not_called()
+        for artifact in DECODING_ARTIFACTS.values():
+            self.assertTrue((models / artifact.filename).exists())
+
+    def test_separately_installed_language_models_can_still_be_removed(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+        from hebrew_workbench.engine.mishkefet_decoding import DECODING_ARTIFACTS
+        models = Path(self.temporary.name) / "optional-models"
+        models.mkdir()
+        for artifact in DECODING_ARTIFACTS.values():
+            (models / artifact.filename).write_bytes(b"optional test weights")
+        with (
+            patch("hebrew_workbench.engine.models.models_directory", return_value=models),
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.question",
+                  return_value=QMessageBox.Yes),
+        ):
+            self.dialog._remove_decoding_models()
+        for artifact in DECODING_ARTIFACTS.values():
+            self.assertFalse((models / artifact.filename).exists())
+
     def test_the_plugins_are_shown(self) -> None:
         names = [
             self.dialog.table.item(row, 0).text()
@@ -65,6 +152,20 @@ class SettingsDialogTests(unittest.TestCase):
         self.assertIn("spelling", self.dialog.active_boxes)
         self.assertIn("grammar", self.dialog.active_boxes)
         self.assertIn("style", self.dialog.active_boxes)
+
+    def test_kraken_medium_has_its_own_selectable_engine(self) -> None:
+        """The complete offline package must expose its medium model in Settings."""
+        medium = self.registry.get("kraken-medium-worker")
+        self.assertIsNotNone(medium)
+        self.assertEqual(
+            self.registry.options_of(medium)["model_id"], "kraken-ppocrv6-medium"
+        )
+        selector = self.dialog.active_boxes["ocr"]
+        index = selector.findData("kraken-medium-worker")
+        self.assertGreaterEqual(index, 0)
+        selector.setCurrentIndex(index)
+        self.assertEqual(self.registry.settings.active["ocr"], "kraken-medium-worker")
+        self.assertIn("Medium", selector.currentText())
 
     def test_the_active_plugin_of_a_kind_can_be_chosen(self) -> None:
         box = self.dialog.active_boxes["ocr"]

@@ -94,7 +94,8 @@ def _display_name(engine: str, artifact_id: str) -> str:
     licence = artifact.license if artifact is not None else "Apache-2.0"
     if engine == "mishkefet":
         return f"Mishkefet-v1 (modern Hebrew cursive, {licence})"
-    return f"kraken PP-OCRv6 (worker, {licence})"
+    variant = "medium" if artifact_id == "kraken-ppocrv6-medium" else "small"
+    return f"kraken PP-OCRv6 {variant} (worker, {licence})"
 
 
 class WorkerEngine:

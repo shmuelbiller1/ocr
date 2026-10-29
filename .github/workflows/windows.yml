@@ -203,6 +203,58 @@ jobs:
             python tools/download_model.py --model $model --target .cache/models
             if ($LASTEXITCODE -ne 0) { throw "model setup failed: $model" }
           }
+      - name: Build and verify both one-click offline Windows EXEs
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem 'release' -Filter '*-win64.zip' | Select-Object -First 1
+          if (-not $archive) { throw 'the complete release ZIP is missing' }
+          $base = $archive.Name -replace '-win64\.zip$', ''
+          # A small permissively licensed edition and a full edition
+          # with Mishkefet + its optional language models (noncommercial).
+          foreach ($edition in @('lite', 'full')) {
+            $payload = "build/one-click-$edition/one-click-payload.zip"
+            $modelArgs = @('--archive', $archive.FullName,
+                           '--model', '.cache/models/small.safetensors',
+                           '--output', $payload)
+            if ($edition -eq 'full') {
+              $modelArgs += @('--full-models-dir', '.cache/models')
+            }
+            python tools/build_one_click.py @modelArgs
+            if ($LASTEXITCODE -ne 0) { throw "Model packaging failed: $edition" }
+            $name = if ($edition -eq 'full') {
+              "$base-all-models-noncommercial-one-click"
+            } else {
+              "$base-one-click"
+            }
+            $resolvedPayload = (Resolve-Path $payload -ErrorAction Stop).Path
+            python -m PyInstaller --noconfirm --clean --onefile --windowed `
+              --add-data "$resolvedPayload;." `
+              --distpath release `
+              --workpath "build/one-click-build-$edition" `
+              --specpath "build/one-click-spec-$edition" `
+              --name $name tools/portable_launcher.py
+            if ($LASTEXITCODE -ne 0) { throw "One-click EXE build failed: $edition" }
+            $exe = Join-Path 'release' ($name + '.exe')
+            $report = "one-click-$edition-selftest.json"
+            pwsh -File tools/run_windows_exe.ps1 `
+              -Exe $exe -Report $report `
+              -StdOut "one-click-$edition-out.txt" `
+              -StdErr "one-click-$edition-err.txt" `
+              -TimeoutSeconds 300
+            if ($LASTEXITCODE -ne 0) { throw "Offline EXE failed first launch: $edition" }
+            if (-not (Test-Path $report)) { throw "Offline report missing: $edition" }
+            $check = Get-Content $report -Raw | ConvertFrom-Json
+            if (-not $check.ok) { throw "Offline selftest failed: $edition" }
+          }
+          $root = Join-Path $env:LOCALAPPDATA 'HebrewNotesWorkbench/one-click'
+          $manifests = @(Get-ChildItem $root -Filter OFFLINE-MODELS.json -Recurse -File)
+          if ($manifests.Count -lt 2) { throw 'Both offline editions were not unpacked' }
+          $types = @($manifests | ForEach-Object {
+            (Get-Content $_.FullName -Raw | ConvertFrom-Json).edition
+          })
+          if ('lite' -notin $types -or 'full-noncommercial' -notin $types) {
+            throw 'The extracted model editions are incomplete'
+          }
       - name: Check the release as a user gets it
         shell: pwsh
         run: |
@@ -596,11 +648,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           cd release
+          # Do not treat an unmatched *.exe as a literal filename when
+          # tests or a ZIP-only release provide no EXE files.
+          shopt -s nullglob
+          archives=(./*.zip ./*.exe)
+          if [ ${#archives[@]} -eq 0 ]; then
+            echo "No ZIP or EXE release assets were produced" >&2
+            exit 1
+          fi
           # One digest file for every archive, with the name of the
           # archive inside it.
-          for archive in ./*.zip; do
+          for archive in "${archives[@]}"; do
             name="$(basename "$archive")"
             sha256sum "$name" > "${name}.sha256"
           done
@@ -611,6 +671,11 @@ jobs:
           existing="$(gh api "repos/${{ github.repository }}/releases" --paginate \
             --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n 1)"
           if [ -n "$existing" ]; then
+            # Keep the release unpublished until every binary and its
+            # matching checksum have been replaced successfully. If a
+            # GitHub upload or API call fails, set -e leaves it a draft
+            # instead of exposing mismatched download/checksum pairs.
+            gh api "repos/${{ github.repository }}/releases/$existing" -X PATCH -F draft=true
             # The file is put there under a temporary name first, and
             # the file that was published before is taken away only
             # when the new one is there.  `gh release upload --clobber`
@@ -634,8 +699,12 @@ jobs:
               gh api "repos/${{ github.repository }}/releases/assets/$new" -X PATCH \
                 -F name="$name"
             }
-            publish ./*.sha256
-            publish ./*.zip
+            # Each pattern may match multiple files; pass one asset at a time.
+            # The publish helper accepts only one positional argument.
+            for asset in ./*.sha256 ./*.zip ./*.exe; do
+              [ -f "$asset" ] || continue
+              publish "$asset"
+            done
             # The notes are written at the end, when the files of the
             # release are there.
             # -F draft=false: the release API wants a boolean and not
@@ -649,7 +718,7 @@ jobs:
             # --verify-tag: the release is made for the tag that was
             # pushed, and not for a new tag that the tool would make.
             gh release create "$TAG" \
-              ./*.zip ./*.sha256 \
+              ./*.zip ./*.exe ./*.sha256 \
               --verify-tag \
               --title "Hebrew Notes Workbench $TAG" \
               --notes-file ../release-notes.md
