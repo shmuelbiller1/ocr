@@ -399,6 +399,7 @@ jobs:
         with:
           name: smoke-test-readings
           path: build/smoke
+          if-no-files-found: warn
       - name: Write the results into the documentation
         if: always()
         continue-on-error: true
@@ -444,7 +445,7 @@ jobs:
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/small.txt build/smoke/medium.txt build/smoke/mishkefet-v1.txt build/smoke/smoke-test.json
 
   ocr-worker-windows:
     name: OCR worker (Windows)
