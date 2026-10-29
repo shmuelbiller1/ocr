@@ -229,9 +229,15 @@ jobs:
             -Report (Join-Path $folder 'selftest.json') `
             -StdOut 'release-selftest-out.txt' `
             -StdErr 'release-selftest-err.txt'
+          $selftestExit = $LASTEXITCODE
           if (-not (Test-Path (Join-Path $folder 'selftest.json'))) {
             Write-Output '::error title=Release::the unpacked program did not write its report'
             throw 'the unpacked program did not start'
+          }
+          Copy-Item (Join-Path $folder 'selftest.json') 'release-selftest.json'
+          $selftest = Get-Content 'release-selftest.json' -Raw | ConvertFrom-Json -ErrorAction Stop
+          if ($selftestExit -ne 0 -or $selftest.ok -ne $true) {
+            throw 'the unpacked application self-test failed'
           }
           python tools/verify_worker_bundle.py `
             --worker $worker.FullName --models .cache/models `
@@ -245,7 +251,7 @@ jobs:
         run: |
           Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-err.txt release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
+          python tools/publish_diagnostics.py --branch=ci/diagnostics test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-out.txt.exit.txt release-selftest-err.txt release-selftest.json release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4

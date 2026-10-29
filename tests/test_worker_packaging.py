@@ -110,6 +110,15 @@ class WorkerPackagingTests(unittest.TestCase):
         worker_job = match.group(1)
         self.assertRegex(worker_job, rf'(?m)^ +python -m pip install "{re.escape(pdf_pin)}"(?: +|$)')
 
+    def test_unpacked_application_failure_cannot_be_masked_by_worker_success(self):
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/windows.yml').read_text()
+        step = workflow.split('      - name: Check the release as a user gets it', 1)[1].split('\n      - name:', 1)[0]
+        self.assertRegex(step, r'(?m)^ +\$selftestExit = \$LASTEXITCODE$')
+        self.assertRegex(step, r'(?m)^ +if \(\$selftestExit -ne 0 -or \$selftest.ok -ne \$true\)')
+        self.assertIn("ConvertFrom-Json -ErrorAction Stop", step)
+        self.assertLess(step.index('$selftestExit ='), step.index('python tools/verify_worker_bundle.py'))
+        self.assertLess(step.index('if ($selftestExit -ne 0'), step.index('python tools/verify_worker_bundle.py'))
+
     def test_offline_guard_blocks_outbound_lookup_and_connect_without_reaching_network(self):
         # Audit hooks cannot be removed, so keep this check in a fresh process.
         code = '''
