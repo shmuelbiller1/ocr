@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from hebrew_workbench.engine.base import (
     EngineManifest,
@@ -237,6 +238,33 @@ class WorkerManifestTests(unittest.TestCase):
             WorkerEngine("worker.exe", "small.safetensors", engine="mishkefet")
         with self.assertRaisesRegex(ValueError, "do not match"):
             WorkerEngine("worker.exe", "model.pt", artifact_id="mishkefet-v1")
+
+    def test_medium_builtin_plugin_uses_its_own_offline_weights(self) -> None:
+        from hebrew_workbench.plugins import PluginRegistry
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            models = root / "models"
+            models.mkdir()
+            medium = models / "medium.safetensors"
+            medium.write_bytes(b"test medium model")
+            worker = root / "ocr-worker.exe"
+            worker.write_bytes(b"worker")
+            with (
+                patch("hebrew_workbench.engine.models.models_directory",
+                      return_value=models),
+                patch("hebrew_workbench.engine.worker.worker_path",
+                      return_value=worker),
+            ):
+                registry = PluginRegistry(root=root / "plugins")
+                plugin = registry.get("kraken-medium-worker")
+                self.assertIsNotNone(plugin)
+                self.assertIsNotNone(plugin.object)
+                self.assertEqual(plugin.object.model_path, medium)
+                self.assertEqual(plugin.object.manifest().model_id,
+                                 "kraken-ppocrv6-medium")
+                self.assertIn("medium", plugin.object.name)
+                self.assertTrue(plugin.available())
 
     def test_the_model_of_the_manifest_is_the_model_that_was_chosen(self) -> None:
         engine = WorkerEngine(
