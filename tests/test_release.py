@@ -338,7 +338,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_the_release_is_made_of_the_program_that_was_checked(self) -> None:
         """The archive of the user is the one that was unpacked and started."""
-        self.assertIn("needs: [test-and-package]", self.text)
+        self.assertIn("needs: [test-and-package, unit-tests, ocr-engine, ocr-worker-windows]", self.text)
         self.assertIn("name: HebrewNotesWorkbench-release", self.text)
 
     def test_the_release_may_write_to_the_repository(self) -> None:

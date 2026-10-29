@@ -38,6 +38,22 @@ class WorkerPackagingTests(unittest.TestCase):
         self.assertEqual(args.count('--collect-all'), 2)
         self.assertNotIn('--exclude-module', args)
 
+    def test_build_timeout_fails_without_starting_a_real_packager(self):
+        import contextlib
+        import io
+        from unittest.mock import Mock, patch
+        from tools import build_worker
+        distribution = Mock(version='7.1.1')
+        with tempfile.TemporaryDirectory() as temp:
+            distribution.locate_file.return_value = Path(temp)
+            with patch.object(build_worker.importlib.metadata, 'distribution', return_value=distribution), \
+                 patch.object(build_worker.subprocess, 'run', side_effect=subprocess.TimeoutExpired('build', 1800)) as run, \
+                 contextlib.redirect_stderr(io.StringIO()):
+                status = build_worker.main(['--profile', 'baseline', '--distpath', temp,
+                                            '--workpath', temp, '--report', str(Path(temp) / 'report.json')])
+            self.assertEqual(status, 1)
+            self.assertEqual(run.call_args.kwargs['timeout'], 1800)
+
     def test_only_separate_video_plugin_is_deleted(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

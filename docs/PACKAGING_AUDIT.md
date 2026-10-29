@@ -35,7 +35,8 @@ Audit based on the pinned `kraken==7.1.1` wheel and the app's actual imports.
 
 The frozen inference build preserves `kraken` distribution metadata, needed
 by `importlib.metadata.entry_points` for model loaders/classes. It explicitly
-collects `kraken.lib.ppocr`, `kraken.lib.vgsl`, `kraken.lib.ro`, and the local
+collects all four registered model modules (`kraken.lib.ppocr`, `kraken.lib.vgsl`,
+`kraken.lib.ro`, `kraken.lib.pretrain`), and the local
 `blla.mlmodel`, `iso15924.json` and dataset `scripts.json` resources. Removing
 `blla.mlmodel` would break offline segmentation even with recognition weights
 already present. A missing required resource fails the build.

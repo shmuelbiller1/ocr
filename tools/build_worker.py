@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # These are CLI / contribution tools, not model or dataset implementations.
 EXCLUDED_MODULES = ("kraken.ketos", "kraken.kraken", "kraken.contrib")
 # Model classes resolved by kraken.models entry points in the supported models.
-MODEL_MODULES = ("kraken.lib.ppocr", "kraken.lib.vgsl", "kraken.lib.ro")
+MODEL_MODULES = ("kraken.lib.ppocr", "kraken.lib.vgsl", "kraken.lib.ro", "kraken.lib.pretrain")
 RESOURCES = ("blla.mlmodel", "iso15924.json", "lib/dataset/scripts.json")
 VIDEO_DLL = re.compile(r"opencv_videoio_ffmpeg[0-9_]+(?:_64)?\.dll", re.IGNORECASE)
 
@@ -63,12 +63,19 @@ def main(argv=None) -> int:
     parser.add_argument("--workpath", type=Path, default=ROOT / "build" / "worker")
     parser.add_argument("--report", type=Path, default=ROOT / "build" / "worker-build.json")
     args = parser.parse_args(argv)
+    args.distpath = args.distpath.resolve()
+    args.workpath = args.workpath.resolve()
+    args.report = args.report.resolve()
     distribution = importlib.metadata.distribution("kraken")
     if distribution.version != "7.1.1":
         parser.error("Re-audit packaging when changing the pinned Kraken 7.1.1 version")
     command = [sys.executable, "-m", "PyInstaller", *build_arguments(
         args.profile, args.distpath, args.workpath, Path(distribution.locate_file("kraken")))]
-    subprocess.run(command, cwd=ROOT, check=True)
+    try:
+        subprocess.run(command, cwd=ROOT, check=True, timeout=1800)
+    except subprocess.TimeoutExpired:
+        print("PyInstaller exceeded the 30-minute build budget", file=sys.stderr)
+        return 1
     worker = args.distpath / "ocr-worker"
     removed = remove_video_plugin(worker) if args.profile == "inference" else []
     report = {"profile": args.profile, "kraken_version": distribution.version,
