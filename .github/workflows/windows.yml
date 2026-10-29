@@ -553,7 +553,7 @@ jobs:
     # The release is made of the program that the Windows job built and
     # checked, and not of anything else: the archive of the user is the
     # one that was unpacked and started.
-    needs: [test-and-package]
+    needs: [test-and-package, unit-tests, ocr-engine, ocr-worker-windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

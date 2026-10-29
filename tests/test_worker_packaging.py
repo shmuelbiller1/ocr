@@ -79,6 +79,10 @@ class WorkerPackagingTests(unittest.TestCase):
         self.assertEqual({row[3] for row in CASES}, {'raw', 'beam', 'assisted'})
         self.assertEqual({row[4] for row in CASES}, {'pdf', 'image'})
 
+    def test_release_waits_for_all_validation_jobs(self):
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/windows.yml').read_text()
+        self.assertIn('needs: [test-and-package, unit-tests, ocr-engine, ocr-worker-windows]', workflow)
+
     def test_offline_guard_blocks_outbound_lookup_and_connect_without_reaching_network(self):
         # Audit hooks cannot be removed, so keep this check in a fresh process.
         code = '''
@@ -87,16 +91,22 @@ from ocr_worker.main import _install_offline_guard
 attempts=[]
 _install_offline_guard(attempts)
 for operation in (lambda:socket.getaddrinfo('example.invalid',443),
+                  lambda:socket.gethostbyname('example.invalid'),
+                  lambda:socket.gethostbyname_ex('example.invalid'),
+                  lambda:socket.gethostbyaddr('192.0.2.1'),
+                  lambda:socket.getnameinfo(('192.0.2.1',443),0),
                   lambda:socket.socket().connect(('192.0.2.1',443))):
     try: operation()
     except OSError: pass
     else: raise AssertionError('outbound access allowed')
-assert len(attempts)==2, attempts
+assert len(attempts)==6, attempts
+socket.getaddrinfo('127.0.0.1',443)
+assert len(attempts)==6
 print(json.dumps(attempts))
 '''
         result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(json.loads(result.stdout)), 2)
+        self.assertEqual(len(json.loads(result.stdout)), 6)
 
 
 if __name__ == '__main__':

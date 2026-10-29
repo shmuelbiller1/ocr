@@ -54,9 +54,11 @@ def _install_offline_guard(attempts: list) -> None:
 
     def guard(event, args):
         host = None
-        if event == "socket.getaddrinfo":
+        if event in ("socket.getaddrinfo", "socket.gethostbyname", "socket.gethostbyaddr"):
             host = args[0]
-        elif event in ("socket.connect", "socket.sendto"):
+        elif event == "socket.getnameinfo":
+            host = args[0][0]
+        elif event in ("socket.connect", "socket.sendto", "socket.sendmsg"):
             address = args[-1]
             if isinstance(address, tuple):
                 host = address[0]
