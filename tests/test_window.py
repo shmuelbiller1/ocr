@@ -51,6 +51,17 @@ class DocumentTextTests(unittest.TestCase):
         self.window._sync_document_list()
         self.window.doc_list.setCurrentRow(0)
 
+    def test_reviewed_text_can_be_saved_as_utf8(self) -> None:
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QFileDialog
+        self.add_two_documents()
+        self.window.editor.setPlainText('ר״ת שָׁלוֹם')
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder) / "reviewed.txt"
+            with patch.object(QFileDialog, "getSaveFileName", return_value=(str(target), "")):
+                self.window.save_text()
+            self.assertEqual(target.read_text(encoding="utf-8"), 'ר״ת שָׁלוֹם')
+
     def test_assisted_output_is_reviewed_and_never_auto_applied(self) -> None:
         from unittest.mock import patch
         from PySide6.QtWidgets import QMessageBox

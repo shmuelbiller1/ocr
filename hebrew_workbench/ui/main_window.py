@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
 
 from .. import APP_NAME, __version__
 from ..engine.registry import EngineRegistry
-from ..exporting import ExportError, build_print_document, print_document, write_docx
+from ..exporting import ExportError, build_print_document, print_document, write_docx, write_txt
 from ..plugins import PluginRegistry
 from ..project import PROJECT_SUFFIX, Project
 from ..resources import samples_directory
