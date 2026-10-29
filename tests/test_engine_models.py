@@ -9,6 +9,7 @@ from pathlib import Path
 
 from hebrew_workbench.engine import models
 from hebrew_workbench.engine.models import (
+    InstallCancelled,
     InstallError,
     ModelArtifact,
     install_artifact,
@@ -89,6 +90,22 @@ class ModelTests(unittest.TestCase):
             self.assertTrue(installed.is_file())
             self.assertIsNone(verify_file(installed, artifact))
 
+    def test_installing_uses_fallback_when_primary_download_is_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            primary = Path(folder) / "primary.bin"
+            fallback = Path(folder) / "fallback.bin"
+            primary.write_bytes(b"bad weights!!")
+            fallback.write_bytes(b"model weights")
+            artifact = make_artifact(
+                fallback,
+                url=primary.as_uri(),
+                fallback_urls=(fallback.as_uri(),),
+            )
+            target_dir = Path(folder) / "models"
+            installed = install_artifact(artifact, target_dir)
+            self.assertEqual(installed.read_bytes(), b"model weights")
+            self.assertIsNone(verify_file(installed, artifact))
+
     def test_installing_a_broken_download_does_not_leave_a_file(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "model.bin"
@@ -120,6 +137,22 @@ class ModelTests(unittest.TestCase):
             target_dir = Path(folder) / "models"
             installed = install_artifact(artifact, target_dir, cancel=lambda: False)
             self.assertTrue(installed.is_file())
+
+    def test_a_stopped_download_does_not_try_the_other_places(self) -> None:
+        """A download that was stopped is not a place that failed: the
+        other places are not tried."""
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "model.bin"
+            source.write_bytes(b"model weights")
+            other = Path(folder) / "other.bin"
+            other.write_bytes(b"model weights")
+            artifact = make_artifact(
+                source, fallback_urls=(other.as_uri(),)
+            )
+            target_dir = Path(folder) / "models"
+            with self.assertRaises(InstallCancelled):
+                install_artifact(artifact, target_dir, cancel=lambda: True)
+            self.assertEqual(list(target_dir.glob("*")), [])
 
     def test_known_models_declare_a_license_and_a_size(self) -> None:
         for artifact in models.MODEL_ARTIFACTS.values():

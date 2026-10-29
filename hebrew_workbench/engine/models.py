@@ -32,6 +32,7 @@ __all__ = [
     "verify_file",
     "install_artifact",
     "InstallError",
+    "InstallCancelled",
 ]
 
 #: Largest model file the application is willing to download (bytes).
@@ -40,6 +41,14 @@ MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
 
 class InstallError(RuntimeError):
     """The model file could not be downloaded or did not pass the check."""
+
+
+class InstallCancelled(InstallError):
+    """The user asked the download of the model to stop.
+
+    It is not a failure of a place to fetch the file from: the download
+    was stopped, and the other places are not tried.
+    """
 
 
 @dataclass(frozen=True)
@@ -64,6 +73,9 @@ class ModelArtifact:
     md5: str | None = None
     #: The SHA-256 of the file, as it was when this project fetched it.
     sha256: str | None = None
+    #: Other places where the same file can be fetched, when the first
+    #: one does not answer.
+    fallback_urls: tuple[str, ...] = ()
 
     @property
     def size_mb(self) -> float:
@@ -87,6 +99,9 @@ MODEL_ARTIFACTS: dict[str, ModelArtifact] = {
         name="kraken PP-OCRv6 (small) multilingual handwriting model",
         filename="small.safetensors",
         url="https://zenodo.org/api/records/21788405/files/small.safetensors/content",
+        fallback_urls=(
+            "https://huggingface.co/small-models-for-glam/kraken-ppocrv6-small/resolve/main/small.safetensors",
+        ),
         size_bytes=13_065_380,
         md5="07279cd68cd4402807542799f12d0f4a",
         # The digest of the file of the record above, taken from the
@@ -108,6 +123,9 @@ MODEL_ARTIFACTS: dict[str, ModelArtifact] = {
         name="kraken PP-OCRv6 (medium) multilingual handwriting model",
         filename="medium.safetensors",
         url="https://zenodo.org/api/records/21788410/files/medium.safetensors/content",
+        fallback_urls=(
+            "https://huggingface.co/small-models-for-glam/kraken-ppocrv6-medium/resolve/main/medium.safetensors",
+        ),
         size_bytes=63_779_644,
         md5="e3411a453ce3b9e9efae3f8631d85762",
         sha256="15313b51ace64cbfa81f8f6ef25ad64f04e5a6fb7f7823e67b107527bc081ac9",
@@ -243,36 +261,53 @@ def install_artifact(
     )
     os.close(handle)
     temp_path = Path(temp_name)
+    urls = (artifact.url, *artifact.fallback_urls)
+    failures: list[str] = []
     try:
-        request = urllib.request.Request(
-            artifact.url, headers={"User-Agent": "HebrewNotesWorkbench/0.2"}
+        for url in urls:
+            if cancel and cancel():
+                # The user asked the download to stop.  The other places
+                # are not tried: the download was stopped, and not
+                # refused.
+                raise InstallCancelled("ההורדה בוטלה.")
+            temp_path.unlink(missing_ok=True)
+            try:
+                request = urllib.request.Request(
+                    url, headers={"User-Agent": "HebrewNotesWorkbench/0.2"}
+                )
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    total = int(response.headers.get("Content-Length") or 0)
+                    done = 0
+                    with open(temp_path, "wb") as stream:
+                        while True:
+                            if cancel and cancel():
+                                raise InstallCancelled("ההורדה בוטלה.")
+                            chunk = response.read(1024 * 256)
+                            if not chunk:
+                                break
+                            stream.write(chunk)
+                            done += len(chunk)
+                            if done > MAX_ARTIFACT_BYTES:
+                                raise InstallError("הקובץ גדול מדי; ההורדה בוטלה.")
+                            if progress:
+                                progress(done, total)
+                problem = verify_file(temp_path, artifact)
+                if problem is not None:
+                    raise InstallError(
+                        f"הקובץ שהורד אינו תואם לפרסום ({problem}). "
+                        "הקובץ נמחק ולא ייעשה בו שימוש."
+                    )
+                shutil.move(str(temp_path), str(target))
+                return target
+            except InstallCancelled:
+                # A download that was stopped is not a source that failed.
+                raise
+            except Exception as exc:
+                temp_path.unlink(missing_ok=True)
+                failures.append(f"{url}: {exc}")
+        details = " | ".join(failures)
+        raise InstallError(
+            f"ההורדה נכשלה מכל המקורות שנבדקו ({len(urls)}). {details}"
         )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            total = int(response.headers.get("Content-Length") or 0)
-            done = 0
-            with open(temp_path, "wb") as stream:
-                while True:
-                    if cancel and cancel():
-                        raise InstallError("ההורדה בוטלה.")
-                    chunk = response.read(1024 * 256)
-                    if not chunk:
-                        break
-                    stream.write(chunk)
-                    done += len(chunk)
-                    if done > MAX_ARTIFACT_BYTES:
-                        raise InstallError("הקובץ גדול מדי; ההורדה בוטלה.")
-                    if progress:
-                        progress(done, total)
-        problem = verify_file(temp_path, artifact)
-        if problem is not None:
-            raise InstallError(
-                f"הקובץ שהורד אינו תואם לפרסום ({problem}). הקובץ נמחק ולא ייעשה בו שימוש."
-            )
-        shutil.move(str(temp_path), str(target))
-    except InstallError:
+    finally:
         temp_path.unlink(missing_ok=True)
-        raise
-    except Exception as exc:
-        temp_path.unlink(missing_ok=True)
-        raise InstallError(f"ההורדה נכשלה: {exc}") from exc
-    return target
