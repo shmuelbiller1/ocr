@@ -1,4 +1,40 @@
-# הערות הגרסה — v0.3.0
+# הערות הגרסה — v0.4.0
+
+## Download / הורדה
+
+For Windows x64, choose **one** of these downloads:
+
+| Download | What is included | Use |
+| --- | --- | --- |
+| `HebrewNotesWorkbench-0.4.0-one-click.exe` (**Lite**) | App, OCR worker and Kraken PP-OCRv6 small (Apache-2.0) | Recommended starting point; no Python, installer or separate model download. |
+| `HebrewNotesWorkbench-0.4.0-all-models-noncommercial-one-click.exe` | App, worker, Kraken small + medium, Mishkefet-v1, character LM and word LM | **Noncommercial use only** for the bundled Mishkefet assets (CC-BY-NC-SA-4.0). Includes assisted decoding offline. |
+| `HebrewNotesWorkbench-0.4.0-win64.zip` | App and worker, without recognition weights | Manual/portable folder option; install the required models before going offline. |
+
+Download the matching `.sha256` file to verify a binary's SHA-256 checksum.
+Double-click an EXE; it unpacks automatically into a per-user cache. First
+launch can take time and requires free disk space for extraction. The onefile
+payload is temporarily extracted on each launch. Additional models selected
+later require a download, but the models listed for each EXE work locally.
+Nothing is uploaded. These EXEs are not claimed to be digitally signed.
+
+The noncommercial model licence does not replace the surrounding application
+and dependency licences. Attribution, original model sources and licence texts
+are included; see `LICENCES` and `docs/THIRD_PARTY.md`. Use Lite if those
+noncommercial restrictions do not suit your intended use.
+
+## Changes in v0.4.0
+
+- Two one-click offline Windows editions, with pinned model-integrity checks.
+- Optional Raw / Beam + three scales / Assisted comparison. Raw remains the
+  default; alternatives are separate, labelled and never silently adopted.
+- Conservative worker cleanup: about 31.6 MB less unpacked and 13.5 MB less
+  compressed in the same-run worker-only comparison. No models or image codecs
+  removed, and no accuracy, speed or RAM improvement claimed.
+- Packaged Windows launch, local image/PDF recognition, all three recognition
+  checkpoints and assisted decoding checked in CI. School-note accuracy is
+  **still unverified** without independently checked transcripts.
+
+## Existing features and limitations
 
 Hebrew Notes Workbench - a program for handwritten Hebrew-script notes on
 Windows, that works without an internet connection and without Python.
@@ -48,9 +84,9 @@ Windows, that works without an internet connection and without Python.
 
 This is an offline Windows program for Hebrew handwriting: import a scan,
 recognise the text, correct it, and print it.  Python is not needed.  The
-recognition engine and its model are installed only when the user asks for
-it, and the model file is checked against the digest published by its
-authors.  Nothing is uploaded anywhere.  The licence texts of every bundled
+regular ZIP requires recognition weights to be installed when the user asks;
+the one-click editions already include the models listed above, and
+the model file is checked against the digest published by its authors.  Nothing is uploaded anywhere.  The licence texts of every bundled
 component are in the folder LICENCES.
 
 The program asks before it closes a window with work that was not saved,
