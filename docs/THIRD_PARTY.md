@@ -105,23 +105,35 @@ licence has to ask the author of the model.  The program shows the licence
 of every model before it is fetched, and the file is checked against the
 digest that this project pinned.
 
-## One-click offline EXE
+## One-click offline EXE editions
 
-An additional Windows release asset is a standard PyInstaller single-file
-launcher with an embedded ZIP. The ZIP contains the same replaceable Windows program files,
-the same license notices, the OCR worker and a **verified** copy of the
-**Kraken PP-OCRv6 small** model (Apache-2.0). The model's source, SHA-256
-and license are listed in `models/MODEL-SOURCE.txt`; the full Apache-2.0
-license and notices are included in the extracted `LICENCES` folder.
-The original ZIP release continues to download its model on user request.
+Two separate standalone Windows executable assets are built from the same
+tested application and OCR worker ZIP. The launcher automatically unpacks the
+files into `%LOCALAPPDATA%\\HebrewNotesWorkbench\\one-click\\<bundle-id>\\`.
+Qt libraries are present as separately replaceable files as required by LGPL.
+No Windows installer is run.
 
-On first launch, the one-click EXE automatically unpacks to
-`%LOCALAPPDATA%\\HebrewNotesWorkbench\\one-click\\<bundle-id>\\`.
-This is an **automatic unpack**, not a privileged installation.
-The Qt DLLs are present there as separate, replaceable files in accordance
-with the LGPL obligations. The launcher does not prevent DLL replacement,
-and it does not redistribute Mishkefet weights. Users who need to replace
-the Qt DLLs may open the cache folder directly.
+- **Lite** contains the original unmodified Kraken PP-OCRv6 small weights,
+  Apache-2.0. Its SHA-256 is pinned and verified before publishing and launch.
+- **All Models — noncommercial** contains Kraken PP-OCRv6 small/medium
+  (Apache-2.0), Mishkefet-v1 checkpoint and its character/word prior files
+  (**CC-BY-NC-SA-4.0**). All five files are verified by pinned SHA-256 digests
+  before publication and at startup. A source/size/hash manifest and
+  attribution notices are included under `models/` and `LICENCES/`.
+  The Mishkefet model and language data are unmodified and attributed to
+  Itay Inbar; model source:
+  <https://huggingface.co/itayinbar/Mishkefet-v1>.
+  License: <https://creativecommons.org/licenses/by-nc-sa/4.0/>.
+  **This edition is only for noncommercial distribution and use** under
+  those conditions; commercial use requires separate authorization.
+
+The standard ZIP edition keeps the original manual, opt-in model installation
+process. This document's earlier "downloaded on request" section describes
+that standard ZIP, not the two offline EXE variants.
+
+A one-file Windows executable may cause a Windows publisher warning until the
+application is digitally signed. PyInstaller temporarily unpacks its payload
+on every launch; it then reuses the verified versioned application cache.
 
 ## Test material
 
