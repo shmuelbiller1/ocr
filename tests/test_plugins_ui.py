@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 if sys.platform.startswith("linux"):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -51,6 +52,43 @@ class SettingsDialogTests(unittest.TestCase):
         self.assertEqual(requests, [])
         self.dialog.install_decoding_button.click()
         self.assertEqual(requests, [True])
+
+    def test_bundled_offline_language_models_cannot_be_removed(self) -> None:
+        """The full one-click edition must still open after using Settings."""
+        from hebrew_workbench.engine.mishkefet_decoding import DECODING_ARTIFACTS
+        models = Path(self.temporary.name) / "offline-models"
+        models.mkdir()
+        (models / "OFFLINE-MODELS.json").write_text(
+            '{"edition":"full-noncommercial"}', encoding="utf-8"
+        )
+        for artifact in DECODING_ARTIFACTS.values():
+            (models / artifact.filename).write_bytes(b"bundled test weights")
+        with (
+            patch("hebrew_workbench.engine.models.models_directory", return_value=models),
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.information") as shown,
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.question") as questioned,
+        ):
+            self.dialog._remove_decoding_models()
+            shown.assert_called_once()
+            questioned.assert_not_called()
+        for artifact in DECODING_ARTIFACTS.values():
+            self.assertTrue((models / artifact.filename).is_file())
+
+    def test_separately_installed_language_models_can_still_be_removed(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+        from hebrew_workbench.engine.mishkefet_decoding import DECODING_ARTIFACTS
+        models = Path(self.temporary.name) / "optional-models"
+        models.mkdir()
+        for artifact in DECODING_ARTIFACTS.values():
+            (models / artifact.filename).write_bytes(b"optional test weights")
+        with (
+            patch("hebrew_workbench.engine.models.models_directory", return_value=models),
+            patch("hebrew_workbench.ui.settings_dialog.QMessageBox.question",
+                  return_value=QMessageBox.Yes),
+        ):
+            self.dialog._remove_decoding_models()
+        for artifact in DECODING_ARTIFACTS.values():
+            self.assertFalse((models / artifact.filename).exists())
 
     def test_the_plugins_are_shown(self) -> None:
         names = [
