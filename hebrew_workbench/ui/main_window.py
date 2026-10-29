@@ -23,6 +23,7 @@ from PySide6.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
+    QDockWidget,
     QHBoxLayout,
     QLabel,
     QListWidget,

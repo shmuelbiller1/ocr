@@ -77,7 +77,7 @@ class SettingsDialog(QDialog):
         self.decoding_box.currentIndexChanged.connect(self._on_decoding_changed)
         form.addRow("Mishkefet: פענוח", self.decoding_box)
         self.install_decoding_button = QPushButton("התקנת מודלי השפה האופציונליים (32 MB)...")
-        self.install_decoding_button.clicked.connect(self.install_decoding_requested.emit)
+        self.install_decoding_button.clicked.connect(lambda _checked=False: self.install_decoding_requested.emit())
         self.remove_decoding_button = QPushButton("הסרת מודלי השפה האופציונליים...")
         self.remove_decoding_button.clicked.connect(self._remove_decoding_models)
         self.decoding_hint = QLabel(

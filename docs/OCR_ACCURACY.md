@@ -211,7 +211,7 @@ by the model authors and against the SHA-256 digest pinned in
 | Script | Hebrew, modern cursive - the material of the program |
 | Device | CPU only, no GPU and no cloud service |
 | Size of the model | 115.3 MB, checked against the SHA-256 `0dfb82e4…f6fd850b88` |
-| Published results of the model authors | A median character error rate of 0.175 on the lines of the public Hebrew handwriting benchmark (second of nine, behind a cloud model alone) and the best page error rate of that benchmark, 0.331.  The same numbers with the best path alone, without the language models and without the beam, are 0.261 - and those are the numbers this program measures |
+| Published results of the model authors | A median character error rate of 0.175 on the lines of the public Hebrew handwriting benchmark (second of nine, behind a cloud model alone) and the best page error rate of that benchmark, 0.331.  The author reports greedy median CER 0.239 (micro CER 0.261), versus assisted median 0.175. These are author benchmark figures, not this app's measured accuracy |
 
 The weights of this model are **not** bundled with the program and are not
 redistributed by it: the user fetches them, on request, from the place
@@ -227,7 +227,7 @@ they cannot be compared with the rates of the first engine, which was not
 trained on that corpus.  The clean comparison is the corpus of the
 modern school handwriting, and it has no page in it yet.
 
-The engine decodes greedily: no dictionary, no language model and no
+The default and raw benchmark profiles decode greedily: no dictionary, no language model and no
 spelling rule is added to the result.  The model itself writes the
 folded punctuation of its own vocabulary, and it keeps the niqqud, the
 te'amim and the final letter forms of the Hebrew.
@@ -236,7 +236,7 @@ te'amim and the final letter forms of the Hebrew.
 program, and the difference is on purpose.**  The author reads with a
 character language model, a word language model, a beam of twelve
 candidates and three or five readings of every line at different widths.
-This program reads with the best path alone, because a measurement with a
+The raw benchmark reads with the best path alone, because a measurement with a
 dictionary in it does not measure the engine, and the rule of this project
 is that no word list and no language model take part in a measurement.  The
 rate of the errors of this program is therefore **higher** than the rate
@@ -339,3 +339,7 @@ not exist`.  `python tools/check_engine.py` says whether the pair works.
   does not count as much as a page with many.
 * Nothing is post-processed: the text the engine produced is compared as
   it is.
+
+Optional experimental beam/TTA and assisted profiles are now available in
+Settings, with separate raw/alternative outputs. They are not included in the
+raw benchmark rates above. See [ASSISTED_DECODING.md](ASSISTED_DECODING.md).

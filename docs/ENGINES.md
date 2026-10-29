@@ -71,7 +71,8 @@ of every line at different widths.  The default/raw benchmark profile reads the 
 alone**, because a measurement with a dictionary in it measures the
 dictionary and not the engine, and because the program never rewrites the
 text of a recognition.  The author of the model publishes the greedy
-number as well: **0.261** against the **0.175** of the full reading.  The
+median as well: **0.239** against the **0.175** of the full reading
+(the greedy micro CER is 0.261, a different aggregation). The
 rate that this program measures is therefore the greedy rate, and it is
 higher than the number of the leaderboard.
 
