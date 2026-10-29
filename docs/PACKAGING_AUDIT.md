@@ -88,3 +88,39 @@ only in CI setup, before these offline checks—not during inference.
 Until these packaged Windows checks pass, the policy is a **candidate**, not
 a verified safe removal or a promised size saving. Results are published in
 `worker-packaging-audit` / `package-comparison.json` and release diagnostics.
+
+
+## First verified Windows result — 29 October 2026
+
+Runtime/configuration commit `93e75c42bd41525b319fc8acf11c1cab96cc03c8`,
+[CI run 40827611021](https://github.com/shmuelbiller1/ocr/actions/runs/40827611021):
+all four test/package jobs passed. The independent worker job built both
+recipes with the same dependencies, including the desktop PDFium pin.
+
+| Worker-only measurement | Baseline | Inference | Reduction |
+| --- | ---: | ---: | ---: |
+| Uncompressed file bytes | 849,988,037 | 818,383,459 | 31,604,578 (3.72%) |
+| ZIP bytes, same DEFLATE settings | 315,688,987 | 302,158,299 | 13,530,688 (4.29%) |
+
+These are measured **worker-only** sizes, not comparisons with an older
+published whole-app ZIP or a promise about a bundled-model installer.
+The explicit video-DLL deletion accounts for 28,349,440 uncompressed bytes;
+the remainder is targeted Kraken collection. Full Torchvision collection is
+retained after the earlier candidate failed its native-operator test.
+
+All five baseline/inference cases passed exact raw/alternative text equality,
+with no denied outbound Python socket attempts. Both local language-model
+files were present for assisted decoding. The actual release ZIP was also
+unpacked, its GUI launched successfully, and its worker passed all five checks.
+The full unit suite passed **464 tests**; local non-GUI tests passed **357**.
+
+Cold subprocess times in the same-run comparison were effectively unchanged:
+small PDF 19.11 → 19.05 s; medium PDF 29.75 → 30.50 s; raw image 12.23 → 11.70 s;
+beam PDF 45.25 → 45.94 s; assisted PDF 47.84 → 48.23 s. These single-run timings
+are not a speed benchmark. **No accuracy improvement or RAM saving is claimed.**
+The supplied scan still lacks an independently verified transcript.
+
+The reports are in that run's `worker-packaging-audit` artifact. These gates
+remain mandatory for subsequent builds; release publication waits for all
+four validation jobs, including the equivalence check. No release tag or
+existing published download was replaced by this audit.

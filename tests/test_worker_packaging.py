@@ -1,6 +1,6 @@
 """Safe exclusions, explicit offline resources and fail-closed validation."""
 import json
-import socket
+import re
 import subprocess
 import sys
 import tempfile
@@ -104,8 +104,11 @@ class WorkerPackagingTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         requirements = (root / 'requirements.txt').read_text()
         pdf_pin = next(line for line in requirements.splitlines() if line.startswith('pypdfium2=='))
-        worker_job = (root / '.github/workflows/windows.yml').read_text().split('  ocr-worker-windows:')[1]
-        self.assertIn(pdf_pin, worker_job)
+        workflow = (root / '.github/workflows/windows.yml').read_text()
+        match = re.search(r'(?ms)^  ocr-worker-windows:\n(.*?)(?=^  \S|\Z)', workflow)
+        self.assertIsNotNone(match, 'Missing independent worker job')
+        worker_job = match.group(1)
+        self.assertRegex(worker_job, rf'(?m)^ +python -m pip install "{re.escape(pdf_pin)}"(?: +|$)')
 
     def test_offline_guard_blocks_outbound_lookup_and_connect_without_reaching_network(self):
         # Audit hooks cannot be removed, so keep this check in a fresh process.
