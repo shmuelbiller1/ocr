@@ -72,22 +72,43 @@ def _verify_at_home(archive, report, packaged_app, home):
         output = home / 'packaged-selftest.json'
         env = dict(os.environ, HEBREW_WORKBENCH_HOME=str(home),
                    HEBREW_WORKBENCH_TEST_SPELLING_PLUGIN='1')
-        run = subprocess.run([str(packaged_app.resolve()), '--selftest', '--selftest-report', str(output)],
-                             env=env, cwd=home, capture_output=True, timeout=90)
-        payload = json.loads(output.read_text(encoding='utf-8'))
-        assert run.returncode == 0 and payload['ok'], payload
-        assert any(c['name']=='optional-hebrew-spelling' and c['ok'] for c in payload['results'])
+        payload = check_packaged_app(packaged_app, output, home, env)
         result['packaged_app'] = payload
     installer.remove('hunspell-hebrew')
     assert (home / 'spelling/hunspell-hebrew-personal.txt').exists()
     installer.install_zip(archive)
     registry.load()
     assert registry.get('hunspell-hebrew').object.check('מונחבדיקהייחודי') == []
-    result.update(ok=True, unicode_install_path=True, personal_persistence=True,
+    result.update(zip_bytes=archive.stat().st_size,
+                  zip_sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
+                  runtime_bytes=sum(p.stat().st_size for p in
+                                    (module.dictionary_path, module.dictionary_path.with_suffix('.aff'),
+                                     module._worker)),
+                  ok=True, unicode_install_path=True, personal_persistence=True,
                   uninstall_reinstall=True, dictionary_unchanged=True)
     report.parent.mkdir(parents=True, exist_ok=True)
     report.write_text(json.dumps(result, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     print(json.dumps(result, ensure_ascii=True, indent=2))
+
+
+def check_packaged_app(packaged_app, output, home, env):
+    def show(stdout, stderr):
+        # bytes repr is console-codepage safe, including partial UTF-8 output.
+        if stdout:
+            print('Packaged stdout:', repr(stdout))
+        if stderr:
+            print('Packaged stderr:', repr(stderr))
+    try:
+        run = subprocess.run([str(packaged_app.resolve()), '--selftest', '--selftest-report', str(output)],
+                             env=env, cwd=home, capture_output=True, timeout=90)
+    except subprocess.TimeoutExpired as exc:
+        show(exc.stdout, exc.stderr)
+        raise
+    show(run.stdout, run.stderr)
+    payload = json.loads(output.read_text(encoding='utf-8'))
+    assert run.returncode == 0 and payload['ok'], payload
+    assert any(c['name']=='optional-hebrew-spelling' and c['ok'] for c in payload['results'])
+    return payload
 
 
 if __name__ == '__main__':

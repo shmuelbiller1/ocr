@@ -176,6 +176,8 @@ class HunspellPluginTests(unittest.TestCase):
         self.assertIn('--hidden-import unicodedata', workflow)
         self.assertIn('--packaged-app dist/HebrewNotesWorkbench/HebrewNotesWorkbench.exe', workflow)
         self.assertIn('Hebrew-spelling-plugin-Windows', workflow)
+        builder = (ROOT / 'tools/build_spelling_plugin.py').read_text()
+        self.assertIn("['-G', 'Visual Studio 17 2022', '-A', 'x64']", builder)
 
 class AdditionalSpellingGuards(unittest.TestCase):
     def test_source_extraction_rejects_traversal_and_links(self):
@@ -226,6 +228,34 @@ class AdditionalSpellingGuards(unittest.TestCase):
             (root / 'SOURCE-FILES.json').write_text('["../outside"]')
             with self.assertRaises(ValueError):
                 source_files(root)
+
+
+    def test_packaged_timeout_exposes_partial_output(self):
+        import contextlib
+        import io
+        from tools.verify_spelling_plugin import check_packaged_app
+        log = io.StringIO()
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            failure = subprocess.TimeoutExpired('app', 90, output=b'partial output', stderr=b'partial error')
+            with patch('tools.verify_spelling_plugin.subprocess.run', side_effect=failure):
+                with contextlib.redirect_stdout(log), self.assertRaises(subprocess.TimeoutExpired):
+                    check_packaged_app(home / 'app.exe', home / 'report.json', home, {})
+        self.assertIn('partial output', log.getvalue())
+        self.assertIn('partial error', log.getvalue())
+
+    def test_missing_packaged_report_exposes_captured_error(self):
+        import contextlib
+        import io
+        from tools.verify_spelling_plugin import check_packaged_app
+        log = io.StringIO()
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            failure = subprocess.CompletedProcess([], 1, b'', b'failed startup')
+            with patch('tools.verify_spelling_plugin.subprocess.run', return_value=failure):
+                with contextlib.redirect_stdout(log), self.assertRaises(FileNotFoundError):
+                    check_packaged_app(home / 'app.exe', home / 'report.json', home, {})
+        self.assertIn('failed startup', log.getvalue())
 
 
 if __name__ == '__main__':

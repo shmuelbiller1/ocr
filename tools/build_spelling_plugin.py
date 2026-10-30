@@ -8,6 +8,7 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -83,11 +84,16 @@ def build(output, cmake='cmake'):
     files = {name: fetch(name, pin, cache) for name, pin in pins.items()}
     hunspell = extract(files['hunspell-source.tar.gz'], output / 'upstream-hunspell')
     hspell = extract(files['hspell-source.tar.gz'], output / 'upstream-hspell')
-    compile_dir = output / 'native'
-    subprocess.run([cmake, '-S', str(TEMPLATE), '-B', str(compile_dir),
-                    '-DHUNSPELL_SOURCE=' + str(hunspell), '-DCMAKE_BUILD_TYPE=Release'], check=True)
+    compile_dir = output / ('native-vs2022-x64' if os.name == 'nt' else 'native')
+    configure = [cmake, '-S', str(TEMPLATE), '-B', str(compile_dir),
+                 '-DHUNSPELL_SOURCE=' + str(hunspell), '-DCMAKE_BUILD_TYPE=Release']
+    if os.name == 'nt':
+        # Hosted runners can export CMAKE_GENERATOR=NMake without a developer
+        # shell. The VS generator locates MSVC without relying on PATH/nmake.
+        configure += ['-G', 'Visual Studio 17 2022', '-A', 'x64']
+    subprocess.run(configure, check=True)
     subprocess.run([cmake, '--build', str(compile_dir), '--config', 'Release', '--parallel', '2'], check=True)
-    binary_name = 'hebrew-spelling-worker.exe' if __import__('os').name == 'nt' else 'hebrew-spelling-worker'
+    binary_name = 'hebrew-spelling-worker.exe' if os.name == 'nt' else 'hebrew-spelling-worker'
     candidates = list(compile_dir.rglob(binary_name))
     if len(candidates) != 1:
         raise ValueError('Expected exactly one native spelling worker')

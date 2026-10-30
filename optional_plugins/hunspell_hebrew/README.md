@@ -52,13 +52,19 @@ No built-in engine or raw recognition setting is changed.
 
 ## Reproduce (developer only)
 
+Windows (Visual Studio 2022 MSVC x64 compiler required):
+
 ```
 python -m pip install cmake==3.31.6
 python tools/build_spelling_plugin.py --output build/hebrew-spelling
 python tools/verify_spelling_plugin.py --zip build/hebrew-spelling/hunspell-hebrew-win64.zip --report build/spelling-report.json
 ```
 
-Requires a local C++ compiler (MSVC on Windows). The builder downloads only
+On Linux, use the same build command with a local C++ compiler and verify
+`build/hebrew-spelling/hunspell-hebrew-linux.zip` instead of `-win64.zip`.
+
+Requires a local C++ compiler (Visual Studio 2022 MSVC on Windows; the
+builder selects its x64 generator explicitly). The builder downloads only
 pinned, hash-checked **source/data**, compiles Hunspell/our worker locally and
 includes licenses, Hspell generators, Hunspell source, application sources and
 build recipe. Input pins and original URLs are in upstream-pins.json. The
@@ -77,3 +83,17 @@ Upstream Hspell's generators and `make hunspell` recipe are in its source tarbal
 LibreOffice's UTF-8 output is preserved verbatim alongside its notice. Build
 dependencies still need a developer-provisioned compiler/CMake. None of this is
 required by an ordinary app user.
+
+
+The dictionary's corresponding source was also regenerated locally, not merely
+matched by version number. From the included Hspell 1.4 tarball, on Linux:
+
+```
+./configure --enable-fatverb
+PERL5LIB=. make -j2 hunspell
+```
+
+The resulting `he.dic` and `he.aff` are already UTF-8 and match the pinned
+LibreOffice files **byte for byte** (both SHA-256s in upstream-pins.json).
+`PERL5LIB=.` is needed because newer Perl no longer searches the current
+working directory by default. No dictionary conversion/patching is necessary.
