@@ -463,6 +463,7 @@ class ExportToPdfTests(unittest.TestCase):
 
     def test_pdf_save_action_really_writes_a_readable_pdf(self) -> None:
         from unittest.mock import patch
+        from contextlib import closing
         import pypdfium2 as pdfium
 
         target = Path(self.folder.name) / "תמלול.pdf"
@@ -472,10 +473,10 @@ class ExportToPdfTests(unittest.TestCase):
                    return_value=(str(target), "")):
             self.window.print_to_pdf()
         self.assertTrue(target.read_bytes().startswith(b"%PDF-"))
-        with pdfium.PdfDocument(target) as pdf:
+        with closing(pdfium.PdfDocument(target)) as pdf:
             self.assertGreater(len(pdf), 0)
-            with pdf[0] as page:
-                with page.get_textpage() as textpage:
+            with closing(pdf[0]) as page:
+                with closing(page.get_textpage()) as textpage:
                     self.assertIn("12345", textpage.get_text_range())
         self.assertEqual(self.window.editor.toPlainText(), text)
 
