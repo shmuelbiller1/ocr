@@ -1,0 +1,31 @@
+{
+  "document": "benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf",
+  "note": "There is no transcript that somebody else checked for this page, so the accuracy of the engines on it is NOT verified.  These are the raw readings of the engines and nothing more.",
+  "engines": [
+    {
+      "model": "kraken-ppocrv6-small",
+      "engine": "kraken PP-OCRv6 (Apache-2.0)",
+      "seconds": 30.03,
+      "lines": 34,
+      "characters": 2166,
+      "text_file": "build/smoke/smoke-small.txt"
+    },
+    {
+      "model": "kraken-ppocrv6-medium",
+      "engine": "kraken PP-OCRv6 (Apache-2.0)",
+      "seconds": 49.71,
+      "lines": 34,
+      "characters": 2278,
+      "text_file": "build/smoke/smoke-medium.txt"
+    },
+    {
+      "model": "mishkefet-v1",
+      "engine": "Mishkefet-v1 (modern Hebrew cursive, CC-BY-NC-SA-4.0)",
+      "seconds": 23.57,
+      "lines": 22,
+      "characters": 1361,
+      "text_file": "build/smoke/smoke-mishkefet-v1.txt"
+    }
+  ],
+  "skipped": []
+}

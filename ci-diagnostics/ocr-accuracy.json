@@ -1,0 +1,681 @@
+{
+  "corpus": {
+    "name": "The Pinkas Dataset",
+    "target": "historical",
+    "citation": "Irina Rabaev, Berat Kurar Barakat, Jihad El-Sana, \"The Pinkas Dataset\", ICDAR 2019, https://doi.org/10.5281/zenodo.3569694",
+    "license": "CC-BY-4.0",
+    "url": "https://zenodo.org/records/3569694",
+    "description": "30 pages of early modern (1500-1800) European Jewish community records in Hebrew and Yiddish, with a line level ground truth. A diagnostic corpus: it is not the material the program is made for.",
+    "pages": 30,
+    "pages_measured": 4,
+    "verified": false
+  },
+  "measurement": {
+    "what_is_measured": "the raw recognition of the engine",
+    "no_corrections": "the proposals of the spelling, of the grammar and of the scholarly style are not part of the measurement"
+  },
+  "pages_read": 5,
+  "measured_corpus_pages": 4,
+  "engines": [
+    {
+      "engine": "kraken PP-OCRv6 (Apache-2.0)",
+      "model": "kraken-ppocrv6-small",
+      "pages": 4,
+      "pages_seen": 4,
+      "summary": {
+        "cer": 0.576,
+        "wer": 0.9375,
+        "seconds_per_page": 23.58,
+        "characters_reference": 10798,
+        "words_reference": 2176,
+        "pages_measured": 4,
+        "ground_truth_complete": true,
+        "pages_with_incomplete_ground_truth": [],
+        "pages_without_verification": [],
+        "measured": true
+      },
+      "results": [
+        {
+          "page": "Page 105_1.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 105_1.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 45,
+            "lines_with_text": 45,
+            "lines_from_words": 1,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 571,
+            "words_with_text": 570,
+            "characters": 2819,
+            "complete": true
+          },
+          "characters_reference": 2862,
+          "characters_hypothesis": 3039,
+          "cer": 0.6464,
+          "cer_with_points": 0.6464,
+          "wer": 0.986,
+          "words_reference": 570,
+          "word_errors": 562,
+          "seconds": 29.2,
+          "reference_sample": "דיא ער בת\"כ בפועל ממש ושאר גדרים מקבל עליו הוט גוועזן לא הועיל ער הוט אלש גבראכן אונ' עובר גוועזן האחרון הכביד ער הוט השררה יר\"ה פהאן אננדר גהענגט אונ' דורך דעם מבאיש ריחינו גוועזן שיצא ע\"י כך קצף על ",
+          "hypothesis_sample": "2423 יען וביען שםבאנם ורארנו דיה העליקסן ויאפכן הוט אצער כל הקהיל רביה ויחידיה גווצאן איט אסירות אברק גיוצין אונ' אלי זרכי השלו ביא ער בחכ בסועל אאש ושאר גדרים אקבל עליו הוט גוזוהן לא הוציל ער הום אלש",
+          "reference_lines_sample": [
+            "דיא ער בת\"כ בפועל ממש ושאר גדרים מקבל עליו הוט גוועזן לא הועיל ער הוט ",
+            "הוט השררה יר\"ה פהאן אננדר גהענגט אונ' דורך דעם מבאיש ריחינו גוועזן שיצ",
+            "צלין  בלי הנחה וכל ישראל ישמעו ויראו ולא יזידון עוד ואם יעשה תשובה כנ\"",
+            "קדישא יצ\"ו בצירוף קריאי בעדה בערך כ\"ה ב\"ב יום א' כ\"ח אייר תי# ל' נאם מ"
+          ],
+          "hypothesis_lines_sample": [
+            "2423",
+            "יען וביען שםבאנם ורארנו דיה העליקסן ויאפכן הוט אצער כל הקהיל רביה ויחי",
+            "ביא ער בחכ בסועל אאש ושאר גדרים אקבל עליו הוט גוזוהן לא הוציל ער הום א",
+            "דוטהשררה ירה פהאן אננרר גהאנגי אונ' מרך דאם אכאיש מחינו גומצזן שרצ\"א ע"
+          ],
+          "lines_reference": 45,
+          "lines_hypothesis": 48
+        },
+        {
+          "page": "Page 105_2.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 105_2.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 47,
+            "lines_with_text": 47,
+            "lines_from_words": 0,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 621,
+            "words_with_text": 621,
+            "characters": 2963,
+            "complete": true
+          },
+          "characters_reference": 3008,
+          "characters_hypothesis": 2947,
+          "cer": 0.7563,
+          "cer_with_points": 0.7563,
+          "wer": 1.0032,
+          "words_reference": 621,
+          "word_errors": 623,
+          "seconds": 24.78,
+          "reference_sample": "אברם שטיב\"ל עשה מעשה ג\"כ כמו יוקל הנ\"ל בכן הוט מן אים ג\"כ מענש גוועזן דז ער זאל בשלשה שני' ניט קורא בתורה זיין אונ' ניט אויש עשין אונ' כל ימיו צו קיין מינוי קומן אונ' קיין קלפי איין גליגט גטאן פאר עש ",
+          "hypothesis_sample": "106 רכ בהיותי דו באר יוקל וואול עשה נכלה בישראל וזנה ערו בת ישראל ובעל גדה בכן הוש אן אים העל גוועדן בראש זאל ער ל יאיו לו יין דבר שבקדושה קזואן רזאן אין קיינר קלפי אריין ליגם לה סנין אנאיה אכש' דזערר",
+          "reference_lines_sample": [
+            "אברם שטיב\"ל עשה מעשה ג\"כ כמו יוקל הנ\"ל בכן הוט מן אים ג\"כ מענש גוועזן ",
+            "ניט קורא בתורה זיין אונ' ניט אויש עשין אונ' כל ימיו צו קיין מינוי קומן",
+            "גטאן פאר עש דיא לייט דיא מכריז ג\"כ מן זול גשיכט הנ\"ל הכרוז ווען גם געב",
+            "הנ\"ל. יום נעשה האב\"ד אצל זיין תשובה מקבל ער זול עכ\"פ גוועזן מענ' ג\"כ ה"
+          ],
+          "hypothesis_lines_sample": [
+            "106",
+            "רכ",
+            "בהיותי דו באר יוקל וואול עשה נכלה בישראל וזנה ערו בת ישראל ובעל גדה בכ",
+            "בראש זאל ער ל יאיו לו יין דבר שבקדושה קזואן רזאן אין קיינר קלפי אריין "
+          ],
+          "lines_reference": 48,
+          "lines_hypothesis": 45
+        },
+        {
+          "page": "Page 107_1.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 107_1.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 33,
+            "lines_with_text": 33,
+            "lines_from_words": 0,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 467,
+            "words_with_text": 467,
+            "characters": 2255,
+            "complete": true
+          },
+          "characters_reference": 2287,
+          "characters_hypothesis": 2195,
+          "cer": 0.3529,
+          "cer_with_points": 0.3529,
+          "wer": 0.8223,
+          "words_reference": 467,
+          "word_errors": 384,
+          "seconds": 19.24,
+          "reference_sample": "כהיום יום א' ג' מנחם תי\"ג הוסכם פה אחד מהחבורא קדישה יצ\"ו דש כל המשפטי' דיני ממונות זולין דוקא ע\"ד הדייני' שבעת ההיא גריכט ווארין אונ' הב\"ד יצ\"ו זולין ניט בבית האב\"ד זיצן לשפוט בין איש לרעהו כי אם להג",
+          "hypothesis_sample": "1653 1654 1856 ا25 ךהיוםיום א'ג' אגחם תיגה הוסכס פה אחד אהחבורא קדילא ילו . דש כל האשתטין דיני אאוטת זולין דוקא עי' הדייני שבצת ההיא גריכש' וארין . אונ' הבדי נו זולין ניט בבית האב'ך' זיכן לשפוט בין אי",
+          "reference_lines_sample": [
+            "כהיום יום א' ג' מנחם תי\"ג הוסכם פה אחד מהחבורא קדישה יצ\"ו דש כל המשפטי",
+            "הדייני' שבעת ההיא גריכט ווארין אונ' הב\"ד יצ\"ו זולין ניט בבית האב\"ד זיצ",
+            "להגהות כתובה לאשה או לחלק ירושה זאלכיש גיהערט ואר הגאון האב\"ד נר\"ו והו",
+            "קבוע שבעת ההיא אונ' זונשט לקיין אנדרין כלל וכלל אם לא ההוספו' כנהוג זא"
+          ],
+          "hypothesis_lines_sample": [
+            "1653",
+            "1654",
+            "1856",
+            "ا25"
+          ],
+          "lines_reference": 33,
+          "lines_hypothesis": 33
+        },
+        {
+          "page": "Page 112_1.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 112_1.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 34,
+            "lines_with_text": 34,
+            "lines_from_words": 0,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 517,
+            "words_with_text": 517,
+            "characters": 2609,
+            "complete": true
+          },
+          "characters_reference": 2641,
+          "characters_hypothesis": 2577,
+          "cer": 0.4877,
+          "cer_with_points": 0.4877,
+          "wer": 0.9093,
+          "words_reference": 518,
+          "word_errors": 471,
+          "seconds": 21.1,
+          "reference_sample": "מאחר דש אלמנה ברענדלין שיף האט ואר שפראכן ומטיב צו זיין עם נשים עניות בשעה שכורעים לילד בכן זא זיא זאלכים נאך קומט איז איר פון חבורא קדישא יצ\"ו ואר שפראכן ווארין כל שנה זיא היא איזט ששה ר\"ט צו געבין, ",
+          "hypothesis_sample": "1656 2601 כהיום יום א' ו' אייר תיו' טיחי' זיין לפק' קכל עליו אורינו הגאון האבר רא' זהר' וצנדמן ילו את כל הסב אר להכיו, דהיינו בדנין סטיבותי הבחורים אלם לא אבני שיריא הוא לא יסאוך האבד' לשום בחור או לא",
+          "reference_lines_sample": [
+            "מאחר דש אלמנה ברענדלין שיף  האט ואר שפראכן ומטיב צו זיין עם נשים עניות",
+            "בכן זא זיא זאלכים נאך קומט איז איר פון חבורא קדישא יצ\"ו ואר שפראכן ווא",
+            "היא איזט ששה ר\"ט צו געבין, זא לנג זיא זיך כנ\"ל ור הלט אונ' כל הקהל מיט",
+            "261"
+          ],
+          "hypothesis_lines_sample": [
+            "1656",
+            "2601",
+            "כהיום יום א' ו' אייר תיו' טיחי' זיין לפק' קכל עליו אורינו הגאון האבר ר",
+            "בדנין סטיבותי הבחורים אלם לא אבני שיריא הוא לא יסאוך האבד' לשום בחור א"
+          ],
+          "lines_reference": 34,
+          "lines_hypothesis": 34
+        }
+      ],
+      "failures": [],
+      "left_out": [
+        {
+          "page": "Page 107_2.jpg",
+          "reason": "there is no ground truth"
+        }
+      ]
+    },
+    {
+      "engine": "kraken PP-OCRv6 (Apache-2.0)",
+      "model": "kraken-ppocrv6-medium",
+      "pages": 4,
+      "pages_seen": 4,
+      "summary": {
+        "cer": 0.5568,
+        "wer": 0.903,
+        "seconds_per_page": 40.78,
+        "characters_reference": 10798,
+        "words_reference": 2176,
+        "pages_measured": 4,
+        "ground_truth_complete": true,
+        "pages_with_incomplete_ground_truth": [],
+        "pages_without_verification": [],
+        "measured": true
+      },
+      "results": [
+        {
+          "page": "Page 105_1.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 105_1.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 45,
+            "lines_with_text": 45,
+            "lines_from_words": 1,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 571,
+            "words_with_text": 570,
+            "characters": 2819,
+            "complete": true
+          },
+          "characters_reference": 2862,
+          "characters_hypothesis": 3040,
+          "cer": 0.6345,
+          "cer_with_points": 0.6345,
+          "wer": 0.9509,
+          "words_reference": 570,
+          "word_errors": 542,
+          "seconds": 47.55,
+          "reference_sample": "דיא ער בת\"כ בפועל ממש ושאר גדרים מקבל עליו הוט גוועזן לא הועיל ער הוט אלש גבראכן אונ' עובר גוועזן האחרון הכביד ער הוט השררה יר\"ה פהאן אננדר גהענגט אונ' דורך דעם מבאיש ריחינו גוועזן שיצא ע\"י כך קצף על ",
+          "hypothesis_sample": "2427 יען וביען שוצאט וראנו די בעליקסן ויאפסן הוט נצער כל הקהל רבים ויחיביו גוועזן איט אסירות אביק גיוצזן אונ' אלי זרכי השלו מא עד בתב בסועל אמש ושאר גדרית אקבל עליו הוט גוותעזן לא הוציל עד הוט אלש גבר",
+          "reference_lines_sample": [
+            "דיא ער בת\"כ בפועל ממש ושאר גדרים מקבל עליו הוט גוועזן לא הועיל ער הוט ",
+            "הוט השררה יר\"ה פהאן אננדר גהענגט אונ' דורך דעם מבאיש ריחינו גוועזן שיצ",
+            "צלין  בלי הנחה וכל ישראל ישמעו ויראו ולא יזידון עוד ואם יעשה תשובה כנ\"",
+            "קדישא יצ\"ו בצירוף קריאי בעדה בערך כ\"ה ב\"ב יום א' כ\"ח אייר תי# ל' נאם מ"
+          ],
+          "hypothesis_lines_sample": [
+            "2427",
+            "יען וביען שוצאט וראנו די בעליקסן ויאפסן הוט נצער כל הקהל רבים ויחיביו ",
+            "מא עד בתב בסועל אמש ושאר גדרית אקבל עליו הוט גוותעזן לא הוציל עד הוט א",
+            "רוע שררה יר\"ה פהאן אננדר גהענגד אונ' דורק דעם אכאיש מחינו גזעזן שיצא ע"
+          ],
+          "lines_reference": 45,
+          "lines_hypothesis": 49
+        },
+        {
+          "page": "Page 105_2.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 105_2.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 47,
+            "lines_with_text": 47,
+            "lines_from_words": 0,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 621,
+            "words_with_text": 621,
+            "characters": 2963,
+            "complete": true
+          },
+          "characters_reference": 3008,
+          "characters_hypothesis": 2924,
+          "cer": 0.7513,
+          "cer_with_points": 0.7513,
+          "wer": 0.9919,
+          "words_reference": 621,
+          "word_errors": 616,
+          "seconds": 44.95,
+          "reference_sample": "אברם שטיב\"ל עשה מעשה ג\"כ כמו יוקל הנ\"ל בכן הוט מן אים ג\"כ מענש גוועזן דז ער זאל בשלשה שני' ניט קורא בתורה זיין אונ' ניט אויש עשין אונ' כל ימיו צו קיין מינוי קומן אונ' קיין קלפי איין גליגט גטאן פאר עש ",
+          "hypothesis_sample": "106 בהיות דו באר יוקל וואול עשה נכלה בשראל וזנה עו בת ישראל ובעי גדה בכן הוט מן אים רענל גוועזן בראש אל ערכבל יאיו בא קיין דבר שבקדושה קוין מאן אין קיינר קלפי אריין ליגט בא סנין אטים אבש דבער ב עלברט ",
+          "reference_lines_sample": [
+            "אברם שטיב\"ל עשה מעשה ג\"כ כמו יוקל הנ\"ל בכן הוט מן אים ג\"כ מענש גוועזן ",
+            "ניט קורא בתורה זיין אונ' ניט אויש עשין אונ' כל ימיו צו קיין מינוי קומן",
+            "גטאן פאר עש דיא לייט דיא מכריז ג\"כ מן זול גשיכט הנ\"ל הכרוז ווען גם געב",
+            "הנ\"ל. יום נעשה האב\"ד אצל זיין תשובה מקבל ער זול עכ\"פ גוועזן מענ' ג\"כ ה"
+          ],
+          "hypothesis_lines_sample": [
+            "106",
+            "בהיות דו באר יוקל וואול עשה נכלה בשראל וזנה עו בת ישראל ובעי גדה בכן ה",
+            "בראש אל ערכבל יאיו בא קיין דבר שבקדושה קוין מאן אין קיינר קלפי אריין ל",
+            "באל קיין אינטי הבין כל יסיו אונ' ניט רותין לעדה הקדוליה. גח זאל עד אין"
+          ],
+          "lines_reference": 48,
+          "lines_hypothesis": 43
+        },
+        {
+          "page": "Page 107_1.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 107_1.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 33,
+            "lines_with_text": 33,
+            "lines_from_words": 0,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 467,
+            "words_with_text": 467,
+            "characters": 2255,
+            "complete": true
+          },
+          "characters_reference": 2287,
+          "characters_hypothesis": 2178,
+          "cer": 0.3236,
+          "cer_with_points": 0.3236,
+          "wer": 0.7452,
+          "words_reference": 467,
+          "word_errors": 348,
+          "seconds": 32.91,
+          "reference_sample": "כהיום יום א' ג' מנחם תי\"ג הוסכם פה אחד מהחבורא קדישה יצ\"ו דש כל המשפטי' דיני ממונות זולין דוקא ע\"ד הדייני' שבעת ההיא גריכט ווארין אונ' הב\"ד יצ\"ו זולין ניט בבית האב\"ד זיצן לשפוט בין איש לרעהו כי אם להג",
+          "hypothesis_sample": "1653 1654 1656 -2512 (היום יום א'ג' מנחם תי\"ג' הוסכם פה אחד שהחבורא קזיא י\"ו\" דלכל האשפטי' דיני ואונטת זולין דוקא עי' הדימני' שבצת ההיא גריכט ווארין אונ' הבדי בו' זאולין ניט בבית האב\"ך' זינן לשפוט בין",
+          "reference_lines_sample": [
+            "כהיום יום א' ג' מנחם תי\"ג הוסכם פה אחד מהחבורא קדישה יצ\"ו דש כל המשפטי",
+            "הדייני' שבעת ההיא גריכט ווארין אונ' הב\"ד יצ\"ו זולין ניט בבית האב\"ד זיצ",
+            "להגהות כתובה לאשה או לחלק ירושה זאלכיש גיהערט ואר הגאון האב\"ד נר\"ו והו",
+            "קבוע שבעת ההיא אונ' זונשט לקיין אנדרין כלל וכלל אם לא ההוספו' כנהוג זא"
+          ],
+          "hypothesis_lines_sample": [
+            "1653",
+            "1654",
+            "1656",
+            "-2512"
+          ],
+          "lines_reference": 33,
+          "lines_hypothesis": 33
+        },
+        {
+          "page": "Page 112_1.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 112_1.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 34,
+            "lines_with_text": 34,
+            "lines_from_words": 0,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 517,
+            "words_with_text": 517,
+            "characters": 2609,
+            "complete": true
+          },
+          "characters_reference": 2641,
+          "characters_hypothesis": 2565,
+          "cer": 0.4532,
+          "cer_with_points": 0.4532,
+          "wer": 0.8861,
+          "words_reference": 518,
+          "word_errors": 459,
+          "seconds": 37.73,
+          "reference_sample": "מאחר דש אלמנה ברענדלין שיף האט ואר שפראכן ומטיב צו זיין עם נשים עניות בשעה שכורעים לילד בכן זא זיא זאלכים נאך קומט איז איר פון חבורא קדישא יצ\"ו ואר שפראכן ווארין כל שנה זיא היא איזט ששה ר\"ט צו געבין, ",
+          "hypothesis_sample": "1656 2601 כהיאםו יום א' ו' אייר תיו' טיתי' דיין' לפק' קבל עליו אורינט הגאון האבד רא' זהר' וצנדאן יצו' את כל היב ואר לסנינט, בהיינט בענין סטיכות הבחורים איר לא אבני עיריא הוא לא יסאוך האבד' ללום כחור א",
+          "reference_lines_sample": [
+            "מאחר דש אלמנה ברענדלין שיף  האט ואר שפראכן ומטיב צו זיין עם נשים עניות",
+            "בכן זא זיא זאלכים נאך קומט איז איר פון חבורא קדישא יצ\"ו ואר שפראכן ווא",
+            "היא איזט ששה ר\"ט צו געבין, זא לנג זיא זיך כנ\"ל ור הלט אונ' כל הקהל מיט",
+            "261"
+          ],
+          "hypothesis_lines_sample": [
+            "1656",
+            "2601",
+            "כהיאםו יום א' ו' אייר תיו' טיתי' דיין' לפק' קבל עליו אורינט הגאון האבד",
+            "בענין סטיכות הבחורים איר לא אבני עיריא הוא לא יסאוך האבד' ללום כחור או"
+          ],
+          "lines_reference": 34,
+          "lines_hypothesis": 34
+        }
+      ],
+      "failures": [],
+      "left_out": [
+        {
+          "page": "Page 107_2.jpg",
+          "reason": "there is no ground truth"
+        }
+      ]
+    },
+    {
+      "engine": "Mishkefet-v1 (modern Hebrew cursive, CC-BY-NC-SA-4.0)",
+      "model": "mishkefet-v1",
+      "pages": 4,
+      "pages_seen": 4,
+      "summary": {
+        "cer": 0.7302,
+        "wer": 0.96,
+        "seconds_per_page": 27.88,
+        "characters_reference": 10798,
+        "words_reference": 2176,
+        "pages_measured": 4,
+        "ground_truth_complete": true,
+        "pages_with_incomplete_ground_truth": [],
+        "pages_without_verification": [],
+        "measured": true
+      },
+      "results": [
+        {
+          "page": "Page 105_1.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 105_1.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 45,
+            "lines_with_text": 45,
+            "lines_from_words": 1,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 571,
+            "words_with_text": 570,
+            "characters": 2819,
+            "complete": true
+          },
+          "characters_reference": 2862,
+          "characters_hypothesis": 970,
+          "cer": 0.7659,
+          "cer_with_points": 0.7659,
+          "wer": 0.9596,
+          "words_reference": 570,
+          "word_errors": 547,
+          "seconds": 24.55,
+          "reference_sample": "דיא ער בת\"כ בפועל ממש ושאר גדרים מקבל עליו הוט גוועזן לא הועיל ער הוט אלש גבראכן אונ' עובר גוועזן האחרון הכביד ער הוט השררה יר\"ה פהאן אננדר גהענגט אונ' דורך דעם מבאיש ריחינו גוועזן שיצא ע\"י כך קצף על ",
+          "hypothesis_sample": "ההק ב ו בצור ל לג לב ונא הקין מאיר מזיא ונמו הנמין יעקב ברך ונא' הצניר שמואל הקטין מבונה שנוי'ל ה\"זו ונא' נפתלי כן לאא משה ז\"ל מענילר ונאי' יששבר כן לאזי מה\"ר משה ר' מנונרלש זל בברך ונאו' צאק בלאא זיא",
+          "reference_lines_sample": [
+            "דיא ער בת\"כ בפועל ממש ושאר גדרים מקבל עליו הוט גוועזן לא הועיל ער הוט ",
+            "הוט השררה יר\"ה פהאן אננדר גהענגט אונ' דורך דעם מבאיש ריחינו גוועזן שיצ",
+            "צלין  בלי הנחה וכל ישראל ישמעו ויראו ולא יזידון עוד ואם יעשה תשובה כנ\"",
+            "קדישא יצ\"ו בצירוף קריאי בעדה בערך כ\"ה ב\"ב יום א' כ\"ח אייר תי# ל' נאם מ"
+          ],
+          "hypothesis_lines_sample": [
+            "ההק ב",
+            "ו",
+            "בצור",
+            "ל"
+          ],
+          "lines_reference": 45,
+          "lines_hypothesis": 35
+        },
+        {
+          "page": "Page 105_2.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 105_2.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 47,
+            "lines_with_text": 47,
+            "lines_from_words": 0,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 621,
+            "words_with_text": 621,
+            "characters": 2963,
+            "complete": true
+          },
+          "characters_reference": 3008,
+          "characters_hypothesis": 3105,
+          "cer": 0.7626,
+          "cer_with_points": 0.7626,
+          "wer": 1.095,
+          "words_reference": 621,
+          "word_errors": 680,
+          "seconds": 45.51,
+          "reference_sample": "אברם שטיב\"ל עשה מעשה ג\"כ כמו יוקל הנ\"ל בכן הוט מן אים ג\"כ מענש גוועזן דז ער זאל בשלשה שני' ניט קורא בתורה זיין אונ' ניט אויש עשין אונ' כל ימיו צו קיין מינוי קומן אונ' קיין קלפי איין גליגט גטאן פאר עש ",
+          "hypothesis_sample": "נבסה ו לב לג שסוים מ קהב' אוג בלרם שן קרקר תי ם אור בהיות ד במר יוקל מואו' עשה גבלה בישראל וזנה עםבת ישראל ובעל גדה בכן הוט מן אים יענש גועדן מ בראש זאל עד כל יאיו צו קיין דבר שבקדושה קומין ראמן אין ק",
+          "reference_lines_sample": [
+            "אברם שטיב\"ל עשה מעשה ג\"כ כמו יוקל הנ\"ל בכן הוט מן אים ג\"כ מענש גוועזן ",
+            "ניט קורא בתורה זיין אונ' ניט אויש עשין אונ' כל ימיו צו קיין מינוי קומן",
+            "גטאן פאר עש דיא לייט דיא מכריז ג\"כ מן זול גשיכט הנ\"ל הכרוז ווען גם געב",
+            "הנ\"ל. יום נעשה האב\"ד אצל זיין תשובה מקבל ער זול עכ\"פ גוועזן מענ' ג\"כ ה"
+          ],
+          "hypothesis_lines_sample": [
+            "נבסה",
+            "ו",
+            "לב",
+            "לג"
+          ],
+          "lines_reference": 48,
+          "lines_hypothesis": 96
+        },
+        {
+          "page": "Page 107_1.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 107_1.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 33,
+            "lines_with_text": 33,
+            "lines_from_words": 0,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 467,
+            "words_with_text": 467,
+            "characters": 2255,
+            "complete": true
+          },
+          "characters_reference": 2287,
+          "characters_hypothesis": 638,
+          "cer": 0.7713,
+          "cer_with_points": 0.7713,
+          "wer": 0.9058,
+          "words_reference": 467,
+          "word_errors": 423,
+          "seconds": 14.29,
+          "reference_sample": "כהיום יום א' ג' מנחם תי\"ג הוסכם פה אחד מהחבורא קדישה יצ\"ו דש כל המשפטי' דיני ממונות זולין דוקא ע\"ד הדייני' שבעת ההיא גריכט ווארין אונ' הב\"ד יצ\"ו זולין ניט בבית האב\"ד זיצן לשפוט בין איש לרעהו כי אם להג",
+          "hypothesis_sample": "ה ל ר אש ן ב ב ת בם ב מ' כולך פדטו רהיום יום א' מנחם תי\"ג הוסבם פה אחד מהחבורא קדישא יצ\"ו דש כל המשפטין דיני ממות זולין דוקא נלי הדיאני' שבעת ההיא גרינט ווארין אונ' הבד צו זולין ניט בבי האבד איצן לשפו",
+          "reference_lines_sample": [
+            "כהיום יום א' ג' מנחם תי\"ג הוסכם פה אחד מהחבורא קדישה יצ\"ו דש כל המשפטי",
+            "הדייני' שבעת ההיא גריכט ווארין אונ' הב\"ד יצ\"ו זולין ניט בבית האב\"ד זיצ",
+            "להגהות כתובה לאשה או לחלק ירושה זאלכיש גיהערט ואר הגאון האב\"ד נר\"ו והו",
+            "קבוע שבעת ההיא אונ' זונשט לקיין אנדרין כלל וכלל אם לא ההוספו' כנהוג זא"
+          ],
+          "hypothesis_lines_sample": [
+            "ה   ל",
+            "ר אש   ן ב ב",
+            "ת בם ב",
+            "מ'"
+          ],
+          "lines_reference": 33,
+          "lines_hypothesis": 31
+        },
+        {
+          "page": "Page 112_1.jpg",
+          "ground_truth_file": ".cache/pinkas/extracted/pinkas_dataset/pinkas_dataset_images_and_xmls/Page 112_1.xml",
+          "writer": "",
+          "verified_by": [
+            "The Pinkas Dataset (ICDAR 2019)"
+          ],
+          "ground_truth": {
+            "lines": 34,
+            "lines_with_text": 34,
+            "lines_from_words": 0,
+            "lines_incomplete": 0,
+            "lines_unreadable": 0,
+            "words": 517,
+            "words_with_text": 517,
+            "characters": 2609,
+            "complete": true
+          },
+          "characters_reference": 2641,
+          "characters_hypothesis": 1312,
+          "cer": 0.6191,
+          "cer_with_points": 0.6191,
+          "wer": 0.8475,
+          "words_reference": 518,
+          "word_errors": 439,
+          "seconds": 27.16,
+          "reference_sample": "מאחר דש אלמנה ברענדלין שיף האט ואר שפראכן ומטיב צו זיין עם נשים עניות בשעה שכורעים לילד בכן זא זיא זאלכים נאך קומט איז איר פון חבורא קדישא יצ\"ו ואר שפראכן ווארין כל שנה זיא היא איזט ששה ר\"ט צו געבין, ",
+          "hypothesis_sample": "ו ם ו מי י ר ד ת לת א שמר את וחוי אמרלמו כד בפטרך ב כהיום יום א ו' אאר תי\"ו טית\"' זיין לפ\"ר קכל עליו מורינט הגאון האבד ר\"א והר\"ר מעברלן יצו את כל המביער לפנים דהים בענין סמיבות הבחורם אש לא מבני שלידי",
+          "reference_lines_sample": [
+            "מאחר דש אלמנה ברענדלין שיף  האט ואר שפראכן ומטיב צו זיין עם נשים עניות",
+            "בכן זא זיא זאלכים נאך קומט איז איר פון חבורא קדישא יצ\"ו ואר שפראכן ווא",
+            "היא איזט ששה ר\"ט צו געבין, זא לנג זיא זיך כנ\"ל ור הלט אונ' כל הקהל מיט",
+            "261"
+          ],
+          "hypothesis_lines_sample": [
+            "ו ם  ו מי י  ר ד ת  לת א שמר  את וחוי אמרלמו",
+            "כד",
+            "בפטרך",
+            "ב"
+          ],
+          "lines_reference": 34,
+          "lines_hypothesis": 54
+        }
+      ],
+      "failures": [],
+      "left_out": [
+        {
+          "page": "Page 107_2.jpg",
+          "reason": "there is no ground truth"
+        }
+      ]
+    }
+  ],
+  "comparison": {
+    "pages": [
+      "Page 105_1.jpg",
+      "Page 105_2.jpg",
+      "Page 107_1.jpg",
+      "Page 112_1.jpg"
+    ],
+    "engines": [
+      {
+        "engine": "kraken PP-OCRv6 (Apache-2.0)",
+        "model": "kraken-ppocrv6-small",
+        "summary": {
+          "cer": 0.576,
+          "wer": 0.9375,
+          "seconds_per_page": 23.58,
+          "characters_reference": 10798,
+          "words_reference": 2176,
+          "pages_measured": 4,
+          "ground_truth_complete": true,
+          "pages_with_incomplete_ground_truth": [],
+          "pages_without_verification": [],
+          "measured": true
+        }
+      },
+      {
+        "engine": "kraken PP-OCRv6 (Apache-2.0)",
+        "model": "kraken-ppocrv6-medium",
+        "summary": {
+          "cer": 0.5568,
+          "wer": 0.903,
+          "seconds_per_page": 40.78,
+          "characters_reference": 10798,
+          "words_reference": 2176,
+          "pages_measured": 4,
+          "ground_truth_complete": true,
+          "pages_with_incomplete_ground_truth": [],
+          "pages_without_verification": [],
+          "measured": true
+        }
+      },
+      {
+        "engine": "Mishkefet-v1 (modern Hebrew cursive, CC-BY-NC-SA-4.0)",
+        "model": "mishkefet-v1",
+        "summary": {
+          "cer": 0.7302,
+          "wer": 0.96,
+          "seconds_per_page": 27.88,
+          "characters_reference": 10798,
+          "words_reference": 2176,
+          "pages_measured": 4,
+          "ground_truth_complete": true,
+          "pages_with_incomplete_ground_truth": [],
+          "pages_without_verification": [],
+          "measured": true
+        }
+      }
+    ],
+    "pages_outside_the_comparison": {
+      "kraken-ppocrv6-small": [],
+      "kraken-ppocrv6-medium": [],
+      "mishkefet-v1": []
+    }
+  }
+}

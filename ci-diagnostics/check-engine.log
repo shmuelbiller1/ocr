@@ -1,0 +1,3 @@
+torch 2.14.0+cpu
+torchvision 0.29.0+cpu
+the operations of torchvision work
