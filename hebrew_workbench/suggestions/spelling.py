@@ -1,14 +1,13 @@
 """The spelling module: proposals from a word list that the user brings.
 
-The program does not ship a Hebrew dictionary.  The Hebrew Hunspell
-dictionary of LibreOffice is under the AGPL, and it may not be given
-away inside this program.  The module therefore works with a word list
-that the user has, and it says whose word list it is and what licence
-it has.
+The core editions do not ship a Hebrew dictionary. Redistribution of
+Hspell dictionaries requires AGPL compliance; it is not categorically
+forbidden. This legacy module uses a custom user word list. The optional
+Hunspell plugin separately handles genuine .dic/.aff pairs.
 
 The word list is a text file with one word in every line.  A line may
-hold the word and its alternatives, separated by a slash, the way a
-Hunspell dictionary does::
+hold the word and its alternatives, separated by a slash in this custom
+format (NOT Hunspell affix flags)::
 
     שלום/תחתונות
     בית

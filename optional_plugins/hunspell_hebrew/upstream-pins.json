@@ -1,0 +1,30 @@
+{
+  "hunspell-source.tar.gz": {
+    "url": "https://codeload.github.com/hunspell/hunspell/tar.gz/15faca15532b34db3106d50f162e5edc2503d6d6",
+    "size": 595736,
+    "sha256": "58eb4c2933c2c4c20952c3022fcbf99c0f1d95eaaeda35ad32ac1706b34194d6"
+  },
+  "hspell-source.tar.gz": {
+    "url": "https://codeload.github.com/ivrix/hspell/tar.gz/f4c5f2e760e28bfb9df06e625dae84c98d655e8f",
+    "size": 570733,
+    "sha256": "3d3961fe2f7f12ccd7bf127e89b0467530cfbf38de61841d94ac90ec2f34a5c3"
+  },
+  "he_IL.aff": {
+    "url": "https://api.github.com/repos/LibreOffice/dictionaries/git/blobs/eaaa52e2eb54a0426d8f14491b4623757101733b",
+    "encoding": "github-blob",
+    "size": 78883,
+    "sha256": "6caf86b3a545be5614f135d33a48baa244a59aca43f051dda6173d5d9cbc7700"
+  },
+  "he_IL.dic": {
+    "url": "https://api.github.com/repos/LibreOffice/dictionaries/git/blobs/1893d41682b72b53f328021f4a9563e5b06f1c09",
+    "encoding": "github-blob",
+    "size": 7796259,
+    "sha256": "5f5331f90ed775bd527f6fb7ad1ead9a1b7d8ce46ad640c2387d9d1dc91d3058"
+  },
+  "README_he_IL.txt": {
+    "url": "https://api.github.com/repos/LibreOffice/dictionaries/git/blobs/a2969876dc0222e7022bc1db5151f67d7ab92172",
+    "encoding": "github-blob",
+    "size": 937,
+    "sha256": "3212469adc6113e77939c20de2c29b9cec6c917d0cae80f2554cac092198e682"
+  }
+}

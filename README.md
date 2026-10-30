@@ -88,9 +88,11 @@ the engine, but they are not what the program is made for.
 ### What is not there yet
 
 * **A dictionary of Hebrew spelling.**  The program does not ship one:
-  the Hebrew Hunspell dictionary of LibreOffice is under the AGPL, and
-  it may not be given away inside this program.  The spelling module
-  works with a word list that the user brings.
+  the core spelling module uses a user word list. An optional native
+  Hunspell/Hspell plugin is now available to build separately; it is
+  experimental, AGPL-licensed and uses pre-2017 spelling rules. AGPL
+  redistribution requires compliance, not a blanket prohibition. See
+  [the plugin guide](optional_plugins/hunspell_hebrew/README.md).
 * **A grammar engine.**  The grammar module has a few punctuation and
   spacing rules.  It is not a grammar checker.
 * **לשון הספר.**  The module is a frame, it is switched off, and it
@@ -236,3 +238,15 @@ to punctuation/spacing, and לשון הספר is an unavailable placeholder. See
 found a Qt 6 printing/PDF defect in v0.4.0; the source patch and stronger
 packaged self-tests must ship in a subsequent release, not be assumed present
 in the existing downloads.
+
+
+### Optional offline Hebrew spelling plugin
+
+`hunspell-hebrew` is a separately installable/removable native spelling plugin.
+It is **not included in the existing releases**. The Windows CI artifact
+`Hebrew-spelling-plugin-Windows` contains its ZIP, source/license materials and
+verification report. It uses pinned Hunspell 1.7.6 plus Hspell 1.4 data; Hspell
+1.4 predates the June 2017 spelling changes, so it is an experimental candidate,
+not a proven best modern-school checker. Every change remains accept/reject.
+Personal vocabulary is stored outside the plugin; raw OCR is untouched.
+See [installation, licensing and limitations](optional_plugins/hunspell_hebrew/README.md).

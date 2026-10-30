@@ -1,0 +1,11 @@
+{
+  "id": "hunspell-hebrew",
+  "name": "Hebrew spelling — Hunspell / Hspell 1.4 (experimental)",
+  "version": "0.1.0",
+  "kind": "spelling",
+  "entry": "spelling:HunspellSpelling",
+  "license": "AGPL-3.0-only (dictionary/plugin distribution); engine LGPL/GPL/MPL",
+  "license_url": "https://github.com/ivrix/hspell/blob/f4c5f2e760e28bfb9df06e625dae84c98d655e8f/LICENSE",
+  "description": "Offline Hebrew suggestions. Hspell 1.4 uses pre-2017 spelling rules; review every suggestion. Not grammar or an OCR engine.",
+  "enabled_by_default": true
+}
