@@ -1,0 +1,78 @@
+Packaged stdout: b'{\r\n  "ok": true,\r\n  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",\r\n  "results": [\r\n    {\r\n      "name": "environment",\r\n      "ok": true,\r\n      "detail": "python 3.12.10 on Windows-2022Server-10.0.20348-SP0"\r\n    },\r\n    {\r\n      "name": "core-imports",\r\n      "ok": true,\r\n      "detail": "all core modules import cleanly"\r\n    },\r\n    {\r\n      "name": "engine-contract",\r\n      "ok": true,\r\n      "detail": "the engine contract fails closed"\r\n    },\r\n    {\r\n      "name": "preview",\r\n      "ok": true,\r\n      "detail": "images and PDF pages preview correctly"\r\n    },\r\n    {\r\n      "name": "plugins",\r\n      "ok": true,\r\n      "detail": "plugins are installed and loaded"\r\n    },\r\n    {\r\n      "name": "gui-startup",\r\n      "ok": true,\r\n      "detail": "main window created with title \'Hebrew Notes Workbench 0.4.0\'"\r\n    },\r\n    {\r\n      "name": "document-output",\r\n      "ok": true,\r\n      "detail": "synthetic fixture: project/raw text, TXT, RTL DOCX and rendered PDF; physical printer output is not tested"\r\n    },\r\n    {\r\n      "name": "optional-hebrew-spelling",\r\n      "ok": true,\r\n      "detail": "real installed native Hunspell/Hspell plugin; curated smoke, not modern-school accuracy or grammar validation"\r\n    }\r\n  ]\r\n}\r\n[PASS] environment: python 3.12.10 on Windows-2022Server-10.0.20348-SP0\r\n[PASS] core-imports: all core modules import cleanly\r\n[PASS] engine-contract: the engine contract fails closed\r\n[PASS] preview: images and PDF pages preview correctly\r\n[PASS] plugins: plugins are installed and loaded\r\n[PASS] gui-startup: main window created with title \'Hebrew Notes Workbench 0.4.0\'\r\n[PASS] document-output: synthetic fixture: project/raw text, TXT, RTL DOCX and rendered PDF; physical printer output is not tested\r\n[PASS] optional-hebrew-spelling: real installed native Hunspell/Hspell plugin; curated smoke, not modern-school accuracy or grammar validation\r\n'
+Packaged stderr: b'pypdfium2\\_helpers\\textpage.py:80: UserWarning: get_text_range() call with default params will be implicitly redirected to get_text_bounded()\r\n'
+{
+  "fixtures": "developer-curated spelling smoke, not school accuracy",
+  "seconds": 0.5094,
+  "proposals": [
+    {
+      "original": "\u05e9\u05dc\u05d5\u05de",
+      "replacement": "\u05e9\u05dc\u05d5\u05dd",
+      "alternatives": [
+        "\u05e9\u05dc\u05de\u05d5",
+        "\u05dc\u05e9\u05de\u05d5"
+      ]
+    },
+    {
+      "original": "\u05ea\u05dc\u05de\u05d9\u05d9\u05d3\u05d9\u05dd",
+      "replacement": "\u05ea\u05dc\u05de\u05d9\u05d3\u05d9\u05dd",
+      "alternatives": [
+        "\u05dc\u05de\u05d9\u05d9\u05d3\u05d9\u05dd",
+        "\u05d5\u05dc\u05de\u05d9\u05d9\u05d3\u05d9\u05dd"
+      ]
+    }
+  ],
+  "packaged_app": {
+    "ok": true,
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "results": [
+      {
+        "name": "environment",
+        "ok": true,
+        "detail": "python 3.12.10 on Windows-2022Server-10.0.20348-SP0"
+      },
+      {
+        "name": "core-imports",
+        "ok": true,
+        "detail": "all core modules import cleanly"
+      },
+      {
+        "name": "engine-contract",
+        "ok": true,
+        "detail": "the engine contract fails closed"
+      },
+      {
+        "name": "preview",
+        "ok": true,
+        "detail": "images and PDF pages preview correctly"
+      },
+      {
+        "name": "plugins",
+        "ok": true,
+        "detail": "plugins are installed and loaded"
+      },
+      {
+        "name": "gui-startup",
+        "ok": true,
+        "detail": "main window created with title 'Hebrew Notes Workbench 0.4.0'"
+      },
+      {
+        "name": "document-output",
+        "ok": true,
+        "detail": "synthetic fixture: project/raw text, TXT, RTL DOCX and rendered PDF; physical printer output is not tested"
+      },
+      {
+        "name": "optional-hebrew-spelling",
+        "ok": true,
+        "detail": "real installed native Hunspell/Hspell plugin; curated smoke, not modern-school accuracy or grammar validation"
+      }
+    ]
+  },
+  "zip_bytes": 3827487,
+  "zip_sha256": "0c3eb0e1801ab5a9ee3e1d6446e5d9d934ef6e0513b594226c0857b416cbba9a",
+  "runtime_bytes": 8613446,
+  "ok": true,
+  "unicode_install_path": true,
+  "personal_persistence": true,
+  "uninstall_reinstall": true,
+  "dictionary_unchanged": true
+}

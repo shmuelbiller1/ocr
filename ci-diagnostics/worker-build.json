@@ -1,0 +1,16 @@
+{
+  "profile": "inference",
+  "kraken_version": "7.1.1",
+  "excluded_modules": [
+    "kraken.ketos",
+    "kraken.kraken",
+    "kraken.contrib"
+  ],
+  "explicitly_removed_files": [
+    {
+      "path": "_internal/cv2/opencv_videoio_ffmpeg4120_64.dll",
+      "bytes": 28349440
+    }
+  ],
+  "worker_bytes": 818250729
+}

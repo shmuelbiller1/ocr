@@ -1,0 +1,103 @@
+251 INFO: PyInstaller: 6.16.0, contrib hooks: 2026.9
+251 INFO: Python: 3.12.10
+266 INFO: Platform: Windows-2022Server-10.0.20348-SP0
+266 INFO: Python environment: C:\hostedtoolcache\windows\Python\3.12.10\x64
+266 INFO: wrote D:\a\ocr\ocr\HebrewNotesWorkbench.spec
+266 INFO: Removing temporary files and cleaning cache in C:\Users\runneradmin\AppData\Local\pyinstaller
+266 INFO: Module search paths (PYTHONPATH):
+['D:\\a\\ocr\\ocr',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\python312.zip',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\DLLs',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages',
+ 'D:\\a\\ocr\\ocr']
+438 INFO: Appending 'datas' from .spec
+438 INFO: checking Analysis
+438 INFO: Building Analysis because Analysis-00.toc is non existent
+438 INFO: Looking for Python shared library...
+438 INFO: Using Python shared library: C:\hostedtoolcache\windows\Python\3.12.10\x64\python312.dll
+438 INFO: Running Analysis Analysis-00.toc
+438 INFO: Target bytecode optimization level: 0
+438 INFO: Initializing module dependency graph...
+438 INFO: Initializing module graph hook caches...
+454 INFO: Analyzing modules for base_library.zip ...
+1330 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+2488 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+3286 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+3646 INFO: Caching module dependency graph...
+3662 INFO: Analyzing D:\a\ocr\ocr\app.py
+3709 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+3959 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+4022 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+4210 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+4210 INFO: SetuptoolsInfo: initializing cached setuptools info...
+4820 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+4867 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+5039 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+5368 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+5463 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+5621 INFO: Processing standard module hook 'hook-pypdfium2.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+5621 INFO: Processing standard module hook 'hook-pypdfium2_raw.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+5886 INFO: Processing standard module hook 'hook-PySide6.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+5996 INFO: Processing standard module hook 'hook-shiboken6.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+6106 INFO: Processing standard module hook 'hook-PySide6.QtNetwork.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+7090 INFO: Processing standard module hook 'hook-PySide6.QtCore.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+7700 INFO: Processing standard module hook 'hook-PySide6.QtWidgets.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+8215 INFO: Processing standard module hook 'hook-PySide6.QtGui.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+8590 INFO: Processing standard module hook 'hook-PySide6.QtPrintSupport.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+8700 INFO: Processing standard module hook 'hook-docx.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+8778 INFO: Processing standard module hook 'hook-lxml.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+8950 INFO: Processing standard module hook 'hook-lxml.etree.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+9185 INFO: Processing module hooks (post-graph stage)...
+9263 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+9419 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+9747 INFO: Processing standard module hook 'hook-lxml.isoschematron.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+9982 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+10013 INFO: Processing standard module hook 'hook-lxml.objectify.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+10029 INFO: Performing binary vs. data reclassification (158 entries)
+10044 INFO: Looking for ctypes DLLs
+10061 INFO: Analyzing run-time hooks ...
+10061 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+10061 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+10061 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+10061 INFO: Including run-time hook 'pyi_rth_pyside6.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+10061 INFO: Processing pre-find-module-path hook 'hook-_pyi_rth_utils.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+10061 INFO: Processing standard module hook 'hook-_pyi_rth_utils.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+10076 INFO: Creating base_library.zip...
+10092 INFO: Looking for dynamic libraries
+10358 INFO: Extra DLL search directories (AddDllDirectory): ['C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\shiboken6']
+10358 INFO: Extra DLL search directories (PATH): ['C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PySide6']
+11330 WARNING: Library not found: could not resolve 'api-ms-win-core-path-l1-1-0.dll', dependency of 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\python312.dll'.
+11330 WARNING: Library not found: could not resolve 'api-ms-win-core-winrt-string-l1-1-0.dll', dependency of 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PySide6\\plugins\\platforms\\qdirect2d.dll'.
+11330 WARNING: Library not found: could not resolve 'api-ms-win-shcore-scaling-l1-1-1.dll', dependency of 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PySide6\\plugins\\platforms\\qdirect2d.dll'.
+11330 WARNING: Library not found: could not resolve 'api-ms-win-core-winrt-l1-1-0.dll', dependency of 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PySide6\\plugins\\platforms\\qdirect2d.dll'.
+11330 WARNING: Library not found: could not resolve 'api-ms-win-core-winrt-string-l1-1-0.dll', dependency of 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PySide6\\plugins\\platforms\\qwindows.dll'.
+11330 WARNING: Library not found: could not resolve 'api-ms-win-shcore-scaling-l1-1-1.dll', dependency of 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PySide6\\plugins\\platforms\\qwindows.dll'.
+11330 WARNING: Library not found: could not resolve 'api-ms-win-core-winrt-l1-1-0.dll', dependency of 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PySide6\\plugins\\platforms\\qwindows.dll'.
+11345 INFO: Warnings written to D:\a\ocr\ocr\build\HebrewNotesWorkbench\warn-HebrewNotesWorkbench.txt
+11377 INFO: Graph cross-reference written to D:\a\ocr\ocr\build\HebrewNotesWorkbench\xref-HebrewNotesWorkbench.html
+11393 INFO: checking PYZ
+11393 INFO: Building PYZ because PYZ-00.toc is non existent
+11393 INFO: Building PYZ (ZlibArchive) D:\a\ocr\ocr\build\HebrewNotesWorkbench\PYZ-00.pyz
+11706 INFO: Building PYZ (ZlibArchive) D:\a\ocr\ocr\build\HebrewNotesWorkbench\PYZ-00.pyz completed successfully.
+11722 INFO: checking PKG
+11722 INFO: Building PKG because PKG-00.toc is non existent
+11722 INFO: Building PKG (CArchive) HebrewNotesWorkbench.pkg
+11737 INFO: Building PKG (CArchive) HebrewNotesWorkbench.pkg completed successfully.
+11737 INFO: Bootloader C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+11737 INFO: checking EXE
+11737 INFO: Building EXE because EXE-00.toc is non existent
+11737 INFO: Building EXE from EXE-00.toc
+11737 INFO: Copying bootloader EXE to D:\a\ocr\ocr\build\HebrewNotesWorkbench\HebrewNotesWorkbench.exe
+11737 INFO: Copying icon to EXE
+11737 INFO: Copying 0 resources to EXE
+11737 INFO: Embedding manifest in EXE
+11737 INFO: Appending PKG archive to EXE
+11737 INFO: Fixing EXE headers
+11784 INFO: Building EXE from EXE-00.toc completed successfully.
+11784 INFO: checking COLLECT
+11784 INFO: Building COLLECT because COLLECT-00.toc is non existent
+11784 INFO: Building COLLECT COLLECT-00.toc
+12050 INFO: Building COLLECT COLLECT-00.toc completed successfully.
+12050 INFO: Build complete! The results are available in: D:\a\ocr\ocr\dist

@@ -1,0 +1,46 @@
+D:\a\ocr\ocr\tools\build_spelling_plugin.py:53: DeprecationWarning: Python 3.14 will, by default, filter extracted tar archives and reject files or modify their metadata. Use the filter argument to control this behavior.
+  source.extractall(destination, members=members)
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.20348.
+-- The CXX compiler identification is MSVC 19.44.35229.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done (10.9s)
+CMake Warning:
+-- Generating done (0.0s)
+  Manually-specified variables were not used by the project:
+
+    CMAKE_BUILD_TYPE
+
+
+-- Build files have been written to: D:/a/ocr/ocr/build/hebrew-spelling/native-vs2022-x64
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  Checking File Globs
+  1>Checking Build System
+  Building Custom Rule D:/a/ocr/ocr/build/hebrew-spelling/upstream-hunspell/hunspell-15faca15532b34db3106d50f162e5edc2503d6d6/CMakeLists.txt
+  affentry.cxx
+  affixmgr.cxx
+  csutil.cxx
+  filemgr.cxx
+  hashmgr.cxx
+  hunspell.cxx
+  hunspelltrace.cxx
+  hunzip.cxx
+  phonet.cxx
+  replist.cxx
+  suggestmgr.cxx
+  Generating Code...
+  hunspell.vcxproj -> D:\a\ocr\ocr\build\hebrew-spelling\native-vs2022-x64\hunspell\Release\hunspell-1.7.lib
+  Building Custom Rule D:/a/ocr/ocr/optional_plugins/hunspell_hebrew/CMakeLists.txt
+  worker.cpp
+  hebrew-spelling-worker.vcxproj -> D:\a\ocr\ocr\build\hebrew-spelling\native-vs2022-x64\Release\hebrew-spelling-worker.exe
+  Building Custom Rule D:/a/ocr/ocr/optional_plugins/hunspell_hebrew/CMakeLists.txt
+{
+  "plugin_zip": "D:\\a\\ocr\\ocr\\build\\hebrew-spelling\\hunspell-hebrew-win64.zip",
+  "zip_bytes": 3827487,
+  "runtime_bytes": 8613446,
+  "sha256": "0c3eb0e1801ab5a9ee3e1d6446e5d9d934ef6e0513b594226c0857b416cbba9a"
+}

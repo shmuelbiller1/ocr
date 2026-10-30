@@ -1,0 +1,76 @@
+{
+  "fixtures": "developer-curated spelling smoke, not school accuracy",
+  "seconds": 0.5094,
+  "proposals": [
+    {
+      "original": "שלומ",
+      "replacement": "שלום",
+      "alternatives": [
+        "שלמו",
+        "לשמו"
+      ]
+    },
+    {
+      "original": "תלמיידים",
+      "replacement": "תלמידים",
+      "alternatives": [
+        "למיידים",
+        "ולמיידים"
+      ]
+    }
+  ],
+  "packaged_app": {
+    "ok": true,
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "results": [
+      {
+        "name": "environment",
+        "ok": true,
+        "detail": "python 3.12.10 on Windows-2022Server-10.0.20348-SP0"
+      },
+      {
+        "name": "core-imports",
+        "ok": true,
+        "detail": "all core modules import cleanly"
+      },
+      {
+        "name": "engine-contract",
+        "ok": true,
+        "detail": "the engine contract fails closed"
+      },
+      {
+        "name": "preview",
+        "ok": true,
+        "detail": "images and PDF pages preview correctly"
+      },
+      {
+        "name": "plugins",
+        "ok": true,
+        "detail": "plugins are installed and loaded"
+      },
+      {
+        "name": "gui-startup",
+        "ok": true,
+        "detail": "main window created with title 'Hebrew Notes Workbench 0.4.0'"
+      },
+      {
+        "name": "document-output",
+        "ok": true,
+        "detail": "synthetic fixture: project/raw text, TXT, RTL DOCX and rendered PDF; physical printer output is not tested"
+      },
+      {
+        "name": "optional-hebrew-spelling",
+        "ok": true,
+        "detail": "real installed native Hunspell/Hspell plugin; curated smoke, not modern-school accuracy or grammar validation"
+      }
+    ]
+  },
+  "zip_bytes": 3827487,
+  "zip_sha256": "0c3eb0e1801ab5a9ee3e1d6446e5d9d934ef6e0513b594226c0857b416cbba9a",
+  "runtime_bytes": 8613446,
+  "ok": true,
+  "unicode_install_path": true,
+  "personal_persistence": true,
+  "uninstall_reinstall": true,
+  "dictionary_unchanged": true
+}

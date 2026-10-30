@@ -1,0 +1,3 @@
+exit code: 0
+exe: D:\a\ocr\ocr\dist\HebrewNotesWorkbench\HebrewNotesWorkbench.exe
+exe size: 4464278 bytes

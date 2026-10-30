@@ -1,0 +1,23 @@
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.20348.
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: D:/a/ocr/ocr/build/hebrew-spelling/native-vs2022-x64
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  Checking File Globs
+  1>Checking Build System
+  hunspell.vcxproj -> D:\a\ocr\ocr\build\hebrew-spelling\native-vs2022-x64\hunspell\Release\hunspell-1.7.lib
+  Building Custom Rule D:/a/ocr/ocr/optional_plugins/hunspell_hebrew/CMakeLists.txt
+  hebrew-spelling-worker.vcxproj -> D:\a\ocr\ocr\build\hebrew-spelling\native-vs2022-x64\Release\hebrew-spelling-worker.exe
+  Building Custom Rule D:/a/ocr/ocr/optional_plugins/hunspell_hebrew/CMakeLists.txt
+{
+  "plugin_zip": "D:\\a\\ocr\\ocr\\build\\hebrew-spelling\\hunspell-hebrew-win64.zip",
+  "zip_bytes": 3827487,
+  "runtime_bytes": 8613446,
+  "sha256": "219854d6a36a39b922e86583685af453115150b675c7b1d2f25a660d557ba17e"
+}
+{
+  "modern_plugin_zip": "D:\\a\\ocr\\ocr\\build\\hebrew-spelling\\modern-hebrew-spelling-win64.zip",
+  "zip_bytes": 4303113,
+  "sha256": "9017cc5f4fe4cc8aab5c76368dea93ad75389a50d73a8b44f7bdaf75ad717d95"
+}
