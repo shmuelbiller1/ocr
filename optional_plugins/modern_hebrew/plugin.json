@@ -1,0 +1,11 @@
+{
+  "id": "modern-hebrew-spelling",
+  "name": "איות עברי — Hspell עם מילים מודרניות (ניסיוני)",
+  "version": "0.1.0",
+  "kind": "spelling",
+  "entry": "modern_spelling:ModernHebrewSpelling",
+  "license": "AGPL-3.0-only; supplemental data CC0-1.0",
+  "license_url": "https://github.com/ivrix/hspell/blob/f4c5f2e760e28bfb9df06e625dae84c98d655e8f/LICENSE",
+  "description": "Offline experimental Hspell with a modern word-list acceptance supplement. Suggestions still need review; may miss errors.",
+  "enabled_by_default": true
+}

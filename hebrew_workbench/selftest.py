@@ -390,12 +390,15 @@ def _check_optional_spelling(report: _Report) -> None:
     from .plugins import PluginRegistry
 
     registry = PluginRegistry()
-    plugin = registry.get("hunspell-hebrew")
+    modern = os.environ.get("HEBREW_WORKBENCH_TEST_SPELLING_PLUGIN") == "modern"
+    plugin = registry.get("modern-hebrew-spelling" if modern else "hunspell-hebrew")
     if plugin is None or not plugin.available():
         raise RuntimeError("The installed Hunspell plugin is missing or unavailable")
     module = plugin.object
     if module.check("שלום בבית והילדים שָׁלוֹם"):
         raise RuntimeError("Common-word/morphology spelling smoke failed")
+    if modern and module.check("אונייה אמיתי לעיתים פירות צוהריים"):
+        raise RuntimeError("Modern Academy example spelling smoke failed")
     text = "English 123 שלומ תלמיידים רש״י"
     proposals = module.check(text)
     if {p.original for p in proposals} != {"שלומ", "תלמיידים"}:
@@ -429,7 +432,7 @@ def run_checks() -> list[CheckResult]:
             check(report)
         except Exception as exc:  # pragma: no cover - defensive
             report.add(name, False, f"the check crashed: {exc!r}")
-    if os.environ.get("HEBREW_WORKBENCH_TEST_SPELLING_PLUGIN") == "1":
+    if os.environ.get("HEBREW_WORKBENCH_TEST_SPELLING_PLUGIN") in ("1", "modern"):
         try:
             _check_optional_spelling(report)
         except Exception as exc:
