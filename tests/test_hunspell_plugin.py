@@ -176,6 +176,7 @@ class HunspellPluginTests(unittest.TestCase):
         self.assertIn('--hidden-import unicodedata', workflow)
         self.assertIn('--packaged-app dist/HebrewNotesWorkbench/HebrewNotesWorkbench.exe', workflow)
         self.assertIn('Hebrew-spelling-plugin-Windows', workflow)
+        self.assertIn('runs-on: windows-2022', workflow[workflow.index('  test-and-package:'):])
         builder = (ROOT / 'tools/build_spelling_plugin.py').read_text()
         self.assertIn("['-G', 'Visual Studio 17 2022', '-A', 'x64']", builder)
 

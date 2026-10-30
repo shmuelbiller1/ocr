@@ -86,7 +86,8 @@ jobs:
 
   test-and-package:
     name: Windows executable
-    runs-on: windows-latest
+    # The native plugin build pins MSVC 2022/CMake 3.31; latest can move to VS 2026.
+    runs-on: windows-2022
     permissions:
       contents: write
     steps:
