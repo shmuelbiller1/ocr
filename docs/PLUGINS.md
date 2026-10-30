@@ -11,11 +11,23 @@ that is all.
 
 | Plugin | Kind | State |
 | --- | --- | --- |
-| `kraken` - kraken + PP-OCRv6 | engine | works, needs the model file |
-| `kraken-worker` - the same engine in a separate process | engine | works, needs the model file and the worker |
-| `spelling-hebrew` | spelling | works, needs a word list of the user |
-| `grammar-hebrew` | grammar | works, a few rules |
-| `style-leshon-ha-sefer` | style | a frame only; it is switched off and says why |
+| `kraken` | in-process OCR | Small model; source environments with Kraken installed |
+| `kraken-worker` | subprocess OCR | Small model; bundled worker used by Windows editions |
+| `kraken-medium-worker` | subprocess OCR | Medium model; included in All Models, optional in Lite/ZIP |
+| `mishkefet` | in-process OCR | MIT adapter code; source environments with its ML dependencies |
+| `mishkefet-worker` | subprocess OCR | Mishkefet weights included in All Models only; noncommercial |
+| `spelling-hebrew` | spelling | Implemented, but requires a user-supplied word list |
+| `grammar-hebrew` | grammar | Four punctuation/spacing rules, not full Hebrew grammar |
+| `style-leshon-ha-sefer` | style | Placeholder; disabled and unavailable; no rules or proposals |
+
+There are **eight built-in plugin entries**, not eight distinct OCR models.
+Packaged Windows apps use the subprocess entries; they do not need a separate
+Python installation or the ML libraries installed into the desktop process.
+Lite bundles the small model. All Models bundles all three recognition models
+and both optional decoding priors. ZIP requires manual model installation.
+The decoding priors are **not** a spelling dictionary or a grammar/style engine.
+See [the readiness audit](FINAL_READINESS.md) for the remaining completion gates.
+
 
 A plugin that comes with the program cannot be removed, but it can be
 switched off, and then the program works without it.

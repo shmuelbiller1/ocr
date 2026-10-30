@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 # The self-test creates a real window.  On a build machine there is no
 # display, so the tests ask Qt for its offscreen platform.
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if sys.platform.startswith("linux"):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from hebrew_workbench.selftest import main, run_checks  # noqa: E402
 
@@ -31,6 +33,7 @@ class SelfTestTests(unittest.TestCase):
             names = {item["name"] for item in payload["results"]}
             self.assertIn("gui-startup", names)
             self.assertIn("engine-contract", names)
+            self.assertIn("document-output", names)
 
 
 if __name__ == "__main__":

@@ -71,7 +71,8 @@ BUILTIN_MANIFESTS: tuple[PluginManifest, ...] = (
         license_url="https://huggingface.co/itayinbar/Mishkefet-v1",
         description=(
             "מנוע קומפקט לכתב יד עברי מודרני. הקוד ברישיון MIT והוא מצורף "
-            "לתוכנה; המשקלים ברישיון שאינו מסחרי ומותקנים בנפרד."
+            "לתוכנה; המשקלים ברישיון שאינו מסחרי כלולים ב-All Models. "
+            "בגרסאות Lite/ZIP יש להתקין אותם בנפרד."
         ),
         builtin=True,
         options={"model_id": "mishkefet-v1"},

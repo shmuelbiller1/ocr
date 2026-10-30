@@ -222,6 +222,17 @@ benchmark/modern_school/       the corpus of the handwriting of today
 
 Settings offers Raw (default), Beam + three scales, and Assisted (optional
 character/word language models). Both readings are preserved side by side;
-the alternative is never auto-applied. Additional files are non-commercial,
-separately downloaded and digest-verified. See [the guide](docs/ASSISTED_DECODING.md).
+the alternative is never auto-applied. Additional files are non-commercial and digest-verified: bundled in All Models,
+explicitly installed in Lite/ZIP. See [the guide](docs/ASSISTED_DECODING.md).
 Accuracy improvement on your pages remains unverified.
+
+
+### Is the whole project final?
+
+**Not yet.** All Models includes all supported OCR models, not every planned
+correction feature. Spelling still needs a user word list, grammar is limited
+to punctuation/spacing, and לשון הספר is an unavailable placeholder. See the
+[full inventory and completion gates](docs/FINAL_READINESS.md). The audit also
+found a Qt 6 printing/PDF defect in v0.4.0; the source patch and stronger
+packaged self-tests must ship in a subsequent release, not be assumed present
+in the existing downloads.
