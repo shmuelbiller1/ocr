@@ -135,7 +135,7 @@ class PreviewPaneTests(unittest.TestCase):
 
     def setUp(self) -> None:
         import os
-import sys
+        import sys
 
         if sys.platform.startswith("linux"):
             os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
