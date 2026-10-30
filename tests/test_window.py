@@ -452,6 +452,33 @@ class ExportToPdfTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.window.close()
 
+    def test_printer_uses_qt6_a4_and_fifteen_mm_margins(self) -> None:
+        from PySide6.QtGui import QPageLayout, QPageSize
+
+        printer = self.window._printer()
+        self.assertEqual(printer.pageLayout().pageSize().id(), QPageSize.PageSizeId.A4)
+        margins = printer.pageLayout().margins(QPageLayout.Unit.Millimeter)
+        for value in (margins.left(), margins.top(), margins.right(), margins.bottom()):
+            self.assertAlmostEqual(value, 15, places=3)
+
+    def test_pdf_save_action_really_writes_a_readable_pdf(self) -> None:
+        from unittest.mock import patch
+        import pypdfium2 as pdfium
+
+        target = Path(self.folder.name) / "תמלול.pdf"
+        text = "שלום עולם 12345\nSecond line"
+        self.window.editor.setPlainText(text)
+        with patch("hebrew_workbench.ui.main_window.QFileDialog.getSaveFileName",
+                   return_value=(str(target), "")):
+            self.window.print_to_pdf()
+        self.assertTrue(target.read_bytes().startswith(b"%PDF-"))
+        with pdfium.PdfDocument(target) as pdf:
+            self.assertGreater(len(pdf), 0)
+            with pdf[0] as page:
+                with page.get_textpage() as textpage:
+                    self.assertIn("12345", textpage.get_text_range())
+        self.assertEqual(self.window.editor.toPlainText(), text)
+
     def test_the_user_is_asked_before_a_pdf_that_is_there_is_replaced(self) -> None:
         from PySide6.QtWidgets import QFileDialog, QMessageBox
 

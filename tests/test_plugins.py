@@ -63,6 +63,23 @@ def make_plugin_folder(
     return folder
 
 
+class BuiltinInventoryTests(unittest.TestCase):
+    def test_all_eight_builtin_plugin_items_are_declared_and_importable(self):
+        expected = {"kraken", "kraken-worker", "kraken-medium-worker", "mishkefet",
+                    "mishkefet-worker", "spelling-hebrew", "grammar-hebrew",
+                    "style-leshon-ha-sefer"}
+        with tempfile.TemporaryDirectory() as folder:
+            registry = PluginRegistry(root=Path(folder))
+            self.assertEqual({plugin.id for plugin in registry.plugins}, expected)
+            self.assertEqual(registry.errors, [])
+            style = registry.get("style-leshon-ha-sefer")
+            self.assertFalse(registry.is_enabled(style.id))
+            self.assertFalse(style.available())
+            self.assertIn("All Models", registry.get("mishkefet").description)
+            from hebrew_workbench.engine.models import MODEL_ARTIFACTS
+            self.assertIn("All Models", MODEL_ARTIFACTS["mishkefet-v1"].notes)
+
+
 class ManifestTests(unittest.TestCase):
     def test_a_manifest_is_read(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

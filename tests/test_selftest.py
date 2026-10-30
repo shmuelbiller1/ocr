@@ -31,6 +31,7 @@ class SelfTestTests(unittest.TestCase):
             names = {item["name"] for item in payload["results"]}
             self.assertIn("gui-startup", names)
             self.assertIn("engine-contract", names)
+            self.assertIn("document-output", names)
 
 
 if __name__ == "__main__":

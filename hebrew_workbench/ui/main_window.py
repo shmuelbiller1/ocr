@@ -17,8 +17,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+from PySide6.QtCore import Qt, QSize, QMarginsF
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QPageLayout, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
 from PySide6.QtWidgets import (
     QApplication,
@@ -1156,8 +1156,8 @@ class MainWindow(QMainWindow):
     def _printer(self) -> QPrinter:
         printer = QPrinter(QPrinter.HighResolution)
         printer.setDocName(APP_NAME)
-        printer.setPageSize(QPrinter.A4)
-        printer.setPageMargins(15, 15, 15, 15, QPrinter.Millimeter)
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout.Unit.Millimeter)
         printer.setFullPage(False)
         return printer
 
@@ -1208,6 +1208,7 @@ class MainWindow(QMainWindow):
         if not self._ask_before_replacing(target, chosen, "שמירה כ-PDF"):
             return
         printer = self._printer()
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
         printer.setOutputFileName(str(target))
         try:
             print_document(build_print_document(content), printer)

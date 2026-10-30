@@ -78,11 +78,11 @@ The rules that follow from this:
 | A release that a user can download | **Works** | a tag that starts with `v` makes the build publish the archive that was built and checked, with its digest and with the notes of the release |
 | The release of a tag that is already there | **Works** | GitHub may make a release the moment the tag is pushed; the build writes the archive, the digest and the notes into the release that is already there, and does not stop. A file that was published before is taken away only when the new one is there, so that a failure in between leaves the user with the file he had |
 
-## First milestone (current scaffold)
+## First milestone (historical scaffold; superseded by the status table)
 - Runnable Windows desktop interface with batch file selection, RTL editor, TXT export and explicit adapter status.
 - A proper OCR adapter interface with a fail-closed default.
 - CI builds a Windows .exe with PyInstaller **and starts it**.
-- Known absent: PDF/image preview, real OCR, real spell checker, DOCX/PDF export, printer integration.
+- Absent at that historical milestone: PDF/image preview, real OCR, real spell checker, DOCX/PDF export, printer integration. See the current status table and `docs/FINAL_READINESS.md`, not this historical list, for remaining work.
 - Do not mark these absent features as complete.
 
 ## Next milestones, sequentially

@@ -257,8 +257,17 @@ def _check_plugins(report: _Report) -> None:
             root = Path(folder) / "plugins"
             registry = PluginRegistry(root=root)
             ids = {plugin.id for plugin in registry.plugins}
-            if "kraken" not in ids:
-                problems.append("the built-in plugins were not found")
+            from .plugins.builtin import BUILTIN_MANIFESTS
+
+            expected = {manifest.id for manifest in BUILTIN_MANIFESTS}
+            missing = expected - ids
+            if missing:
+                problems.append(f"missing built-in plugins: {sorted(missing)}")
+            # Missing optional weights/worker may legitimately produce None;
+            # an import or configuration error is never a healthy plugin.
+            for builtin in registry.plugins:
+                if builtin.error:
+                    problems.append(f"{builtin.id}: {builtin.error}")
 
             source = Path(folder) / "example"
             source.mkdir()
@@ -298,6 +307,74 @@ def _check_plugins(report: _Report) -> None:
     )
 
 
+def _check_document_output(report: _Report) -> None:
+    """Exercise real project/TXT/DOCX/PDF output, not OCR or a physical printer.
+
+    The synthetic text is explicitly a test fixture. Use the main window's
+    printer factory so obsolete Qt APIs cannot pass a launch-only check.
+    """
+    import tempfile
+
+    import docx
+    from PySide6.QtPrintSupport import QPrinter
+    from PySide6.QtWidgets import QApplication
+
+    from .exporting import build_print_document, print_document, write_docx, write_txt
+    from .preview.loader import DocumentPreview
+    from .project import Project
+    from .resources import samples_directory
+    from .ui.main_window import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    try:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            samples = samples_directory()
+            if samples is None:
+                raise RuntimeError("bundled sample pages are missing")
+            sample = samples / "scan_page_1.png"
+            before = sample.read_bytes()
+            raw = "בדיקת פלט 12345\nשורה שנייה English"
+            edited = raw + "\nעריכה לבדיקה"
+            project = Project()
+            entry = project.add(sample)
+            entry.original_transcription = raw
+            entry.transcription = edited
+            restored = Project.load(project.save(root / "check.hwproj"))
+            if (restored.documents[0].transcription != edited or
+                    restored.documents[0].original_transcription != raw):
+                raise RuntimeError("project did not preserve original and edited text")
+            txt = write_txt(root / "check.txt", edited)
+            if txt.read_text(encoding="utf-8-sig") != edited:
+                raise RuntimeError("TXT output changed the text")
+            word = docx.Document(str(write_docx(root / "check.docx", edited)))
+            if "\n".join(p.text for p in word.paragraphs) != edited:
+                raise RuntimeError("DOCX output changed the text")
+            if not all('w:bidi' in p._p.xml for p in word.paragraphs):
+                raise RuntimeError("DOCX paragraphs are not marked right-to-left")
+            pdf = root / "check.pdf"
+            printer = window._printer()
+            printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+            printer.setOutputFileName(str(pdf))
+            print_document(build_print_document(edited), printer)
+            if not pdf.read_bytes().startswith(b"%PDF-"):
+                raise RuntimeError("PDF output is missing or invalid")
+            with DocumentPreview(pdf) as preview:
+                if preview.page_count < 1:
+                    raise RuntimeError("PDF output has no pages")
+                preview.render(1)
+            if sample.read_bytes() != before:
+                raise RuntimeError("the original scan was modified")
+    finally:
+        window.close()
+        window.deleteLater()
+        app.processEvents()
+    report.add("document-output", True,
+               "synthetic fixture: project/raw text, TXT, RTL DOCX and rendered PDF; "
+               "physical printer output is not tested")
+
+
 def run_checks() -> list[CheckResult]:
     """Run every staged check and return the individual results."""
     report = _Report()
@@ -312,6 +389,7 @@ def run_checks() -> list[CheckResult]:
         ("preview", _check_preview),
         ("plugins", _check_plugins),
         ("gui-startup", _check_gui),
+        ("document-output", _check_document_output),
     ):
         try:
             check(report)

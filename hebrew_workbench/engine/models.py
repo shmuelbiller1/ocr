@@ -154,8 +154,8 @@ MODEL_ARTIFACTS: dict[str, ModelArtifact] = {
         engine="mishkefet",
         notes=(
             "The model was written for modern Hebrew cursive, which is the "
-            "material this program is made for. The file is not part of the "
-            "program: it is downloaded by the user, on request, and is "
+            "material this program is made for. The weights are bundled in "
+            "All Models; Lite/ZIP users install them explicitly. Files are "
             "checked against the SHA-256 below. The licence is not a "
             "commercial one: the weights may be used for non-commercial "
             "purposes only, and a modified file keeps the same licence. "
