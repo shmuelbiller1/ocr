@@ -9,6 +9,7 @@ plugins folder of the user.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tempfile
 import zipfile
@@ -151,6 +152,12 @@ class PluginInstaller:
                         f"the archive holds a file outside of it: {name}"
                     )
             handle.extractall(target)
+            # zipfile does not restore executable permissions. User-installed
+            # native workers need them on POSIX; never restore setuid/setgid.
+            if os.name != "nt":
+                for member in handle.infolist():
+                    if not member.is_dir() and (member.external_attr >> 16) & 0o111:
+                        (target / member.filename).chmod(0o755)
 
     def _find_root(self, folder: Path) -> Path:
         """Find the folder that holds the manifest."""

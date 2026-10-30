@@ -51,6 +51,27 @@ class DocumentTextTests(unittest.TestCase):
         self.window._sync_document_list()
         self.window.doc_list.setCurrentRow(0)
 
+    def test_failed_suggestion_check_is_visible_and_keeps_raw_text(self):
+        from unittest.mock import Mock, patch
+        from PySide6.QtWidgets import QMessageBox
+        from hebrew_workbench.suggestions import SuggestionRegistry
+        self.add_two_documents()
+        entry = self.window.project[0]
+        entry.original_transcription = 'raw baseline'
+        self.window.editor.setPlainText('שלומ')
+        broken = Mock(kind='spelling', id='broken', enabled_by_default=True)
+        broken.name = 'Broken spelling'
+        broken.available.return_value = True
+        broken.check.side_effect = RuntimeError('8 seconds; check a shorter document')
+        self.window.suggestion_modules = SuggestionRegistry([broken])
+        with patch.object(QMessageBox, 'warning') as warning:
+            self.window.check_suggestions()
+        warning.assert_called_once()
+        self.assertIn('shorter document', warning.call_args.args[2])
+        self.assertIn('לא הושלמה', self.window.statusBar().currentMessage())
+        self.assertEqual(self.window.editor.toPlainText(), 'שלומ')
+        self.assertEqual(entry.original_transcription, 'raw baseline')
+
     def test_reviewed_text_can_be_saved_as_utf8(self) -> None:
         from unittest.mock import patch
         from PySide6.QtWidgets import QFileDialog

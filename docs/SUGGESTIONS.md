@@ -73,14 +73,14 @@ wrote after it, and the program asks before it does that.
 ## The word list of the spelling module
 
 The program does **not** ship a Hebrew dictionary.  The Hebrew Hunspell
-dictionary of LibreOffice (`he_IL`) is under the AGPL, and it may not be
-given away inside this program.  The module therefore works with a word
-list that the user has:
+dictionary of LibreOffice (`he_IL`) requires AGPL compliance for
+redistribution; it is not categorically forbidden. The legacy module works
+with a custom word list that the user has:
 
 * **הצעות תיקון > בחירת מילון לאיות** points at the file.
 * The file is a text file with one word in every line.  A line may hold
-  the word and its alternatives, separated by a slash, the way a
-  Hunspell dictionary does:
+  the word and its alternatives, separated by a slash in this custom
+  format (not actual Hunspell affix flags):
 
   ```
   שלום/תחתונות
@@ -133,3 +133,15 @@ group of the change: the changes that were made at once have the same
 number, and they are taken back together.
 
 The file of the scan itself is never changed.
+
+
+## Optional native Hunspell/Hspell plugin
+
+The separate `hunspell-hebrew` plugin uses actual UTF-8 .dic/.aff files, a
+source-built native subprocess with an 8-second timeout, and its own personal
+vocabulary file. It does not reuse the custom slash-list parser. Install its
+built ZIP and select it as the active spelling plugin in Settings. It is not
+in current release downloads. Hspell 1.4 follows pre-June-2017 orthography;
+modern-school quality remains unverified. See
+[the plugin guide](../optional_plugins/hunspell_hebrew/README.md) for the AGPL
+source offer, install/remove steps, limits and build recipe.

@@ -1251,7 +1251,12 @@ class MainWindow(QMainWindow):
         session.set_suggestions(proposals, text)
         self._refresh_suggestions(session)
         self.suggestions_dock.show()
-        if proposals:
+        if self.suggestion_modules.errors:
+            QMessageBox.warning(self, "בדיקת הצעות לא הושלמה",
+                                "חלק מהבדיקות נכשלו; אין להסיק שהטקסט תקין.\n" +
+                                "\n".join(self.suggestion_modules.errors))
+            self.statusBar().showMessage("בדיקת ההצעות לא הושלמה; הטקסט לא השתנה.", 8000)
+        elif proposals:
             self.statusBar().showMessage(
                 f"נמצאו {len(proposals)} הצעות. כל הצעה מתקבלת או נדחית בנפרד.",
                 8000,

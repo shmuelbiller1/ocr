@@ -87,3 +87,15 @@ fix is not a verified Windows fix until the updated packaged checks pass.
 
 No training, cloud processing, automatic rewriting or invented grammar/style
 rules are needed or justified to complete this audit.
+
+
+## Follow-up: optional spelling candidate
+
+A separately built `hunspell-hebrew` plugin now provides genuine word checking,
+three native candidates at most, and persistent personal vocabulary. Its
+AGPL-licensed dictionary is **not included in the existing core releases**.
+This closes the adapter/dictionary-format prototype gap only, not the validated
+modern-school spelling gate: upstream Hspell 1.4 uses pre-June-2017 rules, and
+school/Aramaic/Yiddish vocabulary still needs checking. Frozen Windows plugin
+installation and native smoke checks are required in CI. The curated smoke
+fixtures are not an independent accuracy benchmark. See the plugin guide.

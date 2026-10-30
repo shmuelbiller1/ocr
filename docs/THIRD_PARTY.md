@@ -147,3 +147,26 @@ on every launch; it then reuses the verified versioned application cache.
 
 Sample pages that are distributed with the application must carry the
 attribution of their original authors in `docs/SAMPLES.md`.
+
+
+## Optional Hunspell/Hspell spelling distribution (not bundled in core)
+
+- Hunspell 1.7.6, source commit `15faca15532b34db3106d50f162e5edc2503d6d6`:
+  LGPL/GPL/MPL tri-license; complete source and license texts accompany the plugin.
+- Hebrew .dic/.aff from LibreOffice, derived from Hspell 1.4: AGPLv3 notices
+  retained unmodified. Hspell source/generators commit
+  `f4c5f2e760e28bfb9df06e625dae84c98d655e8f` accompanies the dictionary.
+- Exact Git blob IDs, sizes and SHA-256s are in
+  `optional_plugins/hunspell_hebrew/upstream-pins.json`.
+- The separate distribution is labelled AGPL-3.0-only, with a complete tracked
+  workbench-source snapshot and build recipe. Project-authored files retain
+  their MIT grants; no dictionary is relabelled MIT. This is not a legal
+  certification or an assertion that subprocess isolation exempts integration
+  from copyleft. No NC OCR model weights are in the plugin ZIP.
+- Build dependencies: CMake 3.31.6 and a local C++ compiler; not app runtime
+  dependencies. No externally supplied spelling executables are downloaded.
+
+The core editions still contain no Hebrew dictionary. AGPL is **not a blanket
+ban on redistribution**; compliance and the actual combination matter. Existing
+release assets and model licensing are unchanged. Hspell 1.4's pre-2017 spelling
+standard is an explicit quality limitation, not a modern Hebrew certification.

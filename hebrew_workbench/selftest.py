@@ -14,6 +14,7 @@ process always ends with a meaningful exit code.
 from __future__ import annotations
 
 import json
+import os
 import platform
 import sys
 import traceback
@@ -384,6 +385,30 @@ def _check_document_output(report: _Report) -> None:
                "physical printer output is not tested")
 
 
+def _check_optional_spelling(report: _Report) -> None:
+    """Opt-in CI check of the real installed native plugin in a frozen app."""
+    from .plugins import PluginRegistry
+
+    registry = PluginRegistry()
+    plugin = registry.get("hunspell-hebrew")
+    if plugin is None or not plugin.available():
+        raise RuntimeError("The installed Hunspell plugin is missing or unavailable")
+    module = plugin.object
+    if module.check("שלום בבית והילדים שָׁלוֹם"):
+        raise RuntimeError("Common-word/morphology spelling smoke failed")
+    text = "English 123 שלומ תלמיידים רש״י"
+    proposals = module.check(text)
+    if {p.original for p in proposals} != {"שלומ", "תלמיידים"}:
+        raise RuntimeError("Spelling smoke did not preserve protected tokens")
+    for original, expected in (("שלומ", "שלום"), ("תלמיידים", "תלמידים")):
+        if not any(p.original == original and expected in (p.replacement, *p.alternatives)
+                   and text[p.start:p.end] == original for p in proposals):
+            raise RuntimeError("Spelling candidate or source offset smoke failed")
+    report.add("optional-hebrew-spelling", True,
+               "real installed native Hunspell/Hspell plugin; curated smoke, "
+               "not modern-school accuracy or grammar validation")
+
+
 def run_checks() -> list[CheckResult]:
     """Run every staged check and return the individual results."""
     report = _Report()
@@ -404,6 +429,11 @@ def run_checks() -> list[CheckResult]:
             check(report)
         except Exception as exc:  # pragma: no cover - defensive
             report.add(name, False, f"the check crashed: {exc!r}")
+    if os.environ.get("HEBREW_WORKBENCH_TEST_SPELLING_PLUGIN") == "1":
+        try:
+            _check_optional_spelling(report)
+        except Exception as exc:
+            report.add("optional-hebrew-spelling", False, str(exc))
     return report.results
 
 

@@ -174,3 +174,13 @@ it is before using it.
 The licences of the parts that come with the program are in
 `LICENCES/` in the folder of the program, and in `docs/THIRD_PARTY.md`
 in the sources.
+
+
+## Optional source-built Hebrew spelling plugin
+
+The eight built-ins remain unchanged. `hunspell-hebrew` is a **user-installed**
+spelling plugin with native worker + dictionary, distributed separately under
+AGPLv3 with source and upstream notices. It can be removed without removing an
+OCR engine; personal vocabulary survives uninstall. It is not part of v0.4.0
+or either existing one-click EXE. See
+[its guide](../optional_plugins/hunspell_hebrew/README.md) for exact limitations.
