@@ -316,6 +316,8 @@ def _check_document_output(report: _Report) -> None:
     import tempfile
 
     import docx
+    import pypdfium2 as pdfium
+    from contextlib import closing
     from PySide6.QtPrintSupport import QPrinter
     from PySide6.QtWidgets import QApplication
 
@@ -364,6 +366,13 @@ def _check_document_output(report: _Report) -> None:
                 if preview.page_count < 1:
                     raise RuntimeError("PDF output has no pages")
                 preview.render(1)
+            # Rendering alone accepts blank PDFs. Check a searchable sentinel
+            # too, closing explicitly for pinned PDFium 4.30 (no __enter__).
+            with closing(pdfium.PdfDocument(pdf)) as document:
+                with closing(document[0]) as page:
+                    with closing(page.get_textpage()) as textpage:
+                        if "12345" not in textpage.get_text_range():
+                            raise RuntimeError("PDF output is blank or lost its text")
             if sample.read_bytes() != before:
                 raise RuntimeError("the original scan was modified")
     finally:
