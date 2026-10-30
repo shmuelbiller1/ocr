@@ -64,3 +64,16 @@ includes licenses, Hspell generators, Hunspell source, application sources and
 build recipe. Input pins and original URLs are in upstream-pins.json. The
 uncompressed dictionary pair is about 7.9 MB; the final package size must be
 measured, not inferred from the Firefox add-on size.
+
+
+For rebuilding the included corresponding source without a Git checkout, unpack
+`SOURCE/workbench-source.zip`, then run its `tools/build_spelling_plugin.py` as
+above. Its captured file manifest allows repackaging without `.git` and does
+not scrape untracked/private files. To avoid re-downloading already supplied
+inputs, place the two SOURCE tarballs and the three files under `data/` into
+`build/hebrew-spelling/downloads/` (the dictionary README is named
+`README_he_IL.txt`). The builder validates the same pinned hashes from cache.
+Upstream Hspell's generators and `make hunspell` recipe are in its source tarball;
+LibreOffice's UTF-8 output is preserved verbatim alongside its notice. Build
+dependencies still need a developer-provisioned compiler/CMake. None of this is
+required by an ordinary app user.

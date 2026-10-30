@@ -53,6 +53,27 @@ def extract(archive, destination):
     return folders[0]
 
 
+def source_files(root):
+    """Use Git's tracked list, or the captured list from an unpacked source ZIP.
+
+    Never recursively collect an arbitrary checkout (personal data/secrets).
+    """
+    manifest = root / 'SOURCE-FILES.json'
+    if manifest.is_file():
+        names = json.loads(manifest.read_text(encoding='utf-8'))
+    else:
+        names = subprocess.check_output(['git', 'ls-files', '-z'], cwd=root).decode().split('\0')
+    result = []
+    for name in names:
+        if not name or name == 'SOURCE-FILES.json':
+            continue
+        path = (root / name).resolve()
+        if root.resolve() not in path.parents or not path.is_file():
+            raise ValueError('Missing or unsafe corresponding source: ' + name)
+        result.append(name)
+    return result
+
+
 def build(output, cmake='cmake'):
     output = Path(output).resolve()
     # Avoid deleting any user-selected directory: builds stage in a fresh subfolder.
@@ -83,11 +104,11 @@ def build(output, cmake='cmake'):
     for name in ('hunspell-source.tar.gz', 'hspell-source.tar.gz'):
         shutil.copy2(files[name], sources / name)
     # Include exact tracked application sources as well as upstream generators.
-    tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
+    tracked = source_files(ROOT)
     with zipfile.ZipFile(sources / 'workbench-source.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr('SOURCE-FILES.json', json.dumps(tracked, indent=2))
         for name in tracked:
-            if name and (ROOT / name).is_file():
-                archive.write(ROOT / name, name)
+            archive.write(ROOT / name, name)
     shutil.copy2(Path(__file__), sources / 'build_spelling_plugin.py')
     licenses = bundle / 'LICENCES'; licenses.mkdir(exist_ok=True)
     shutil.copy2(hspell / 'COPYING', licenses / 'AGPL-3.0.txt')

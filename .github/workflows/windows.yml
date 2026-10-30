@@ -126,9 +126,9 @@ jobs:
         run: |
           python -m pip install cmake==3.31.6
           if ($LASTEXITCODE -ne 0) { throw 'CMake install failed' }
-          python tools/build_spelling_plugin.py --output build/hebrew-spelling
+          python tools/build_spelling_plugin.py --output build/hebrew-spelling 2>&1 | Tee-Object -FilePath spelling-build.txt
           if ($LASTEXITCODE -ne 0) { throw 'Spelling source build failed' }
-          python tools/verify_spelling_plugin.py --zip build/hebrew-spelling/hunspell-hebrew-win64.zip --packaged-app dist/HebrewNotesWorkbench/HebrewNotesWorkbench.exe --report spelling-windows.json
+          python tools/verify_spelling_plugin.py --zip build/hebrew-spelling/hunspell-hebrew-win64.zip --packaged-app dist/HebrewNotesWorkbench/HebrewNotesWorkbench.exe --report spelling-windows.json 2>&1 | Tee-Object -FilePath spelling-check.txt
           if ($LASTEXITCODE -ne 0) { throw 'Real packaged spelling plugin check failed' }
       - name: Upload optional spelling plugin and native verification
         uses: actions/upload-artifact@v4
@@ -321,7 +321,7 @@ jobs:
         run: |
           Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py --branch=ci/diagnostics spelling-windows.json test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-out.txt.exit.txt release-selftest-err.txt release-selftest.json release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
+          python tools/publish_diagnostics.py --branch=ci/diagnostics spelling-build.txt spelling-check.txt spelling-windows.json test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-out.txt.exit.txt release-selftest-err.txt release-selftest.json release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4

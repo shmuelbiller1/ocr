@@ -60,6 +60,14 @@ class HunspellPluginTests(unittest.TestCase):
         self.assertFalse(run.call_args.kwargs['shell'])
         self.assertEqual(run.call_args.kwargs['timeout'], 8)
 
+    def test_hebrew_punctuation_splits_words_without_losing_offsets(self):
+        text = 'שלומ־עולם שלומ׃ שלומ׀'
+        with patch.object(self.code.subprocess, 'run',
+                          return_value=self.response('0\tשלום\n1\n')):
+            proposals = self.plugin.check(text)
+        self.assertEqual(len(proposals), 3)
+        self.assertTrue(all(text[p.start:p.end] == 'שלומ' for p in proposals))
+
     def test_unknown_without_candidate_does_not_invent_replacement(self):
         with patch.object(self.code.subprocess, 'run', return_value=self.response('0\n')):
             p = self.plugin.check('אבגד')[0]
@@ -101,6 +109,11 @@ class HunspellPluginTests(unittest.TestCase):
         (self.root / 'BUNDLE.json').write_text(json.dumps(self.manifest))
         with self.assertRaises(OSError):
             self.code.HunspellSpelling()
+
+    def test_personal_file_cannot_be_the_dictionary_or_inside_plugin(self):
+        for path in (self.plugin.dictionary_path, self.root / 'personal.txt'):
+            with self.subTest(path=path), self.assertRaises(OSError):
+                self.plugin.configure({'personal_dictionary': str(path)})
 
     def test_bad_dictionary_setting_preserves_previous_configuration(self):
         old = self.plugin.dictionary_path
@@ -164,10 +177,6 @@ class HunspellPluginTests(unittest.TestCase):
         self.assertIn('--packaged-app dist/HebrewNotesWorkbench/HebrewNotesWorkbench.exe', workflow)
         self.assertIn('Hebrew-spelling-plugin-Windows', workflow)
 
-
-if __name__ == '__main__':
-    unittest.main()
-
 class AdditionalSpellingGuards(unittest.TestCase):
     def test_source_extraction_rejects_traversal_and_links(self):
         import io
@@ -204,3 +213,20 @@ class AdditionalSpellingGuards(unittest.TestCase):
             root = Path(temp) / 'plugins'
             PluginInstaller(root).install_zip(archive)
             self.assertEqual((root / 'example-native/worker').stat().st_mode & 0o7777, 0o755)
+
+
+    def test_unpacked_corresponding_source_build_does_not_need_git_metadata(self):
+        from tools.build_spelling_plugin import source_files
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'app.py').write_text('pass')
+            (root / 'private.txt').write_text('not tracked; must never be captured')
+            (root / 'SOURCE-FILES.json').write_text('["app.py"]')
+            self.assertEqual(source_files(root), ['app.py'])
+            (root / 'SOURCE-FILES.json').write_text('["../outside"]')
+            with self.assertRaises(ValueError):
+                source_files(root)
+
+
+if __name__ == '__main__':
+    unittest.main()

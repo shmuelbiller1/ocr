@@ -17,7 +17,7 @@ import unicodedata
 from hebrew_workbench.plugins.paths import application_directory
 from hebrew_workbench.suggestions.base import Suggestion, SuggestionModule
 
-TOKENS = re.compile(r"[\w\u0591-\u05c7]+(?:['\"׳״][\w\u0591-\u05c7]+)*", re.UNICODE)
+TOKENS = re.compile(r"[\w\u0591-\u05bd\u05bf\u05c1\u05c2\u05c4\u05c5\u05c7]+(?:['\"׳״][\w\u0591-\u05bd\u05bf\u05c1\u05c2\u05c4\u05c5\u05c7]+)*", re.UNICODE)
 MAX_WORDS = 2048
 TIMEOUT = 8
 
@@ -71,6 +71,9 @@ class HunspellSpelling(SuggestionModule):
                 if hashlib.sha256((self.root / name).read_bytes()).hexdigest() != digest:
                     raise ValueError(f'Bundled spelling file failed verification: {name}')
             aff = dictionary.with_suffix('.aff')
+            if (personal == self.root or self.root in personal.parents or
+                    personal in (dictionary, aff)):
+                raise ValueError('Personal vocabulary must be outside the plugin/dictionary pair')
             if any(c in str(dictionary) + str(personal) for c in '\t\r\n'):
                 raise ValueError('Dictionary/personal paths cannot contain control characters')
             if not dictionary.is_file() or not aff.is_file() or not worker.is_file():

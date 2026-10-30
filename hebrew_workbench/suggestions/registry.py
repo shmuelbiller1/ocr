@@ -32,6 +32,7 @@ class SuggestionRegistry:
         # what the program asks for: a module that is installed by the
         # user may have a name of its own, but it does the work of one
         # kind.
+        self.errors: list[str] = []
         self._enabled: dict[str, bool] = {
             module.kind: module.enabled_by_default for module in self.modules
         }
@@ -64,17 +65,20 @@ class SuggestionRegistry:
     def check(self, text: str) -> list[Suggestion]:
         """The proposals of every module that is switched on."""
         proposals: list[Suggestion] = []
+        self.errors = []
         for module in self.modules:
             if not self.is_enabled(module.kind):
                 continue
-            available = getattr(module, "available", None)
-            if not callable(available) or not available():
-                continue
             try:
+                available = getattr(module, "available", None)
+                if not callable(available) or not available():
+                    continue
                 proposals.extend(module.check(text))
-            except Exception:
+            except Exception as exc:
                 # A module that breaks must not stop the others, and it
-                # must never change the text.
+                # must never change the text. Retain a visible failure rather
+                # than presenting a failed check as "no proposals".
+                self.errors.append(f"{module.name}: {exc}")
                 continue
         proposals.sort(key=lambda item: (item.start, item.end, item.module))
         return proposals

@@ -1137,3 +1137,19 @@ class ContextOfTheChangesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CheckFailureVisibilityTests(unittest.TestCase):
+    def test_module_failure_is_visible_while_other_modules_continue(self):
+        from unittest.mock import Mock
+        broken = Mock(kind=KIND_SPELLING, id='broken', enabled_by_default=True)
+        broken.name = 'Broken spelling'
+        broken.available.return_value = True
+        broken.check.side_effect = RuntimeError('8 seconds; check a shorter document')
+        registry = SuggestionRegistry([broken, GrammarModule()])
+        proposals = registry.check('שלום  עולם')
+        self.assertTrue(proposals)
+        self.assertIn('shorter document', registry.errors[0])
+        registry.set_enabled(KIND_SPELLING, False)
+        registry.check('שלום')
+        self.assertEqual(registry.errors, [])
