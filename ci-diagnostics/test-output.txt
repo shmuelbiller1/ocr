@@ -1,0 +1,750 @@
+test_a_complete_ground_truth_is_not_warned_about (tests.test_accuracy_document.AccuracyDocumentTests.test_a_complete_ground_truth_is_not_warned_about) ... ok
+test_a_document_without_a_marker_is_left_alone (tests.test_accuracy_document.AccuracyDocumentTests.test_a_document_without_a_marker_is_left_alone) ... ok
+test_a_page_with_an_incomplete_ground_truth_is_named (tests.test_accuracy_document.AccuracyDocumentTests.test_a_page_with_an_incomplete_ground_truth_is_named)
+The numbers of a page that was not fully transcribed are marked. ... ok
+test_the_numbers_of_the_report_are_written_into_the_document (tests.test_accuracy_document.AccuracyDocumentTests.test_the_numbers_of_the_report_are_written_into_the_document) ... ok
+test_the_report_of_the_benchmark_is_used_as_it_is (tests.test_accuracy_document.AccuracyDocumentTests.test_the_report_of_the_benchmark_is_used_as_it_is) ... ok
+test_writing_the_same_numbers_again_changes_nothing (tests.test_accuracy_document.AccuracyDocumentTests.test_writing_the_same_numbers_again_changes_nothing) ... ok
+test_a_corpus_that_was_measured_whole_says_nothing_of_the_sort (tests.test_accuracy_document.CorpusSizeTests.test_a_corpus_that_was_measured_whole_says_nothing_of_the_sort) ... ok
+test_the_rate_is_not_written_as_a_rate_of_the_whole_corpus (tests.test_accuracy_document.CorpusSizeTests.test_the_rate_is_not_written_as_a_rate_of_the_whole_corpus) ... ok
+test_the_report_says_how_much_of_the_corpus_was_read (tests.test_accuracy_document.CorpusSizeTests.test_the_report_says_how_much_of_the_corpus_was_read) ... ok
+test_the_failure_of_the_engine_is_named (tests.test_accuracy_document.EngineFailureTests.test_the_failure_of_the_engine_is_named) ... ok
+test_the_notice_of_the_build_tells_the_failure_and_the_result (tests.test_accuracy_document.EngineFailureTests.test_the_notice_of_the_build_tells_the_failure_and_the_result) ... ok
+test_the_results_of_the_engine_that_worked_are_kept (tests.test_accuracy_document.EngineFailureTests.test_the_results_of_the_engine_that_worked_are_kept) ... ok
+test_the_engine_that_failed_is_named (tests.test_accuracy_document.FailedEnginesTests.test_the_engine_that_failed_is_named) ... ok
+test_the_rate_is_not_published (tests.test_accuracy_document.FailedEnginesTests.test_the_rate_is_not_published) ... ok
+test_the_engine_that_failed_is_not_the_headline (tests.test_accuracy_document.FirstWorkingEngineTests.test_the_engine_that_failed_is_not_the_headline) ... ok
+test_the_rate_of_the_engine_that_worked_is_written (tests.test_accuracy_document.FirstWorkingEngineTests.test_the_rate_of_the_engine_that_worked_is_written) ... ok
+test_a_report_without_a_page_that_was_left_out_says_nothing (tests.test_accuracy_document.LeftOutPagesTests.test_a_report_without_a_page_that_was_left_out_says_nothing) ... ok
+test_the_page_that_was_left_out_is_named (tests.test_accuracy_document.LeftOutPagesTests.test_the_page_that_was_left_out_is_named) ... ok
+test_the_tool_says_that_the_document_is_missing (tests.test_accuracy_document.MissingDocumentTests.test_the_tool_says_that_the_document_is_missing) ... the results were written into /tmp/tmpj1jgkql6/OCR_ACCURACY.md
+the document /tmp/tmp4cr6rzy8/no-such-document.md is not there
+ok
+test_an_empty_corpus_is_written_as_not_verified (tests.test_accuracy_document.ModernCorpusTests.test_an_empty_corpus_is_written_as_not_verified) ... ok
+test_the_note_of_the_report_is_shown (tests.test_accuracy_document.ModernCorpusTests.test_the_note_of_the_report_is_shown) ... ok
+test_the_section_names_the_artefact_of_the_modern_report (tests.test_accuracy_document.ModernCorpusTests.test_the_section_names_the_artefact_of_the_modern_report)
+The report of the modern corpus and the report of the ... ok
+test_no_rate_is_published (tests.test_accuracy_document.NoVerifiedPageTests.test_no_rate_is_published) ... ok
+test_the_notice_of_the_build_says_so (tests.test_accuracy_document.NoVerifiedPageTests.test_the_notice_of_the_build_says_so) ... ok
+test_the_report_says_how_many_pages_were_measured (tests.test_accuracy_document.SelectedAndMeasuredTests.test_the_report_says_how_many_pages_were_measured) ... ok
+test_every_engine_is_in_the_table (tests.test_accuracy_document.SeveralEnginesTests.test_every_engine_is_in_the_table) ... ok
+test_the_measurement_says_that_no_correction_is_part_of_it (tests.test_accuracy_document.SeveralEnginesTests.test_the_measurement_says_that_no_correction_is_part_of_it) ... ok
+test_the_rates_of_the_engines_are_written (tests.test_accuracy_document.SeveralEnginesTests.test_the_rates_of_the_engines_are_written) ... ok
+test_the_section_names_the_artefact_of_the_diagnostic_report (tests.test_accuracy_document.TheDiagnosticCorpusTests.test_the_section_names_the_artefact_of_the_diagnostic_report) ... ok
+test_a_line_that_is_only_half_transcribed_is_not_complete (tests.test_benchmark.AccuracyTests.test_a_line_that_is_only_half_transcribed_is_not_complete)
+A word without a text would be counted as a mistake. ... ok
+test_a_page_is_measured_against_its_ground_truth (tests.test_benchmark.AccuracyTests.test_a_page_is_measured_against_its_ground_truth) ... ok
+test_a_page_without_a_ground_truth_is_not_measured (tests.test_benchmark.AccuracyTests.test_a_page_without_a_ground_truth_is_not_measured) ... ok
+test_character_error_rate_counts_edits (tests.test_benchmark.AccuracyTests.test_character_error_rate_counts_edits) ... ok
+test_character_error_rate_of_empty_reference (tests.test_benchmark.AccuracyTests.test_character_error_rate_of_empty_reference) ... ok
+test_character_error_rate_of_equal_text_is_zero (tests.test_benchmark.AccuracyTests.test_character_error_rate_of_equal_text_is_zero) ... ok
+test_normalisation_collapses_whitespace (tests.test_benchmark.AccuracyTests.test_normalisation_collapses_whitespace) ... ok
+test_normalisation_removes_vowel_points_and_keeps_letters (tests.test_benchmark.AccuracyTests.test_normalisation_removes_vowel_points_and_keeps_letters) ... ok
+test_page_xml_is_read_line_by_line (tests.test_benchmark.AccuracyTests.test_page_xml_is_read_line_by_line) ... ok
+test_pages_are_paired_with_their_ground_truth (tests.test_benchmark.AccuracyTests.test_pages_are_paired_with_their_ground_truth) ... ok
+test_the_number_of_the_words_is_recorded (tests.test_benchmark.AccuracyTests.test_the_number_of_the_words_is_recorded)
+The rate of the corpus needs the number of the words. ... ok
+test_the_rate_of_the_words_of_the_corpus_weighs_the_pages (tests.test_benchmark.AccuracyTests.test_the_rate_of_the_words_of_the_corpus_weighs_the_pages)
+A page with few words does not count as much as a page with many. ... ok
+test_the_report_of_the_ground_truth_says_what_the_file_holds (tests.test_benchmark.AccuracyTests.test_the_report_of_the_ground_truth_says_what_the_file_holds)
+A measurement says whether the ground truth was complete. ... ok
+test_the_text_of_a_line_is_found_inside_a_text_equiv (tests.test_benchmark.AccuracyTests.test_the_text_of_a_line_is_found_inside_a_text_equiv)
+The text of a line sits deeper than the direct children. ... ok
+test_the_text_of_a_line_is_not_the_text_of_its_first_word (tests.test_benchmark.AccuracyTests.test_the_text_of_a_line_is_not_the_text_of_its_first_word)
+A line has a text of its own, next to the texts of its words. ... ok
+test_the_words_of_a_line_are_joined_when_the_line_has_no_text (tests.test_benchmark.AccuracyTests.test_the_words_of_a_line_are_joined_when_the_line_has_no_text) ... ok
+test_word_error_rate (tests.test_benchmark.AccuracyTests.test_word_error_rate) ... ok
+test_a_stream_that_cannot_be_changed_is_not_an_error (tests.test_benchmark.ConsoleTests.test_a_stream_that_cannot_be_changed_is_not_an_error) ... ok
+test_the_console_can_write_hebrew (tests.test_benchmark.ConsoleTests.test_the_console_can_write_hebrew) ... ok
+test_a_page_that_is_complete_and_verified_is_measured (tests.test_benchmark.MeasuredPagesTests.test_a_page_that_is_complete_and_verified_is_measured) ... ok
+test_a_page_that_was_not_verified_is_not_measured (tests.test_benchmark.MeasuredPagesTests.test_a_page_that_was_not_verified_is_not_measured) ... ok
+test_a_page_whose_ground_truth_is_not_complete_is_not_measured (tests.test_benchmark.MeasuredPagesTests.test_a_page_whose_ground_truth_is_not_complete_is_not_measured) ... ok
+test_the_pages_of_the_corpus_are_not_all_measured (tests.test_benchmark.MeasuredPagesTests.test_the_pages_of_the_corpus_are_not_all_measured) ... ok
+test_a_corpus_that_is_a_link_keeps_the_names_of_its_pages (tests.test_benchmark.PageNamesTests.test_a_corpus_that_is_a_link_keeps_the_names_of_its_pages)
+The folder of the corpus may be a link, and the pages of the ... [1/1] recognising page.jpg ...
+    CER 0.0%  WER 0.0%  0.0s
+    lines: 1 in the ground truth, 1 in the result
+    ground truth: שלום
+    recognised:   שלום
+ok
+test_a_page_that_is_linked_keeps_its_place_in_the_corpus (tests.test_benchmark.PageNamesTests.test_a_page_that_is_linked_keeps_its_place_in_the_corpus)
+A page that is linked from outside of the corpus is still a ... [1/1] recognising class_a/page.jpg ...
+    CER 0.0%  WER 0.0%  0.0s
+    lines: 1 in the ground truth, 1 in the result
+    ground truth: שלום
+    recognised:   שלום
+ok
+test_the_comparison_of_two_engines_is_of_the_same_pages (tests.test_benchmark.PageNamesTests.test_the_comparison_of_two_engines_is_of_the_same_pages) ... [1/2] recognising class_a/page.jpg ...
+    CER 0.0%  WER 0.0%  0.0s
+    lines: 1 in the ground truth, 1 in the result
+    ground truth: שלום
+    recognised:   שלום
+[2/2] recognising class_b/page.jpg ...
+    CER 75.0%  WER 100.0%  0.0s
+    lines: 1 in the ground truth, 1 in the result
+    ground truth: עולם
+    recognised:   שלום
+[1/1] recognising class_b/page.jpg ...
+    CER 0.0%  WER 0.0%  0.0s
+    lines: 1 in the ground truth, 1 in the result
+    ground truth: עולם
+    recognised:   עולם
+ok
+test_two_pages_with_the_same_name_are_two_pages (tests.test_benchmark.PageNamesTests.test_two_pages_with_the_same_name_are_two_pages)
+The pages of two folders may have the same name, and the ... [1/2] recognising class_a/page.jpg ...
+    CER 0.0%  WER 0.0%  0.0s
+    lines: 1 in the ground truth, 1 in the result
+    ground truth: שלום
+    recognised:   שלום
+[2/2] recognising class_b/page.jpg ...
+    CER 75.0%  WER 100.0%  0.0s
+    lines: 1 in the ground truth, 1 in the result
+    ground truth: עולם
+    recognised:   שלום
+ok
+test_a_corpus_with_an_error_stops_the_build (tests.test_benchmark_corpus.BuildBenchmarkTests.test_a_corpus_with_an_error_stops_the_build)
+A corpus that lost a page is a corpus that is broken, and the ... error: the image of the page is missing: pages/nothing.jpg
+ok
+test_a_corpus_without_an_error_is_built (tests.test_benchmark_corpus.BuildBenchmarkTests.test_a_corpus_without_an_error_is_built) ... the corpus A corpus of the tests: 1 pages
+  pages/nothing.jpg: not measured
+no page of this corpus has a verified transcript, so the accuracy of the recognition on this material is NOT verified
+manifest written to /tmp/tmpb6yp8l60/manifest.json
+ok
+test_a_folder_without_a_description_is_not_a_corpus (tests.test_benchmark_corpus.CorpusTests.test_a_folder_without_a_description_is_not_a_corpus) ... ok
+test_a_page_with_a_verified_transcript_is_measured (tests.test_benchmark_corpus.CorpusTests.test_a_page_with_a_verified_transcript_is_measured) ... ok
+test_a_page_without_a_verification_is_not_measured (tests.test_benchmark_corpus.CorpusTests.test_a_page_without_a_verification_is_not_measured) ... ok
+test_a_page_without_an_image_is_an_error (tests.test_benchmark_corpus.CorpusTests.test_a_page_without_an_image_is_an_error) ... ok
+test_a_file_with_text_is_complete (tests.test_benchmark_corpus.EmptyXmlTests.test_a_file_with_text_is_complete) ... ok
+test_a_file_without_any_line_is_not_complete (tests.test_benchmark_corpus.EmptyXmlTests.test_a_file_without_any_line_is_not_complete) ... ok
+test_a_line_without_text_is_not_complete (tests.test_benchmark_corpus.EmptyXmlTests.test_a_line_without_text_is_not_complete) ... ok
+test_the_failure_of_an_engine_is_named_and_the_run_goes_on (tests.test_benchmark_corpus.EngineFailureTests.test_the_failure_of_an_engine_is_named_and_the_run_goes_on) ... the corpus A corpus of the tests: 0 pages
+no page of this corpus has a verified transcript, so the accuracy of the recognition on this material is NOT verified
+manifest written to /tmp/tmpbzzyz_6l/manifest.json
+[1/1] recognising page.png ...
+    the engine failed on this page: RuntimeError: the engine is not installed
+ok
+test_a_model_that_is_not_known_is_not_measured (tests.test_benchmark_corpus.EngineFolderTests.test_a_model_that_is_not_known_is_not_measured) ... ok
+test_a_model_that_is_not_there_is_not_measured (tests.test_benchmark_corpus.EngineFolderTests.test_a_model_that_is_not_there_is_not_measured) ... ok
+test_the_model_of_the_folder_that_is_given_is_found (tests.test_benchmark_corpus.EngineFolderTests.test_the_model_of_the_folder_that_is_given_is_found) ... ok
+test_a_blank_name_is_not_a_name (tests.test_benchmark_corpus.IncompleteGroundTruthTests.test_a_blank_name_is_not_a_name) ... ok
+test_a_corpus_with_a_page_without_a_transcript_is_not_verified (tests.test_benchmark_corpus.IncompleteGroundTruthTests.test_a_corpus_with_a_page_without_a_transcript_is_not_verified) ... ok
+test_a_page_with_an_empty_report_is_not_complete (tests.test_benchmark_corpus.IncompleteGroundTruthTests.test_a_page_with_an_empty_report_is_not_complete) ... ok
+test_a_page_without_a_transcript_is_not_complete (tests.test_benchmark_corpus.IncompleteGroundTruthTests.test_a_page_without_a_transcript_is_not_complete) ... ok
+test_the_name_of_one_checker_may_be_given_as_a_string (tests.test_benchmark_corpus.IncompleteGroundTruthTests.test_the_name_of_one_checker_may_be_given_as_a_string) ... ok
+test_a_page_without_a_ground_truth_is_named (tests.test_benchmark_corpus.LeftOutPageTests.test_a_page_without_a_ground_truth_is_named) ... [1/2] recognising good.png ...
+    CER 0.0%  WER 0.0%  0.0s
+    lines: 1 in the ground truth, 1 in the result
+    ground truth: שלום עולם
+    recognised:   שלום עולם
+[2/2] recognising empty.png ...
+    no ground truth, the page is left out
+ok
+test_a_page_that_is_not_in_the_corpus_any_more_is_not_measured (tests.test_benchmark_corpus.ManifestCompletenessTests.test_a_page_that_is_not_in_the_corpus_any_more_is_not_measured) ... ok
+test_a_page_that_is_not_in_the_manifest_is_not_measured (tests.test_benchmark_corpus.ManifestCompletenessTests.test_a_page_that_is_not_in_the_manifest_is_not_measured) ... ok
+test_two_pages_with_the_same_name_are_told_apart (tests.test_benchmark_corpus.ManifestCompletenessTests.test_two_pages_with_the_same_name_are_told_apart) ... ok
+test_a_corpus_without_a_manifest_is_not_checked (tests.test_benchmark_corpus.ManifestTests.test_a_corpus_without_a_manifest_is_not_checked) ... ok
+test_an_image_that_was_changed_is_not_measured (tests.test_benchmark_corpus.ManifestTests.test_an_image_that_was_changed_is_not_measured) ... ok
+test_the_image_that_the_manifest_holds_is_accepted (tests.test_benchmark_corpus.ManifestTests.test_the_image_that_the_manifest_holds_is_accepted) ... ok
+test_the_corpus_of_the_school_exists (tests.test_benchmark_corpus.ModernSchoolCorpusTests.test_the_corpus_of_the_school_exists) ... ok
+test_the_corpus_of_the_school_says_that_it_is_not_verified (tests.test_benchmark_corpus.ModernSchoolCorpusTests.test_the_corpus_of_the_school_says_that_it_is_not_verified) ... ok
+test_the_pinkas_corpus_is_a_diagnostic_one (tests.test_benchmark_corpus.ModernSchoolCorpusTests.test_the_pinkas_corpus_is_a_diagnostic_one) ... ok
+test_two_models_of_the_same_engine_are_compared_on_the_same_pages (tests.test_benchmark_corpus.SameEngineNameTests.test_two_models_of_the_same_engine_are_compared_on_the_same_pages) ... ok
+test_a_page_that_was_not_verified_is_not_a_measurement (tests.test_benchmark_corpus.SharedPagesTests.test_a_page_that_was_not_verified_is_not_a_measurement) ... ok
+test_a_page_whose_ground_truth_is_not_complete_is_not_a_measurement (tests.test_benchmark_corpus.SharedPagesTests.test_a_page_whose_ground_truth_is_not_complete_is_not_a_measurement) ... ok
+test_the_common_pages_are_the_ones_the_engines_are_compared_on (tests.test_benchmark_corpus.SharedPagesTests.test_the_common_pages_are_the_ones_the_engines_are_compared_on) ... ok
+test_there_is_no_rate_when_no_page_may_be_measured (tests.test_benchmark_corpus.SharedPagesTests.test_there_is_no_rate_when_no_page_may_be_measured) ... ok
+test_a_text_file_is_read_line_by_line (tests.test_benchmark_corpus.TranscriptTests.test_a_text_file_is_read_line_by_line) ... ok
+test_an_empty_transcript_is_not_complete (tests.test_benchmark_corpus.TranscriptTests.test_an_empty_transcript_is_not_complete) ... ok
+test_a_page_with_an_unreadable_line_is_not_measured (tests.test_benchmark_corpus.UnreadableLineTests.test_a_page_with_an_unreadable_line_is_not_measured) ... ok
+test_a_line_that_could_not_be_read_makes_the_page_not_complete (tests.test_benchmark_corpus.UnreadableXmlTests.test_a_line_that_could_not_be_read_makes_the_page_not_complete) ... ok
+test_a_page_that_was_read_is_complete (tests.test_benchmark_corpus.UnreadableXmlTests.test_a_page_that_was_read_is_complete) ... ok
+test_a_pair_that_does_not_work_is_reported (tests.test_check_engine.CheckEngineTests.test_a_pair_that_does_not_work_is_reported)
+The failure of torchvision while it is imported is reported. ... ok
+test_a_pair_that_works_is_reported (tests.test_check_engine.CheckEngineTests.test_a_pair_that_works_is_reported)
+A working pair is said so. ... ok
+test_disabled_engine_never_returns_text (tests.test_engine.EngineContractTests.test_disabled_engine_never_returns_text)
+A disabled engine must raise instead of returning anything. ... ok
+test_disabled_is_explicit (tests.test_engine.EngineContractTests.test_disabled_is_explicit) ... ok
+test_missing_file_not_processed (tests.test_engine.EngineContractTests.test_missing_file_not_processed) ... ok
+test_replaceable_engine (tests.test_engine.EngineContractTests.test_replaceable_engine) ... ok
+test_result_is_immutable (tests.test_engine.EngineContractTests.test_result_is_immutable) ... ok
+test_a_good_file_passes_the_check (tests.test_engine_models.ModelTests.test_a_good_file_passes_the_check) ... ok
+test_a_model_without_a_published_md5_is_checked_by_its_sha256 (tests.test_engine_models.ModelTests.test_a_model_without_a_published_md5_is_checked_by_its_sha256)
+Some hosts publish no MD5, and the file is still checked. ... ok
+test_a_stopped_download_does_not_try_the_other_places (tests.test_engine_models.ModelTests.test_a_stopped_download_does_not_try_the_other_places)
+A download that was stopped is not a place that failed: the ... ok
+test_a_wrong_md5_is_reported (tests.test_engine_models.ModelTests.test_a_wrong_md5_is_reported) ... ok
+test_a_wrong_sha256_is_reported (tests.test_engine_models.ModelTests.test_a_wrong_sha256_is_reported) ... ok
+test_a_wrong_size_is_reported (tests.test_engine_models.ModelTests.test_a_wrong_size_is_reported) ... ok
+test_cancellable_download_caps_network_operation_timeout (tests.test_engine_models.ModelTests.test_cancellable_download_caps_network_operation_timeout) ... ok
+test_cancellation_during_verification_never_installs (tests.test_engine_models.ModelTests.test_cancellation_during_verification_never_installs) ... ok
+test_digests_are_computed_over_the_whole_file (tests.test_engine_models.ModelTests.test_digests_are_computed_over_the_whole_file) ... ok
+test_every_model_belongs_to_an_engine_that_exists (tests.test_engine_models.ModelTests.test_every_model_belongs_to_an_engine_that_exists)
+A model of an engine that is not in the program would never be ... ok
+test_installing_a_broken_download_does_not_leave_a_file (tests.test_engine_models.ModelTests.test_installing_a_broken_download_does_not_leave_a_file) ... ok
+test_installing_checks_the_file_and_moves_it_into_place (tests.test_engine_models.ModelTests.test_installing_checks_the_file_and_moves_it_into_place) ... ok
+test_installing_uses_fallback_when_primary_download_is_invalid (tests.test_engine_models.ModelTests.test_installing_uses_fallback_when_primary_download_is_invalid) ... ok
+test_known_models_declare_a_license_and_a_size (tests.test_engine_models.ModelTests.test_known_models_declare_a_license_and_a_size) ... ok
+test_known_models_have_a_pinned_sha256 (tests.test_engine_models.ModelTests.test_known_models_have_a_pinned_sha256)
+Every model file is checked against two digests. ... ok
+test_models_directory_follows_the_environment (tests.test_engine_models.ModelTests.test_models_directory_follows_the_environment) ... ok
+test_the_download_can_be_stopped (tests.test_engine_models.ModelTests.test_the_download_can_be_stopped)
+The user has to be able to stop the download of a model. ... ok
+test_the_download_continues_when_nothing_asks_to_stop_it (tests.test_engine_models.ModelTests.test_the_download_continues_when_nothing_asks_to_stop_it) ... ok
+test_the_model_of_the_second_engine_is_known (tests.test_engine_models.ModelTests.test_the_model_of_the_second_engine_is_known)
+The model of the second engine is in the catalogue, with its ... ok
+test_a_broken_engine_raises_an_engine_error (tests.test_engine_registry.RegistryTests.test_a_broken_engine_raises_an_engine_error) ... ok
+test_the_default_engine_fails_closed (tests.test_engine_registry.RegistryTests.test_the_default_engine_fails_closed) ... ok
+test_the_status_mentions_the_license_of_the_engine (tests.test_engine_registry.RegistryTests.test_the_status_mentions_the_license_of_the_engine) ... ok
+test_medium_builtin_plugin_uses_its_own_offline_weights (tests.test_engine_registry.WorkerManifestTests.test_medium_builtin_plugin_uses_its_own_offline_weights) ... ok
+test_mismatched_worker_engine_and_artifact_are_rejected (tests.test_engine_registry.WorkerManifestTests.test_mismatched_worker_engine_and_artifact_are_rejected) ... ok
+test_the_model_of_the_manifest_is_the_model_that_was_chosen (tests.test_engine_registry.WorkerManifestTests.test_the_model_of_the_manifest_is_the_model_that_was_chosen) ... ok
+test_a_failing_worker_reports_the_reason (tests.test_engine_registry.WorkerTests.test_a_failing_worker_reports_the_reason) ... ok
+test_a_missing_worker_is_not_available (tests.test_engine_registry.WorkerTests.test_a_missing_worker_is_not_available) ... ok
+test_an_engine_without_the_callbacks_still_works (tests.test_engine_registry.WorkerTests.test_an_engine_without_the_callbacks_still_works)
+An adapter of the first version of the contract keeps working. ... ok
+test_the_callbacks_are_given_to_an_engine_that_wants_them (tests.test_engine_registry.WorkerTests.test_the_callbacks_are_given_to_an_engine_that_wants_them)
+The user can stop the work and sees what it is doing. ... ok
+test_the_message_of_the_worker_is_used (tests.test_engine_registry.WorkerTests.test_the_message_of_the_worker_is_used)
+The worker says what went wrong; the client says it too. ... ok
+test_the_worker_result_is_read_back (tests.test_engine_registry.WorkerTests.test_the_worker_result_is_read_back) ... ok
+test_docx_contains_the_text_and_is_right_to_left (tests.test_exporting.ExportTests.test_docx_contains_the_text_and_is_right_to_left) ... ok
+test_empty_text_is_allowed (tests.test_exporting.ExportTests.test_empty_text_is_allowed) ... ok
+test_print_document_holds_the_text (tests.test_exporting.ExportTests.test_print_document_holds_the_text) ... ok
+test_txt_is_written_with_a_byte_order_mark (tests.test_exporting.ExportTests.test_txt_is_written_with_a_byte_order_mark) ... ok
+test_txt_round_trip (tests.test_exporting.ExportTests.test_txt_round_trip) ... ok
+test_unwritable_path_raises (tests.test_exporting.ExportTests.test_unwritable_path_raises) ... ok
+test_missing_packaged_report_exposes_captured_error (tests.test_hunspell_plugin.AdditionalSpellingGuards.test_missing_packaged_report_exposes_captured_error) ... ok
+test_packaged_timeout_exposes_partial_output (tests.test_hunspell_plugin.AdditionalSpellingGuards.test_packaged_timeout_exposes_partial_output) ... ok
+test_source_extraction_rejects_traversal_and_links (tests.test_hunspell_plugin.AdditionalSpellingGuards.test_source_extraction_rejects_traversal_and_links) ... ok
+test_unpacked_corresponding_source_build_does_not_need_git_metadata (tests.test_hunspell_plugin.AdditionalSpellingGuards.test_unpacked_corresponding_source_build_does_not_need_git_metadata) ... ok
+test_zip_installer_restores_native_execute_bit_but_not_setuid (tests.test_hunspell_plugin.AdditionalSpellingGuards.test_zip_installer_restores_native_execute_bit_but_not_setuid) ... ok
+test_archive_sources_and_hashes_are_required_not_optional_downloads (tests.test_hunspell_plugin.HunspellPluginTests.test_archive_sources_and_hashes_are_required_not_optional_downloads) ... ok
+test_at_most_three_native_candidates (tests.test_hunspell_plugin.HunspellPluginTests.test_at_most_three_native_candidates) ... ok
+test_bad_dictionary_setting_preserves_previous_configuration (tests.test_hunspell_plugin.HunspellPluginTests.test_bad_dictionary_setting_preserves_previous_configuration) ... ok
+test_distinct_word_limit_is_explicit_not_silent_partial_checking (tests.test_hunspell_plugin.HunspellPluginTests.test_distinct_word_limit_is_explicit_not_silent_partial_checking) ... ok
+test_eviction_keeps_current_document_cached_words (tests.test_hunspell_plugin.HunspellPluginTests.test_eviction_keeps_current_document_cached_words) ... ok
+test_hebrew_offsets_niqqud_mixed_scripts_and_acronyms (tests.test_hunspell_plugin.HunspellPluginTests.test_hebrew_offsets_niqqud_mixed_scripts_and_acronyms) ... ok
+test_hebrew_punctuation_splits_words_without_losing_offsets (tests.test_hunspell_plugin.HunspellPluginTests.test_hebrew_punctuation_splits_words_without_losing_offsets) ... ok
+test_keep_word_persists_outside_plugin_without_modifying_dictionary (tests.test_hunspell_plugin.HunspellPluginTests.test_keep_word_persists_outside_plugin_without_modifying_dictionary) ... ok
+test_keep_word_write_failure_is_session_only_and_retryable (tests.test_hunspell_plugin.HunspellPluginTests.test_keep_word_write_failure_is_session_only_and_retryable) ... ok
+test_malformed_partial_or_failed_worker_is_rejected (tests.test_hunspell_plugin.HunspellPluginTests.test_malformed_partial_or_failed_worker_is_rejected) ... ok
+test_manifest_cannot_omit_a_required_hash (tests.test_hunspell_plugin.HunspellPluginTests.test_manifest_cannot_omit_a_required_hash) ... ok
+test_missing_worker_process_error_is_not_fake_output (tests.test_hunspell_plugin.HunspellPluginTests.test_missing_worker_process_error_is_not_fake_output) ... ok
+test_optional_frozen_check_is_a_mandatory_windows_step (tests.test_hunspell_plugin.HunspellPluginTests.test_optional_frozen_check_is_a_mandatory_windows_step) ... ok
+test_personal_file_cannot_be_the_dictionary_or_inside_plugin (tests.test_hunspell_plugin.HunspellPluginTests.test_personal_file_cannot_be_the_dictionary_or_inside_plugin) ... ok
+test_personal_list_without_final_newline_is_not_corrupted (tests.test_hunspell_plugin.HunspellPluginTests.test_personal_list_without_final_newline_is_not_corrupted) ... ok
+test_real_hunspell_format_count_is_not_a_custom_slash_word_list (tests.test_hunspell_plugin.HunspellPluginTests.test_real_hunspell_format_count_is_not_a_custom_slash_word_list) ... ok
+test_repeated_words_are_checked_once_and_cached (tests.test_hunspell_plugin.HunspellPluginTests.test_repeated_words_are_checked_once_and_cached) ... ok
+test_source_only_folder_is_unavailable_with_actionable_error (tests.test_hunspell_plugin.HunspellPluginTests.test_source_only_folder_is_unavailable_with_actionable_error) ... ok
+test_tampered_worker_or_dictionary_fails_closed (tests.test_hunspell_plugin.HunspellPluginTests.test_tampered_worker_or_dictionary_fails_closed) ... ok
+test_timeout_is_reported_not_swallowed_or_turned_into_correct_words (tests.test_hunspell_plugin.HunspellPluginTests.test_timeout_is_reported_not_swallowed_or_turned_into_correct_words) ... ok
+test_unknown_without_candidate_does_not_invent_replacement (tests.test_hunspell_plugin.HunspellPluginTests.test_unknown_without_candidate_does_not_invent_replacement) ... ok
+test_comparison_preserves_crlf_exactly_in_reference_and_readings (tests.test_mishkefet_decoding.ComparisonToolTests.test_comparison_preserves_crlf_exactly_in_reference_and_readings) ... ok
+test_reference_collision_is_rejected_without_overwriting (tests.test_mishkefet_decoding.ComparisonToolTests.test_reference_collision_is_rejected_without_overwriting) ... ok
+test_unverified_report_has_no_scores_and_keeps_outputs_separate (tests.test_mishkefet_decoding.ComparisonToolTests.test_unverified_report_has_no_scores_and_keeps_outputs_separate) ... ok
+test_advanced_options_are_explicit_and_raw_never_loads_language_models (tests.test_mishkefet_decoding.DecodingTests.test_advanced_options_are_explicit_and_raw_never_loads_language_models) ... ok
+test_assisted_serialization_uses_the_same_blank_line_policy_as_raw (tests.test_mishkefet_decoding.DecodingTests.test_assisted_serialization_uses_the_same_blank_line_policy_as_raw) ... ok
+test_beam_setting_is_restored_if_raw_reading_fails (tests.test_mishkefet_decoding.DecodingTests.test_beam_setting_is_restored_if_raw_reading_fails) ... ok
+test_factory_and_configure_preserve_mode (tests.test_mishkefet_decoding.DecodingTests.test_factory_and_configure_preserve_mode) ... ok
+test_missing_language_models_fail_explicitly_without_fallback (tests.test_mishkefet_decoding.DecodingTests.test_missing_language_models_fail_explicitly_without_fallback) ... ok
+test_older_projects_and_results_remain_raw (tests.test_mishkefet_decoding.DecodingTests.test_older_projects_and_results_remain_raw) ... ok
+test_project_roundtrip_retains_both_outputs_exactly (tests.test_mishkefet_decoding.DecodingTests.test_project_roundtrip_retains_both_outputs_exactly) ... ok
+test_raw_and_assisted_use_same_crops_but_never_overwrite_raw (tests.test_mishkefet_decoding.DecodingTests.test_raw_and_assisted_use_same_crops_but_never_overwrite_raw) ... ok
+test_raw_is_default_and_invalid_modes_are_rejected (tests.test_mishkefet_decoding.DecodingTests.test_raw_is_default_and_invalid_modes_are_rejected) ... ok
+test_worker_dispatch_propagates_mode_and_rejects_invalid_mode (tests.test_mishkefet_decoding.DecodingTests.test_worker_dispatch_propagates_mode_and_rejects_invalid_mode) ... ok
+test_worker_factory_propagates_profile_to_subprocess_engine (tests.test_mishkefet_decoding.DecodingTests.test_worker_factory_propagates_profile_to_subprocess_engine) ... ok
+test_all_downloads_are_pinned_noncommercial_and_revision_specific (tests.test_mishkefet_decoding.LanguageModelIntegrityTests.test_all_downloads_are_pinned_noncommercial_and_revision_specific) ... ok
+test_executable_pickle_globals_are_rejected_even_with_matching_digest (tests.test_mishkefet_decoding.LanguageModelIntegrityTests.test_executable_pickle_globals_are_rejected_even_with_matching_digest) ... ok
+test_only_pinned_bytes_can_be_deserialized (tests.test_mishkefet_decoding.LanguageModelIntegrityTests.test_only_pinned_bytes_can_be_deserialized) ... ok
+test_an_engine_without_a_model_is_not_available (tests.test_mishkefet_engine.MishkefetEngineTests.test_an_engine_without_a_model_is_not_available) ... ok
+test_the_engine_of_the_plugin_system_uses_the_installed_model (tests.test_mishkefet_engine.MishkefetEngineTests.test_the_engine_of_the_plugin_system_uses_the_installed_model)
+The plugin builds an engine for the model that the user ... ok
+test_the_manifest_says_the_licence_and_the_digest (tests.test_mishkefet_engine.MishkefetEngineTests.test_the_manifest_says_the_licence_and_the_digest) ... ok
+test_the_model_of_the_engine_is_in_the_catalogue (tests.test_mishkefet_engine.MishkefetEngineTests.test_the_model_of_the_engine_is_in_the_catalogue) ... ok
+test_timed_out_inference_keeps_its_lock_until_worker_finishes (tests.test_mishkefet_engine.MishkefetEngineTests.test_timed_out_inference_keeps_its_lock_until_worker_finishes) ... ok
+test_a_checkpoint_that_was_replaced_is_not_loaded (tests.test_mishkefet_engine.TheCheckpointIsCheckedTests.test_a_checkpoint_that_was_replaced_is_not_loaded) ... ok
+test_a_checkpoint_with_the_right_digest_passes_the_check (tests.test_mishkefet_engine.TheCheckpointIsCheckedTests.test_a_checkpoint_with_the_right_digest_passes_the_check) ... ok
+test_the_vendored_code_is_not_changed (tests.test_mishkefet_engine.TheCheckpointIsCheckedTests.test_the_vendored_code_is_not_changed)
+The file that came with the model is used as it was ... ok
+test_the_worker_of_the_first_engine_still_says_its_own_name (tests.test_mishkefet_engine.TheNameOfTheWorkerEngineTests.test_the_worker_of_the_first_engine_still_says_its_own_name) ... ok
+test_the_worker_of_the_second_engine_says_its_own_name (tests.test_mishkefet_engine.TheNameOfTheWorkerEngineTests.test_the_worker_of_the_second_engine_says_its_own_name) ... ok
+test_the_engine_is_a_plugin_of_the_program (tests.test_mishkefet_engine.ThePluginTests.test_the_engine_is_a_plugin_of_the_program) ... ok
+test_the_plugin_of_the_engine_says_which_model_it_reads (tests.test_mishkefet_engine.ThePluginTests.test_the_plugin_of_the_engine_says_which_model_it_reads) ... ok
+test_the_charset_starts_with_the_blank (tests.test_mishkefet_engine.TheVendoredCodeTests.test_the_charset_starts_with_the_blank) ... ok
+test_the_letters_of_hebrew_keep_their_final_forms (tests.test_mishkefet_engine.TheVendoredCodeTests.test_the_letters_of_hebrew_keep_their_final_forms) ... ok
+test_the_licence_of_the_vendored_code_is_in_the_repository (tests.test_mishkefet_engine.TheVendoredCodeTests.test_the_licence_of_the_vendored_code_is_in_the_repository) ... ok
+test_the_niqqud_and_the_te_amim_are_kept (tests.test_mishkefet_engine.TheVendoredCodeTests.test_the_niqqud_and_the_te_amim_are_kept) ... ok
+test_the_punctuation_variants_are_folded (tests.test_mishkefet_engine.TheVendoredCodeTests.test_the_punctuation_variants_are_folded)
+The model can only write the folded punctuation, because the ... ok
+test_an_unknown_engine_is_an_error (tests.test_mishkefet_engine.TheWorkerDispatchTests.test_an_unknown_engine_is_an_error) ... ok
+test_the_job_names_the_engine (tests.test_mishkefet_engine.TheWorkerDispatchTests.test_the_job_names_the_engine) ... ok
+test_the_job_of_the_worker_carries_the_engine (tests.test_mishkefet_engine.TheWorkerDispatchTests.test_the_job_of_the_worker_carries_the_engine)
+The worker writes the engine into the job file, so that the ... ok
+test_base_failure_propagates_without_partial_success (tests.test_modern_spelling_plugin.ModernSupplementTests.test_base_failure_propagates_without_partial_success) ... ok
+test_corruption_and_missing_data_fail_closed (tests.test_modern_spelling_plugin.ModernSupplementTests.test_corruption_and_missing_data_fail_closed) ... ok
+test_exact_modern_forms_suppress_false_flags_and_never_invent_candidates (tests.test_modern_spelling_plugin.ModernSupplementTests.test_exact_modern_forms_suppress_false_flags_and_never_invent_candidates) ... ok
+test_invalid_data_rejected_even_with_matching_digest (tests.test_modern_spelling_plugin.ModernSupplementTests.test_invalid_data_rejected_even_with_matching_digest) ... ok
+test_no_arbitrary_prefix_stripping (tests.test_modern_spelling_plugin.ModernSupplementTests.test_no_arbitrary_prefix_stripping) ... ok
+test_options_still_pass_to_baseline (tests.test_modern_spelling_plugin.ModernSupplementTests.test_options_still_pass_to_baseline) ... ok
+test_windows_ci_checks_real_frozen_modern_plugin_and_keeps_baseline (tests.test_modern_spelling_plugin.ModernSupplementTests.test_windows_ci_checks_real_frozen_modern_plugin_and_keeps_baseline) ... ok
+test_all_five_models_are_bundled_and_verified_offline (tests.test_one_click.OneClickTests.test_all_five_models_are_bundled_and_verified_offline) ... ok
+test_full_model_bundle_fails_if_any_model_missing (tests.test_one_click.OneClickTests.test_full_model_bundle_fails_if_any_model_missing) ... ok
+test_payload_contains_complete_program_and_verified_model (tests.test_one_click.OneClickTests.test_payload_contains_complete_program_and_verified_model) ... ok
+test_rejects_broken_cached_model (tests.test_one_click.OneClickTests.test_rejects_broken_cached_model) ... ok
+test_rejects_duplicate_zip_member (tests.test_one_click.OneClickTests.test_rejects_duplicate_zip_member) ... /opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/zipfile/__init__.py:1650: UserWarning: Duplicate name: 'HebrewNotesWorkbench/HebrewNotesWorkbench.exe'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+ok
+test_rejects_wrong_model_digest_before_packaging (tests.test_one_click.OneClickTests.test_rejects_wrong_model_digest_before_packaging) ... ok
+test_rejects_zip_traversal_even_when_model_is_valid (tests.test_one_click.OneClickTests.test_rejects_zip_traversal_even_when_model_is_valid) ... ok
+test_a_chosen_plugin_is_the_one_that_is_used (tests.test_plugins.ActiveChoiceTests.test_a_chosen_plugin_is_the_one_that_is_used) ... ok
+test_a_kind_without_a_choice_uses_the_first_plugin_that_is_on (tests.test_plugins.ActiveChoiceTests.test_a_kind_without_a_choice_uses_the_first_plugin_that_is_on) ... ok
+test_the_choice_of_no_plugin_survives_a_restart (tests.test_plugins.ActiveChoiceTests.test_the_choice_of_no_plugin_survives_a_restart) ... ok
+test_the_user_can_choose_that_a_kind_has_no_plugin (tests.test_plugins.ActiveChoiceTests.test_the_user_can_choose_that_a_kind_has_no_plugin) ... ok
+test_a_module_without_check_is_not_given_to_the_program (tests.test_plugins.BrokenModuleTests.test_a_module_without_check_is_not_given_to_the_program) ... ok
+test_all_eight_builtin_plugin_items_are_declared_and_importable (tests.test_plugins.BuiltinInventoryTests.test_all_eight_builtin_plugin_items_are_declared_and_importable) ... ok
+test_the_error_of_the_plugin_is_reported (tests.test_plugins.ConstructorErrorTests.test_the_error_of_the_plugin_is_reported) ... ok
+test_the_identifier_of_a_folder_is_refused (tests.test_plugins.DangerousIdentifierTests.test_the_identifier_of_a_folder_is_refused) ... ok
+test_the_installer_refuses_to_leave_its_folder (tests.test_plugins.DangerousIdentifierTests.test_the_installer_refuses_to_leave_its_folder) ... ok
+test_the_engine_is_not_offered (tests.test_plugins.EngineWithoutAvailabilityTests.test_the_engine_is_not_offered) ... ok
+test_the_name_of_the_package_includes_the_folder (tests.test_plugins.FolderNameTests.test_the_name_of_the_package_includes_the_folder) ... ok
+test_a_built_in_plugin_is_not_removed_by_the_installer (tests.test_plugins.InstallerTests.test_a_built_in_plugin_is_not_removed_by_the_installer) ... ok
+test_a_plugin_can_be_installed_again_on_purpose (tests.test_plugins.InstallerTests.test_a_plugin_can_be_installed_again_on_purpose) ... ok
+test_a_plugin_is_installed_from_a_folder (tests.test_plugins.InstallerTests.test_a_plugin_is_installed_from_a_folder) ... ok
+test_a_plugin_is_installed_from_a_zip_file (tests.test_plugins.InstallerTests.test_a_plugin_is_installed_from_a_zip_file) ... ok
+test_a_plugin_is_removed (tests.test_plugins.InstallerTests.test_a_plugin_is_removed) ... ok
+test_a_plugin_that_is_already_there_is_not_replaced_by_accident (tests.test_plugins.InstallerTests.test_a_plugin_that_is_already_there_is_not_replaced_by_accident) ... ok
+test_a_zip_that_holds_a_file_outside_of_itself_is_refused (tests.test_plugins.InstallerTests.test_a_zip_that_holds_a_file_outside_of_itself_is_refused) ... ok
+test_the_original_files_are_not_touched (tests.test_plugins.InstallerTests.test_the_original_files_are_not_touched) ... ok
+test_a_file_of_a_plugin_does_not_hide_a_module_of_the_program (tests.test_plugins.IsolationTests.test_a_file_of_a_plugin_does_not_hide_a_module_of_the_program) ... ok
+test_two_plugins_with_the_same_module_name_do_not_mix (tests.test_plugins.IsolationTests.test_two_plugins_with_the_same_module_name_do_not_mix) ... ok
+test_the_choice_of_the_user_is_on_top_of_the_manifest (tests.test_plugins.ManifestOptionTests.test_the_choice_of_the_user_is_on_top_of_the_manifest) ... ok
+test_the_options_of_the_manifest_are_given_to_the_plugin (tests.test_plugins.ManifestOptionTests.test_the_options_of_the_manifest_are_given_to_the_plugin) ... ok
+test_a_kind_that_is_not_known_is_refused (tests.test_plugins.ManifestTests.test_a_kind_that_is_not_known_is_refused) ... ok
+test_a_manifest_is_read (tests.test_plugins.ManifestTests.test_a_manifest_is_read) ... ok
+test_a_manifest_without_the_needed_fields_is_refused (tests.test_plugins.ManifestTests.test_a_manifest_without_the_needed_fields_is_refused) ... ok
+test_an_entry_without_a_colon_is_refused (tests.test_plugins.ManifestTests.test_an_entry_without_a_colon_is_refused) ... ok
+test_an_identifier_with_a_path_in_it_is_refused (tests.test_plugins.ManifestTests.test_an_identifier_with_a_path_in_it_is_refused) ... ok
+test_the_kind_of_the_manifest_is_the_kind_of_the_module (tests.test_plugins.ModuleKindTests.test_the_kind_of_the_manifest_is_the_kind_of_the_module) ... ok
+test_the_engine_of_a_nested_package_is_imported_once (tests.test_plugins.NestedPackageTests.test_the_engine_of_a_nested_package_is_imported_once) ... ok
+test_the_engine_of_a_package_is_imported_once (tests.test_plugins.PackageExportTests.test_the_engine_of_a_package_is_imported_once) ... ok
+test_the_code_of_the_package_of_the_plugin_runs (tests.test_plugins.PackageInitTests.test_the_code_of_the_package_of_the_plugin_runs) ... ok
+test_a_relative_import_inside_the_plugin_works (tests.test_plugins.PackagePluginTests.test_a_relative_import_inside_the_plugin_works) ... ok
+test_a_value_of_the_package_of_the_plugin_is_imported (tests.test_plugins.ParentPackageInitTests.test_a_value_of_the_package_of_the_plugin_is_imported) ... ok
+test_a_plugin_can_read_the_files_that_come_with_it (tests.test_plugins.PluginResourceTests.test_a_plugin_can_read_the_files_that_come_with_it) ... ok
+test_the_old_value_stays_when_the_plugin_refuses_the_new_one (tests.test_plugins.RefusedOptionTests.test_the_old_value_stays_when_the_plugin_refuses_the_new_one) ... ok
+test_a_broken_plugin_is_reported_and_does_not_stop_the_others (tests.test_plugins.RegistryTests.test_a_broken_plugin_is_reported_and_does_not_stop_the_others) ... ok
+test_a_plugin_can_be_switched_off_and_on_again (tests.test_plugins.RegistryTests.test_a_plugin_can_be_switched_off_and_on_again) ... ok
+test_a_plugin_with_the_same_id_as_a_built_in_one_is_refused (tests.test_plugins.RegistryTests.test_a_plugin_with_the_same_id_as_a_built_in_one_is_refused) ... ok
+test_an_installed_plugin_is_found_and_can_be_used (tests.test_plugins.RegistryTests.test_an_installed_plugin_is_found_and_can_be_used) ... ok
+test_the_built_in_plugins_are_there (tests.test_plugins.RegistryTests.test_the_built_in_plugins_are_there) ... ok
+test_the_choice_of_the_user_is_kept (tests.test_plugins.RegistryTests.test_the_choice_of_the_user_is_kept) ... ok
+test_the_grammar_and_the_spelling_start_switched_on (tests.test_plugins.RegistryTests.test_the_grammar_and_the_spelling_start_switched_on) ... ok
+test_the_modules_of_the_proposals_come_from_the_plugins (tests.test_plugins.RegistryTests.test_the_modules_of_the_proposals_come_from_the_plugins) ... ok
+test_the_program_works_without_a_plugins_folder (tests.test_plugins.RegistryTests.test_the_program_works_without_a_plugins_folder) ... ok
+test_the_style_plugin_starts_switched_off (tests.test_plugins.RegistryTests.test_the_style_plugin_starts_switched_off) ... ok
+test_the_new_code_of_the_plugin_is_used (tests.test_plugins.ReinstallTests.test_the_new_code_of_the_plugin_is_used) ... ok
+test_the_code_of_a_replaced_plugin_is_read_again (tests.test_plugins.ReplacedPluginTests.test_the_code_of_a_replaced_plugin_is_read_again) ... ok
+test_the_name_of_the_settings_file_is_refused (tests.test_plugins.ReservedIdentifierTests.test_the_name_of_the_settings_file_is_refused) ... ok
+test_the_mistake_stays_when_the_old_value_cannot_be_put_back (tests.test_plugins.RollbackTests.test_the_mistake_stays_when_the_old_value_cannot_be_put_back)
+A plugin that breaks while it is put back is not used. ... ok
+test_the_module_is_put_back_the_way_it_was (tests.test_plugins.RollbackTests.test_the_module_is_put_back_the_way_it_was) ... ok
+test_the_options_of_the_user_reach_the_constructor (tests.test_plugins.SavedOptionTests.test_the_options_of_the_user_reach_the_constructor) ... ok
+test_a_broken_settings_file_does_not_stop_the_program (tests.test_plugins.SettingsTests.test_a_broken_settings_file_does_not_stop_the_program) ... ok
+test_the_settings_are_written_and_read_back (tests.test_plugins.SettingsTests.test_the_settings_are_written_and_read_back) ... ok
+test_the_switch_of_a_module_is_by_its_kind (tests.test_plugins.SuggestionModuleIdTests.test_the_switch_of_a_module_is_by_its_kind) ... ok
+test_a_module_that_waits_for_a_word_list_is_still_the_chosen_one (tests.test_plugins.UnavailablePluginTests.test_a_module_that_waits_for_a_word_list_is_still_the_chosen_one) ... ok
+test_an_engine_that_cannot_run_is_not_the_active_one (tests.test_plugins.UnavailablePluginTests.test_an_engine_that_cannot_run_is_not_the_active_one) ... ok
+test_a_choice_that_was_not_made_is_not_a_choice_of_none (tests.test_plugins.WithoutPluginTests.test_a_choice_that_was_not_made_is_not_a_choice_of_none) ... ok
+test_a_plugin_can_be_switched_off (tests.test_plugins_ui.SettingsDialogTests.test_a_plugin_can_be_switched_off) ... ok
+test_a_refresh_of_the_screen_does_not_replace_the_plugins (tests.test_plugins_ui.SettingsDialogTests.test_a_refresh_of_the_screen_does_not_replace_the_plugins)
+A plugin that is read again is a new object, and the program ... ok
+test_bundled_offline_language_models_cannot_be_removed (tests.test_plugins_ui.SettingsDialogTests.test_bundled_offline_language_models_cannot_be_removed)
+The full one-click edition must still open after using Settings. ... ok
+test_every_kind_has_a_box_to_choose_the_active_plugin (tests.test_plugins_ui.SettingsDialogTests.test_every_kind_has_a_box_to_choose_the_active_plugin) ... ok
+test_invalid_offline_manifest_does_not_allow_model_deletion (tests.test_plugins_ui.SettingsDialogTests.test_invalid_offline_manifest_does_not_allow_model_deletion) ... ok
+test_kraken_medium_has_its_own_selectable_engine (tests.test_plugins_ui.SettingsDialogTests.test_kraken_medium_has_its_own_selectable_engine)
+The complete offline package must expose its medium model in Settings. ... ok
+test_language_model_download_only_emits_on_explicit_request (tests.test_plugins_ui.SettingsDialogTests.test_language_model_download_only_emits_on_explicit_request) ... ok
+test_lite_edition_can_remove_separately_installed_language_models (tests.test_plugins_ui.SettingsDialogTests.test_lite_edition_can_remove_separately_installed_language_models)
+Lite bundles Kraken only; optional downloaded priors are removable. ... ok
+test_mishkefet_modes_are_explicit_persisted_and_not_globally_applied (tests.test_plugins_ui.SettingsDialogTests.test_mishkefet_modes_are_explicit_persisted_and_not_globally_applied) ... ok
+test_separately_installed_language_models_can_still_be_removed (tests.test_plugins_ui.SettingsDialogTests.test_separately_installed_language_models_can_still_be_removed) ... ok
+test_switching_a_plugin_off_does_not_replace_the_plugins (tests.test_plugins_ui.SettingsDialogTests.test_switching_a_plugin_off_does_not_replace_the_plugins) ... ok
+test_the_active_plugin_of_a_kind_can_be_chosen (tests.test_plugins_ui.SettingsDialogTests.test_the_active_plugin_of_a_kind_can_be_chosen) ... ok
+test_the_choice_of_another_kind_is_not_changed (tests.test_plugins_ui.SettingsDialogTests.test_the_choice_of_another_kind_is_not_changed) ... ok
+test_the_dialog_reports_the_changes (tests.test_plugins_ui.SettingsDialogTests.test_the_dialog_reports_the_changes) ... ok
+test_the_list_shows_the_plugin_that_is_in_force (tests.test_plugins_ui.SettingsDialogTests.test_the_list_shows_the_plugin_that_is_in_force) ... ok
+test_the_plugins_are_shown (tests.test_plugins_ui.SettingsDialogTests.test_the_plugins_are_shown) ... ok
+test_a_module_that_is_switched_off_gives_no_proposals (tests.test_plugins_ui.WindowPluginTests.test_a_module_that_is_switched_off_gives_no_proposals) ... ok
+test_the_choice_of_no_engine_is_kept (tests.test_plugins_ui.WindowPluginTests.test_the_choice_of_no_engine_is_kept) ... ok
+test_the_modules_of_the_window_come_from_the_plugins (tests.test_plugins_ui.WindowPluginTests.test_the_modules_of_the_window_come_from_the_plugins) ... ok
+test_the_window_has_a_button_to_the_settings_of_the_plugins (tests.test_plugins_ui.WindowPluginTests.test_the_window_has_a_button_to_the_settings_of_the_plugins) ... ok
+test_the_window_has_the_plugins (tests.test_plugins_ui.WindowPluginTests.test_the_window_has_the_plugins) ... ok
+test_when_every_module_is_off_there_are_no_modules_at_all (tests.test_plugins_ui.WindowPluginTests.test_when_every_module_is_off_there_are_no_modules_at_all) ... ok
+test_the_first_frame_is_shown_again_after_another_one (tests.test_preview.MultiFrameImageTests.test_the_first_frame_is_shown_again_after_another_one) ... ok
+test_fitting_the_page_keeps_the_size_that_is_shown (tests.test_preview.PreviewPaneTests.test_fitting_the_page_keeps_the_size_that_is_shown)
+The zoom buttons continue from the size the user sees. ... ok
+test_pane_reports_a_broken_document (tests.test_preview.PreviewPaneTests.test_pane_reports_a_broken_document) ... ok
+test_pane_shows_a_page (tests.test_preview.PreviewPaneTests.test_pane_shows_a_page) ... ok
+test_broken_pdf_is_reported (tests.test_preview.PreviewTests.test_broken_pdf_is_reported) ... ok
+test_image_has_one_page (tests.test_preview.PreviewTests.test_image_has_one_page) ... ok
+test_missing_file_is_reported (tests.test_preview.PreviewTests.test_missing_file_is_reported) ... ok
+test_multipage_tiff_has_many_pages (tests.test_preview.PreviewTests.test_multipage_tiff_has_many_pages) ... ok
+test_oversized_file_is_refused (tests.test_preview.PreviewTests.test_oversized_file_is_refused) ... ok
+test_page_number_out_of_range (tests.test_preview.PreviewTests.test_page_number_out_of_range) ... ok
+test_pdf_is_rasterised (tests.test_preview.PreviewTests.test_pdf_is_rasterised) ... ok
+test_unsupported_type_is_reported (tests.test_preview.PreviewTests.test_unsupported_type_is_reported) ... ok
+test_a_document_without_an_original_text_has_none (tests.test_project.OriginalTranscriptionTests.test_a_document_without_an_original_text_has_none) ... ok
+test_the_original_text_is_saved_and_loaded (tests.test_project.OriginalTranscriptionTests.test_the_original_text_is_saved_and_loaded) ... ok
+test_a_correction_with_a_number_that_is_not_a_number_is_refused (tests.test_project.ProjectTests.test_a_correction_with_a_number_that_is_not_a_number_is_refused)
+A file that was written by another program may hold numbers ... ok
+test_add_is_idempotent (tests.test_project.ProjectTests.test_add_is_idempotent) ... ok
+test_newer_schema_is_rejected (tests.test_project.ProjectTests.test_newer_schema_is_rejected) ... ok
+test_remove_and_clear (tests.test_project.ProjectTests.test_remove_and_clear) ... ok
+test_save_and_load_round_trip (tests.test_project.ProjectTests.test_save_and_load_round_trip) ... ok
+test_saved_file_is_utf8_json (tests.test_project.ProjectTests.test_saved_file_is_utf8_json) ... ok
+test_transcription_is_kept_per_document (tests.test_project.ProjectTests.test_transcription_is_kept_per_document) ... ok
+test_existing_release_is_draft_during_asset_replacement (tests.test_release.PublishTheReleaseTests.test_existing_release_is_draft_during_asset_replacement)
+Do not show new checksums beside old executables to users. ... ok
+test_marking_a_release_draft_preserves_its_tag (tests.test_release.PublishTheReleaseTests.test_marking_a_release_draft_preserves_its_tag)
+GitHub can replace an omitted draft tag with an untagged UUID. ... ok
+test_the_draft_flag_is_sent_as_a_boolean (tests.test_release.PublishTheReleaseTests.test_the_draft_flag_is_sent_as_a_boolean)
+The release API wants a boolean and not a text, and it refuses ... ok
+test_the_file_of_the_user_is_not_replaced_with_a_clobber (tests.test_release.PublishTheReleaseTests.test_the_file_of_the_user_is_not_replaced_with_a_clobber)
+`gh release upload --clobber` deletes the file that was ... ok
+test_the_release_is_made_only_when_there_is_none (tests.test_release.PublishTheReleaseTests.test_the_release_is_made_only_when_there_is_none) ... ok
+test_the_step_looks_for_a_release_that_is_already_there (tests.test_release.PublishTheReleaseTests.test_the_step_looks_for_a_release_that_is_already_there)
+A tag that was pushed before the build had made the archive may ... ok
+test_the_step_makes_the_release_when_there_is_none (tests.test_release.PublishTheReleaseTests.test_the_step_makes_the_release_when_there_is_none) ... ok
+test_the_step_writes_the_release_that_is_already_there (tests.test_release.PublishTheReleaseTests.test_the_step_writes_the_release_that_is_already_there)
+Run the step as the runner of GitHub runs it, with a tool of ... ok
+test_the_notes_say_that_nothing_is_uploaded (tests.test_release.ReleaseNotesTests.test_the_notes_say_that_nothing_is_uploaded) ... ok
+test_the_notes_say_what_does_not_work (tests.test_release.ReleaseNotesTests.test_the_notes_say_what_does_not_work) ... ok
+test_the_notes_say_what_the_program_needs_from_the_user (tests.test_release.ReleaseNotesTests.test_the_notes_say_what_the_program_needs_from_the_user) ... ok
+test_a_licence_text_that_arrives_is_kept (tests.test_release.ReleaseTests.test_a_licence_text_that_arrives_is_kept) ... ok
+test_a_licence_text_that_cannot_be_fetched_does_not_stop_the_release (tests.test_release.ReleaseTests.test_a_licence_text_that_cannot_be_fetched_does_not_stop_the_release)
+The texts are in the repository, and the network is only a way ... ok
+test_a_licence_text_that_is_not_the_right_one_is_not_kept (tests.test_release.ReleaseTests.test_a_licence_text_that_is_not_the_right_one_is_not_kept) ... ok
+test_the_archive_holds_the_application_the_licences_and_the_readme (tests.test_release.ReleaseTests.test_the_archive_holds_the_application_the_licences_and_the_readme) ... ok
+test_the_archive_holds_the_licence_of_the_program (tests.test_release.ReleaseTests.test_the_archive_holds_the_licence_of_the_program) ... ok
+test_the_archive_holds_the_recognition_worker (tests.test_release.ReleaseTests.test_the_archive_holds_the_recognition_worker) ... ok
+test_the_digest_of_the_archive_is_reported (tests.test_release.ReleaseTests.test_the_digest_of_the_archive_is_reported) ... ok
+test_the_licence_texts_are_taken_from_the_repository (tests.test_release.ReleaseTests.test_the_licence_texts_are_taken_from_the_repository)
+The release does not need a network for the licence texts. ... ok
+test_the_licence_texts_of_the_packages_are_copied (tests.test_release.ReleaseTests.test_the_licence_texts_of_the_packages_are_copied) ... ok
+test_the_name_of_a_package_is_the_name_of_pep_503 (tests.test_release.ReleaseTests.test_the_name_of_a_package_is_the_name_of_pep_503)
+A run of dashes, underscores and dots is one dash. ... ok
+test_the_notice_names_every_component (tests.test_release.ReleaseTests.test_the_notice_names_every_component) ... ok
+test_the_packages_that_the_worker_needs_are_in_the_release (tests.test_release.ReleaseTests.test_the_packages_that_the_worker_needs_are_in_the_release)
+The worker collects kraken, and kraken needs other packages. ... ok
+test_the_release_holds_the_licence_of_qt_and_of_python (tests.test_release.ReleaseTests.test_the_release_holds_the_licence_of_qt_and_of_python) ... ok
+test_the_release_holds_the_licence_of_the_vendored_code (tests.test_release.ReleaseTests.test_the_release_holds_the_licence_of_the_vendored_code)
+The code of the second engine is inside the program, and its ... ok
+test_the_release_is_not_made_when_a_licence_text_is_missing (tests.test_release.ReleaseTests.test_the_release_is_not_made_when_a_licence_text_is_missing) ... ok
+test_the_release_is_not_made_without_the_licence_of_the_vendored_code (tests.test_release.ReleaseTests.test_the_release_is_not_made_without_the_licence_of_the_vendored_code)
+A program that is given to somebody has to carry the licence ... ok
+test_the_release_without_the_worker_does_not_need_its_licences (tests.test_release.ReleaseTests.test_the_release_without_the_worker_does_not_need_its_licences)
+The worker is not in the release, and the licences of the ... ok
+test_a_tag_makes_the_build (tests.test_release.ReleaseWorkflowTests.test_a_tag_makes_the_build) ... ok
+test_every_archive_has_a_digest_file_of_its_own (tests.test_release.ReleaseWorkflowTests.test_every_archive_has_a_digest_file_of_its_own)
+A digest file that is written with a glob in its name is a ... ok
+test_the_digest_of_the_archive_is_published_with_it (tests.test_release.ReleaseWorkflowTests.test_the_digest_of_the_archive_is_published_with_it) ... ok
+test_the_manifest_of_the_repository_is_the_one_that_is_checked (tests.test_release.ReleaseWorkflowTests.test_the_manifest_of_the_repository_is_the_one_that_is_checked)
+The build writes its own manifest to another place, and the ... ok
+test_the_notes_of_the_release_are_the_notes_of_the_repository (tests.test_release.ReleaseWorkflowTests.test_the_notes_of_the_release_are_the_notes_of_the_repository) ... ok
+test_the_notes_of_the_release_have_the_token_that_they_need (tests.test_release.ReleaseWorkflowTests.test_the_notes_of_the_release_have_the_token_that_they_need) ... ok
+test_the_release_has_the_token_that_it_needs (tests.test_release.ReleaseWorkflowTests.test_the_release_has_the_token_that_it_needs) ... ok
+test_the_release_is_made_for_the_tag_that_was_pushed (tests.test_release.ReleaseWorkflowTests.test_the_release_is_made_for_the_tag_that_was_pushed) ... ok
+test_the_release_is_made_of_the_program_that_was_checked (tests.test_release.ReleaseWorkflowTests.test_the_release_is_made_of_the_program_that_was_checked)
+The archive of the user is the one that was unpacked and started. ... ok
+test_the_release_is_published_only_for_a_tag (tests.test_release.ReleaseWorkflowTests.test_the_release_is_published_only_for_a_tag) ... ok
+test_the_release_may_write_to_the_repository (tests.test_release.ReleaseWorkflowTests.test_the_release_may_write_to_the_repository) ... ok
+test_current_installation_guides_describe_all_models_edition (tests.test_release_version.ReleaseVersionTests.test_current_installation_guides_describe_all_models_edition) ... ok
+test_release_notes_and_download_names_match_app_version (tests.test_release_version.ReleaseVersionTests.test_release_notes_and_download_names_match_app_version) ... ok
+test_every_check_passes (tests.test_selftest.SelfTestTests.test_every_check_passes) ... This plugin does not support propagateSizeHints()
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/pypdfium2/_helpers/textpage.py:80: UserWarning: get_text_range() call with default params will be implicitly redirected to get_text_bounded()
+  warnings.warn("get_text_range() call with default params will be implicitly redirected to get_text_bounded()")
+ok
+test_report_is_written (tests.test_selftest.SelfTestTests.test_report_is_written) ... This plugin does not support propagateSizeHints()
+ok
+test_a_change_of_the_group_that_cannot_be_taken_back_stays_in_the_history (tests.test_suggestions.BatchTests.test_a_change_of_the_group_that_cannot_be_taken_back_stays_in_the_history)
+A change that could not be taken back is still in the text, ... ok
+test_a_change_that_was_accepted_alone_is_not_taken_back_with_the_group (tests.test_suggestions.BatchTests.test_a_change_that_was_accepted_alone_is_not_taken_back_with_the_group) ... ok
+test_several_proposals_are_accepted_as_one_group (tests.test_suggestions.BatchTests.test_several_proposals_are_accepted_as_one_group) ... ok
+test_the_group_is_kept_when_the_project_is_saved (tests.test_suggestions.BatchTests.test_the_group_is_kept_when_the_project_is_saved) ... ok
+test_the_group_is_taken_back_as_one_action (tests.test_suggestions.BatchTests.test_the_group_is_taken_back_as_one_action) ... ok
+test_there_is_no_group_to_take_back_when_nothing_was_accepted (tests.test_suggestions.BatchTests.test_there_is_no_group_to_take_back_when_nothing_was_accepted) ... ok
+test_module_failure_is_visible_while_other_modules_continue (tests.test_suggestions.CheckFailureVisibilityTests.test_module_failure_is_visible_while_other_modules_continue) ... ok
+test_a_change_that_is_not_at_the_start_is_not_made_stale (tests.test_suggestions.ContextOfTheChangesTests.test_a_change_that_is_not_at_the_start_is_not_made_stale)
+The text that was kept begins before the place of the change, ... ok
+test_repeated_skipped_batch_undo_never_weakens_context_guard (tests.test_suggestions.ContextOfTheChangesTests.test_repeated_skipped_batch_undo_never_weakens_context_guard) ... ok
+test_the_proposals_that_do_not_fit_any_more_are_taken_away (tests.test_suggestions.EveryOccurrenceAfterAChangeTests.test_the_proposals_that_do_not_fit_any_more_are_taken_away) ... ok
+test_the_word_is_changed_in_every_place (tests.test_suggestions.EveryOccurrenceAfterAChangeTests.test_the_word_is_changed_in_every_place) ... ok
+test_a_word_that_is_a_part_of_another_word_is_not_changed (tests.test_suggestions.EveryOccurrenceTests.test_a_word_that_is_a_part_of_another_word_is_not_changed) ... ok
+test_the_places_can_be_taken_back_as_one_action (tests.test_suggestions.EveryOccurrenceTests.test_the_places_can_be_taken_back_as_one_action) ... ok
+test_the_word_is_changed_in_every_place (tests.test_suggestions.EveryOccurrenceTests.test_the_word_is_changed_in_every_place) ... ok
+test_a_correct_text_has_no_proposals (tests.test_suggestions.GrammarTests.test_a_correct_text_has_no_proposals) ... ok
+test_a_missing_space_after_a_comma_is_proposed (tests.test_suggestions.GrammarTests.test_a_missing_space_after_a_comma_is_proposed) ... ok
+test_a_space_before_a_closing_quote_is_proposed (tests.test_suggestions.GrammarTests.test_a_space_before_a_closing_quote_is_proposed) ... ok
+test_a_space_before_a_comma_is_proposed (tests.test_suggestions.GrammarTests.test_a_space_before_a_comma_is_proposed) ... ok
+test_an_opening_quote_keeps_the_space_before_it (tests.test_suggestions.GrammarTests.test_an_opening_quote_keeps_the_space_before_it)
+The space before a quote that opens a quotation is correct. ... ok
+test_two_spaces_are_proposed_to_be_one (tests.test_suggestions.GrammarTests.test_two_spaces_are_proposed_to_be_one) ... ok
+test_a_word_that_is_already_there_is_not_written_twice (tests.test_suggestions.KeepWordTests.test_a_word_that_is_already_there_is_not_written_twice) ... ok
+test_the_word_is_added_to_the_list_of_the_user (tests.test_suggestions.KeepWordTests.test_the_word_is_added_to_the_list_of_the_user) ... ok
+test_without_a_list_the_word_is_known_only_in_this_session (tests.test_suggestions.KeepWordTests.test_without_a_list_the_word_is_known_only_in_this_session) ... ok
+test_keeping_an_alternative_stops_the_proposal (tests.test_suggestions.KeptAlternativeTests.test_keeping_an_alternative_stops_the_proposal) ... ok
+test_the_kept_word_is_not_proposed_after_a_restart (tests.test_suggestions.KeptAlternativeTests.test_the_kept_word_is_not_proposed_after_a_restart) ... ok
+test_a_change_that_covers_a_change_that_covers_another (tests.test_suggestions.OverlappingChangesTests.test_a_change_that_covers_a_change_that_covers_another)
+A change that covers a change that covers another one keeps ... ok
+test_a_change_that_is_covered_and_a_change_before_it (tests.test_suggestions.OverlappingChangesTests.test_a_change_that_is_covered_and_a_change_before_it)
+A change that was covered by a later change keeps its place, ... ok
+test_a_change_that_is_covered_is_taken_back (tests.test_suggestions.OverlappingChangesTests.test_a_change_that_is_covered_is_taken_back)
+A correction that was made on the text of another correction ... ok
+test_a_change_that_shrinks_and_a_change_that_follows_it (tests.test_suggestions.OverlappingChangesTests.test_a_change_that_shrinks_and_a_change_that_follows_it)
+A change that makes the text shorter moves the place of the ... ok
+test_a_change_that_was_touched_can_be_taken_back (tests.test_suggestions.OverlappingChangesTests.test_a_change_that_was_touched_can_be_taken_back)
+Two changes that cover the same place: when the second one is ... ok
+test_a_change_to_the_right_does_not_move_a_place (tests.test_suggestions.OverlappingChangesTests.test_a_change_to_the_right_does_not_move_a_place)
+A change that was accepted after a change that is to its ... ok
+test_a_covered_change_and_a_group_that_is_taken_back (tests.test_suggestions.OverlappingChangesTests.test_a_covered_change_and_a_group_that_is_taken_back)
+A change that covers another one is still covering it when ... ok
+test_a_word_between_two_changes_that_grow (tests.test_suggestions.OverlappingChangesTests.test_a_word_between_two_changes_that_grow)
+Two changes, one on each side of a word, move it in two ways, ... ok
+test_a_word_is_changed_after_a_change_to_the_right (tests.test_suggestions.OverlappingChangesTests.test_a_word_is_changed_after_a_change_to_the_right) ... ok
+test_a_word_is_changed_after_two_changes_in_the_same_round (tests.test_suggestions.OverlappingChangesTests.test_a_word_is_changed_after_two_changes_in_the_same_round) ... ok
+test_a_word_is_changed_after_two_changes_to_the_left (tests.test_suggestions.OverlappingChangesTests.test_a_word_is_changed_after_two_changes_to_the_left)
+Two changes to the left of a word move it twice, and the place ... ok
+test_the_place_of_a_word_is_found_after_two_changes (tests.test_suggestions.OverlappingChangesTests.test_the_place_of_a_word_is_found_after_two_changes)
+Two changes that changed the length of the text move the place ... ok
+test_two_proposals_of_the_same_word_are_not_applied_together (tests.test_suggestions.OverlappingChangesTests.test_two_proposals_of_the_same_word_are_not_applied_together)
+Two proposals of the same word would make a word that nobody ... ok
+test_two_proposals_whose_text_is_one_inside_the_other (tests.test_suggestions.OverlappingChangesTests.test_two_proposals_whose_text_is_one_inside_the_other)
+Two proposals of the same text, one of them inside the other, ... ok
+test_a_module_that_breaks_does_not_stop_the_others (tests.test_suggestions.RegistryTests.test_a_module_that_breaks_does_not_stop_the_others) ... ok
+test_a_module_that_is_off_does_not_propose_anything (tests.test_suggestions.RegistryTests.test_a_module_that_is_off_does_not_propose_anything) ... ok
+test_every_kind_is_a_module_of_its_own (tests.test_suggestions.RegistryTests.test_every_kind_is_a_module_of_its_own) ... ok
+test_the_style_module_is_off_when_the_program_starts (tests.test_suggestions.RegistryTests.test_the_style_module_is_off_when_the_program_starts) ... ok
+test_taking_back_the_last_group_does_not_take_back_the_saved_one (tests.test_suggestions.RestoredBatchTests.test_taking_back_the_last_group_does_not_take_back_the_saved_one) ... ok
+test_the_next_group_has_a_number_of_its_own (tests.test_suggestions.RestoredBatchTests.test_the_next_group_has_a_number_of_its_own) ... ok
+test_a_proposal_that_does_not_fit_the_text_is_not_applied (tests.test_suggestions.SessionTests.test_a_proposal_that_does_not_fit_the_text_is_not_applied) ... ok
+test_a_refused_proposal_is_not_applied (tests.test_suggestions.SessionTests.test_a_refused_proposal_is_not_applied) ... ok
+test_accepting_a_proposal_changes_the_text (tests.test_suggestions.SessionTests.test_accepting_a_proposal_changes_the_text) ... ok
+test_the_changes_can_be_undone (tests.test_suggestions.SessionTests.test_the_changes_can_be_undone) ... ok
+test_the_changes_of_a_saved_project_are_taken_back_into_the_session (tests.test_suggestions.SessionTests.test_the_changes_of_a_saved_project_are_taken_back_into_the_session) ... ok
+test_the_corrections_are_taken_back_whatever_the_order_of_acceptance (tests.test_suggestions.SessionTests.test_the_corrections_are_taken_back_whatever_the_order_of_acceptance)
+The place of a correction is kept when another one is accepted. ... ok
+test_the_corrections_that_depend_on_each_other_are_taken_back (tests.test_suggestions.SessionTests.test_the_corrections_that_depend_on_each_other_are_taken_back)
+A correction that was made on the text of another one. ... ok
+test_the_log_of_the_changes_can_be_written_and_read (tests.test_suggestions.SessionTests.test_the_log_of_the_changes_can_be_written_and_read) ... ok
+test_the_places_of_a_new_round_are_not_moved_by_earlier_corrections (tests.test_suggestions.SessionTests.test_the_places_of_a_new_round_are_not_moved_by_earlier_corrections)
+A new round of proposals has the places of the text as it is. ... ok
+test_the_proposals_are_taken_away_when_the_corrections_are_undone (tests.test_suggestions.SessionTests.test_the_proposals_are_taken_away_when_the_corrections_are_undone)
+A proposal of the old places is of no use after the undo. ... ok
+test_the_undo_does_not_change_a_text_that_was_not_corrected (tests.test_suggestions.SessionTests.test_the_undo_does_not_change_a_text_that_was_not_corrected)
+A correction is not taken back in a place that was not corrected. ... ok
+test_the_undo_finds_the_correction_after_a_change_before_it (tests.test_suggestions.SessionTests.test_the_undo_finds_the_correction_after_a_change_before_it)
+The place of a correction is found even when the text moved. ... ok
+test_the_undo_keeps_what_the_user_wrote_after_the_correction (tests.test_suggestions.SessionTests.test_the_undo_keeps_what_the_user_wrote_after_the_correction) ... ok
+test_a_module_without_a_list_cannot_work (tests.test_suggestions.SpellingTests.test_a_module_without_a_list_cannot_work) ... ok
+test_a_short_word_is_not_proposed (tests.test_suggestions.SpellingTests.test_a_short_word_is_not_proposed) ... ok
+test_a_word_that_is_in_the_list_is_not_proposed (tests.test_suggestions.SpellingTests.test_a_word_that_is_in_the_list_is_not_proposed) ... ok
+test_a_word_that_is_not_in_the_list_is_proposed (tests.test_suggestions.SpellingTests.test_a_word_that_is_not_in_the_list_is_proposed) ... ok
+test_every_spelling_of_a_word_can_be_proposed (tests.test_suggestions.SpellingTests.test_every_spelling_of_a_word_can_be_proposed) ... ok
+test_the_alternatives_of_a_word_are_kept (tests.test_suggestions.SpellingTests.test_the_alternatives_of_a_word_are_kept) ... ok
+test_the_licence_of_the_list_is_found_next_to_it (tests.test_suggestions.SpellingTests.test_the_licence_of_the_list_is_found_next_to_it) ... ok
+test_the_other_spelling_of_a_word_is_proposed_with_a_replacement (tests.test_suggestions.SpellingTests.test_the_other_spelling_of_a_word_is_proposed_with_a_replacement)
+The spellings of a word that are separated by a slash are known. ... ok
+test_the_preferred_spelling_of_a_word_is_not_proposed (tests.test_suggestions.SpellingTests.test_the_preferred_spelling_of_a_word_is_not_proposed) ... ok
+test_the_rules_that_will_be_here_are_written_down (tests.test_suggestions.StyleTests.test_the_rules_that_will_be_here_are_written_down) ... ok
+test_the_style_module_is_not_implemented_and_says_so (tests.test_suggestions.StyleTests.test_the_style_module_is_not_implemented_and_says_so) ... ok
+test_the_change_that_stayed_can_still_be_taken_back (tests.test_suggestions.UndoBatchContextTests.test_the_change_that_stayed_can_still_be_taken_back) ... ok
+test_a_word_is_added_to_a_file_that_does_not_end_with_a_line (tests.test_suggestions.WordListWithoutANewlineTests.test_a_word_is_added_to_a_file_that_does_not_end_with_a_line) ... ok
+test_the_file_of_the_user_is_read_again_the_right_way (tests.test_suggestions.WordListWithoutANewlineTests.test_the_file_of_the_user_is_read_again_the_right_way) ... ok
+test_choosing_a_wording_does_not_change_anything (tests.test_suggestions_ui.AlternativeTests.test_choosing_a_wording_does_not_change_anything) ... ok
+test_the_button_accepts_the_proposal_when_no_was_chosen (tests.test_suggestions_ui.AlternativeTests.test_the_button_accepts_the_proposal_when_no_was_chosen) ... ok
+test_the_original_proposal_is_not_waiting_after_an_alternative (tests.test_suggestions_ui.AlternativeTests.test_the_original_proposal_is_not_waiting_after_an_alternative) ... ok
+test_a_plugin_that_failed_is_not_called_any_more (tests.test_suggestions_ui.BrokenPluginTests.test_a_plugin_that_failed_is_not_called_any_more)
+The window refreshes its modules when the setting was refused. ... ok
+test_all_the_proposals_are_accepted_at_once (tests.test_suggestions_ui.BulkActionsTests.test_all_the_proposals_are_accepted_at_once) ... ok
+test_all_the_proposals_are_refused_at_once (tests.test_suggestions_ui.BulkActionsTests.test_all_the_proposals_are_refused_at_once) ... ok
+test_ocr_lock_blocks_programmatic_corrections (tests.test_suggestions_ui.BulkActionsTests.test_ocr_lock_blocks_programmatic_corrections) ... ok
+test_restore_original_discards_old_correction_history (tests.test_suggestions_ui.BulkActionsTests.test_restore_original_discards_old_correction_history) ... ok
+test_the_last_group_is_taken_back_as_one_action (tests.test_suggestions_ui.BulkActionsTests.test_the_last_group_is_taken_back_as_one_action) ... ok
+test_the_proposals_that_were_marked_are_accepted (tests.test_suggestions_ui.BulkActionsTests.test_the_proposals_that_were_marked_are_accepted) ... ok
+test_the_proposals_that_were_marked_are_refused (tests.test_suggestions_ui.BulkActionsTests.test_the_proposals_that_were_marked_are_refused) ... ok
+test_the_text_goes_back_to_what_the_recognition_gave (tests.test_suggestions_ui.BulkActionsTests.test_the_text_goes_back_to_what_the_recognition_gave) ... ok
+test_the_wording_of_the_proposal_is_kept_when_nothing_is_chosen (tests.test_suggestions_ui.ChosenWordingTests.test_the_wording_of_the_proposal_is_kept_when_nothing_is_chosen) ... ok
+test_the_wording_that_is_chosen_is_used (tests.test_suggestions_ui.ChosenWordingTests.test_the_wording_that_is_chosen_is_used) ... ok
+test_the_document_is_not_marked_after_going_back_to_the_recognition (tests.test_suggestions_ui.ManualEditTests.test_the_document_is_not_marked_after_going_back_to_the_recognition)
+After going back to the text of the recognition there is ... ok
+test_the_document_remembers_that_the_user_wrote_in_it (tests.test_suggestions_ui.ManualEditTests.test_the_document_remembers_that_the_user_wrote_in_it) ... ok
+test_the_project_keeps_what_the_user_wrote (tests.test_suggestions_ui.ManualEditTests.test_the_project_keeps_what_the_user_wrote) ... ok
+test_the_question_is_asked_after_the_proposals_were_checked (tests.test_suggestions_ui.ManualEditTests.test_the_question_is_asked_after_the_proposals_were_checked) ... ok
+test_the_proposal_itself_is_refused (tests.test_suggestions_ui.RefusedChosenWordingTests.test_the_proposal_itself_is_refused)
+The proposal has to leave the list of the proposals that are ... ok
+test_the_proposal_leaves_the_list_of_the_session (tests.test_suggestions_ui.RefusedChosenWordingTests.test_the_proposal_leaves_the_list_of_the_session) ... ok
+test_the_pane_asks_to_undo (tests.test_suggestions_ui.SuggestionsPaneTests.test_the_pane_asks_to_undo) ... ok
+test_the_pane_says_when_there_are_no_proposals (tests.test_suggestions_ui.SuggestionsPaneTests.test_the_pane_says_when_there_are_no_proposals) ... ok
+test_the_pane_shows_the_proposals (tests.test_suggestions_ui.SuggestionsPaneTests.test_the_pane_shows_the_proposals) ... ok
+test_the_user_is_told_when_a_change_could_not_be_taken_back (tests.test_suggestions_ui.UndoReportTests.test_the_user_is_told_when_a_change_could_not_be_taken_back) ... ok
+test_a_proposal_is_not_applied_when_the_text_was_changed_after_the_check (tests.test_suggestions_ui.WindowSuggestionsTests.test_a_proposal_is_not_applied_when_the_text_was_changed_after_the_check)
+What the user wrote after the check is not thrown away. ... ok
+test_accepting_a_proposal_changes_the_text_and_is_logged (tests.test_suggestions_ui.WindowSuggestionsTests.test_accepting_a_proposal_changes_the_text_and_is_logged) ... ok
+test_checking_the_text_shows_the_proposals (tests.test_suggestions_ui.WindowSuggestionsTests.test_checking_the_text_shows_the_proposals) ... ok
+test_refusing_a_proposal_leaves_the_text_alone (tests.test_suggestions_ui.WindowSuggestionsTests.test_refusing_a_proposal_leaves_the_text_alone) ... ok
+test_the_accepted_changes_come_back_when_the_project_is_opened (tests.test_suggestions_ui.WindowSuggestionsTests.test_the_accepted_changes_come_back_when_the_project_is_opened) ... ok
+test_the_changes_can_be_undone (tests.test_suggestions_ui.WindowSuggestionsTests.test_the_changes_can_be_undone) ... ok
+test_the_other_documents_stop_proposing_a_word_that_was_kept (tests.test_suggestions_ui.WindowSuggestionsTests.test_the_other_documents_stop_proposing_a_word_that_was_kept)
+The word is in the word list of the user, and every document ... ok
+test_the_proposals_are_cleared_when_the_word_list_changes (tests.test_suggestions_ui.WindowSuggestionsTests.test_the_proposals_are_cleared_when_the_word_list_changes)
+The proposals of the old word list are not offered any more. ... ok
+test_the_proposals_of_one_document_are_not_offered_for_another (tests.test_suggestions_ui.WindowSuggestionsTests.test_the_proposals_of_one_document_are_not_offered_for_another)
+The proposals belong to the document they were made for. ... ok
+test_the_spell_checker_needs_a_word_list (tests.test_suggestions_ui.WindowSuggestionsTests.test_the_spell_checker_needs_a_word_list) ... ok
+test_the_undo_is_still_there_after_a_new_check (tests.test_suggestions_ui.WindowSuggestionsTests.test_the_undo_is_still_there_after_a_new_check) ... ok
+test_a_word_that_the_user_keeps_is_not_proposed_any_more (tests.test_suggestions_ui.WordActionsTests.test_a_word_that_the_user_keeps_is_not_proposed_any_more) ... ok
+test_the_places_can_be_taken_back_as_one_action (tests.test_suggestions_ui.WordActionsTests.test_the_places_can_be_taken_back_as_one_action) ... ok
+test_the_word_is_changed_in_every_place_it_appears (tests.test_suggestions_ui.WordActionsTests.test_the_word_is_changed_in_every_place_it_appears) ... ok
+test_a_cancelled_task_is_not_a_failure (tests.test_tasks.TaskThreadTests.test_a_cancelled_task_is_not_a_failure)
+A task the user stopped is not an error. ... ok
+test_a_committed_install_wins_over_a_late_cancel_request (tests.test_tasks.TaskThreadTests.test_a_committed_install_wins_over_a_late_cancel_request) ... ok
+test_a_finished_task_reports_its_result (tests.test_tasks.TaskThreadTests.test_a_finished_task_reports_its_result) ... ok
+test_a_task_that_fails_reports_the_reason (tests.test_tasks.TaskThreadTests.test_a_task_that_fails_reports_the_reason) ... ok
+test_the_task_says_that_it_was_cancelled (tests.test_tasks.TaskThreadTests.test_the_task_says_that_it_was_cancelled) ... ok
+test_a_model_that_is_not_there_is_named_and_nothing_is_measured (tests.test_tools.SmokeTestTests.test_a_model_that_is_not_there_is_named_and_nothing_is_measured) ... ok
+test_smoke_failure_and_empty_reading_exit_status (tests.test_tools.SmokeTestTests.test_smoke_failure_and_empty_reading_exit_status) ... ok
+test_the_page_of_the_project_is_read_by_the_tool (tests.test_tools.SmokeTestTests.test_the_page_of_the_project_is_read_by_the_tool) ... ok
+test_every_tool_starts_and_asks_for_help (tests.test_tools.ToolTests.test_every_tool_starts_and_asks_for_help) ... ok
+test_assisted_apply_cannot_modify_the_recognizing_document (tests.test_window.DocumentTextTests.test_assisted_apply_cannot_modify_the_recognizing_document) ... ok
+test_assisted_output_is_reviewed_and_never_auto_applied (tests.test_window.DocumentTextTests.test_assisted_output_is_reviewed_and_never_auto_applied) ... ok
+test_failed_suggestion_check_is_visible_and_keeps_raw_text (tests.test_window.DocumentTextTests.test_failed_suggestion_check_is_visible_and_keeps_raw_text) ... ok
+test_only_the_document_being_recognized_is_read_only (tests.test_window.DocumentTextTests.test_only_the_document_being_recognized_is_read_only) ... ok
+test_opening_another_project_forgets_the_old_one (tests.test_window.DocumentTextTests.test_opening_another_project_forgets_the_old_one)
+The proposals of one project are not offered in another. ... ok
+test_removing_a_document_clears_the_editor (tests.test_window.DocumentTextTests.test_removing_a_document_clears_the_editor) ... ok
+test_removing_another_document_keeps_the_text_of_the_shown_one (tests.test_window.DocumentTextTests.test_removing_another_document_keeps_the_text_of_the_shown_one)
+The text of the shown document is not lost when another one goes. ... ok
+test_reviewed_text_can_be_saved_as_utf8 (tests.test_window.DocumentTextTests.test_reviewed_text_can_be_saved_as_utf8) ... ok
+test_the_list_shows_the_document_that_is_in_the_editor (tests.test_window.DocumentTextTests.test_the_list_shows_the_document_that_is_in_the_editor)
+After a removal the list and the editor show the same document. ... ok
+test_the_recognition_clears_the_corrections_of_the_old_text (tests.test_window.DocumentTextTests.test_the_recognition_clears_the_corrections_of_the_old_text)
+The corrections of the old text do not belong to the new text. ... ok
+test_the_result_of_the_recognition_stays_with_its_document (tests.test_window.DocumentTextTests.test_the_result_of_the_recognition_stays_with_its_document)
+A recognition that finishes after the user moved on is safe. ... ok
+test_the_text_comes_back_when_the_document_is_chosen_again (tests.test_window.DocumentTextTests.test_the_text_comes_back_when_the_document_is_chosen_again) ... ok
+test_the_text_of_a_document_is_kept_when_another_one_is_chosen (tests.test_window.DocumentTextTests.test_the_text_of_a_document_is_kept_when_another_one_is_chosen) ... ok
+test_a_file_that_is_not_there_is_written_without_a_question (tests.test_window.ExportOverwriteTests.test_a_file_that_is_not_there_is_written_without_a_question) ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-axk_wrli'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_a_file_that_is_there_is_not_replaced_without_a_question (tests.test_window.ExportOverwriteTests.test_a_file_that_is_there_is_not_replaced_without_a_question) ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-7b4y6zae'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_the_file_that_is_written_is_the_one_that_was_asked_about (tests.test_window.ExportOverwriteTests.test_the_file_that_is_written_is_the_one_that_was_asked_about)
+The name of the file changes after the dialog was closed, and ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-7fae7u1x'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_pdf_save_action_really_writes_a_readable_pdf (tests.test_window.ExportToPdfTests.test_pdf_save_action_really_writes_a_readable_pdf) ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-3lbo_1uj'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_printer_uses_qt6_a4_and_fifteen_mm_margins (tests.test_window.ExportToPdfTests.test_printer_uses_qt6_a4_and_fifteen_mm_margins) ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-ske_nkx0'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_the_user_is_asked_before_a_pdf_that_is_there_is_replaced (tests.test_window.ExportToPdfTests.test_the_user_is_asked_before_a_pdf_that_is_there_is_replaced) ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-l_ugb_df'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_the_recognition_keeps_the_text_it_gave (tests.test_window.OriginalTextTests.test_the_recognition_keeps_the_text_it_gave) ... ok
+test_the_text_can_go_back_to_what_the_recognition_gave (tests.test_window.OriginalTextTests.test_the_text_can_go_back_to_what_the_recognition_gave) ... ok
+test_the_user_is_asked_before_the_text_he_wrote_is_thrown_away (tests.test_window.OriginalTextTests.test_the_user_is_asked_before_the_text_he_wrote_is_thrown_away)
+Going back to the original text takes away what was typed. ... ok
+test_there_is_nothing_to_go_back_to_before_the_recognition (tests.test_window.OriginalTextTests.test_there_is_nothing_to_go_back_to_before_the_recognition) ... ok
+test_the_editor_is_closed_while_the_recognition_runs (tests.test_window.TheEditorDuringTheRecognitionTests.test_the_editor_is_closed_while_the_recognition_runs) ... ok
+test_nothing_is_asked_when_the_work_was_saved (tests.test_window.UnsavedWorkTests.test_nothing_is_asked_when_the_work_was_saved)
+The text is in a project file, and there is nothing to lose. ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-abz5ymy_'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_the_result_of_the_recognition_is_work_that_was_not_saved (tests.test_window.UnsavedWorkTests.test_the_result_of_the_recognition_is_work_that_was_not_saved)
+The program puts the text of the recognition in the editor, ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-urwqvyu2'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_the_text_without_a_document_is_not_in_the_project (tests.test_window.UnsavedWorkTests.test_the_text_without_a_document_is_not_in_the_project)
+The text that the user typed without choosing a document is ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-9b33i2ad'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_the_user_is_asked_before_the_window_is_closed (tests.test_window.UnsavedWorkTests.test_the_user_is_asked_before_the_window_is_closed)
+The text of the user is not in a project file, and the ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-o6xo7tyn'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_the_window_stays_open_when_the_user_refuses (tests.test_window.UnsavedWorkTests.test_the_window_stays_open_when_the_user_refuses) ... This plugin does not support propagateSizeHints()
+ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-kndaia89'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_the_work_is_not_asked_about_when_the_window_is_empty (tests.test_window.UnsavedWorkTests.test_the_work_is_not_asked_about_when_the_window_is_empty) ... ok
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/tempfile.py:940: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/hebrew-workbench-home-pdyuv48s'>
+  _warnings.warn(warn_message, ResourceWarning)
+test_baseline_reproduces_original_collection_recipe (tests.test_worker_packaging.WorkerPackagingTests.test_baseline_reproduces_original_collection_recipe) ... ok
+test_build_timeout_fails_without_starting_a_real_packager (tests.test_worker_packaging.WorkerPackagingTests.test_build_timeout_fails_without_starting_a_real_packager) ... ok
+test_empty_output_fallback_or_network_attempts_fail_checks (tests.test_worker_packaging.WorkerPackagingTests.test_empty_output_fallback_or_network_attempts_fail_checks) ... ok
+test_independent_worker_installs_the_desktop_pdf_runtime (tests.test_worker_packaging.WorkerPackagingTests.test_independent_worker_installs_the_desktop_pdf_runtime) ... ok
+test_inference_keeps_segmentation_data_and_dynamic_model_metadata (tests.test_worker_packaging.WorkerPackagingTests.test_inference_keeps_segmentation_data_and_dynamic_model_metadata) ... ok
+test_inventory_counts_actual_bundle_files (tests.test_worker_packaging.WorkerPackagingTests.test_inventory_counts_actual_bundle_files) ... ok
+test_matrix_covers_all_models_profiles_and_both_input_types (tests.test_worker_packaging.WorkerPackagingTests.test_matrix_covers_all_models_profiles_and_both_input_types) ... ok
+test_missing_offline_segmentation_model_prevents_build (tests.test_worker_packaging.WorkerPackagingTests.test_missing_offline_segmentation_model_prevents_build) ... ok
+test_offline_guard_blocks_outbound_lookup_and_connect_without_reaching_network (tests.test_worker_packaging.WorkerPackagingTests.test_offline_guard_blocks_outbound_lookup_and_connect_without_reaching_network) ... ok
+test_only_separate_video_plugin_is_deleted (tests.test_worker_packaging.WorkerPackagingTests.test_only_separate_video_plugin_is_deleted) ... ok
+test_release_waits_for_all_validation_jobs (tests.test_worker_packaging.WorkerPackagingTests.test_release_waits_for_all_validation_jobs) ... ok
+test_unpacked_application_failure_cannot_be_masked_by_worker_success (tests.test_worker_packaging.WorkerPackagingTests.test_unpacked_application_failure_cannot_be_masked_by_worker_success) ... ok
+
+----------------------------------------------------------------------
+Ran 520 tests in 8.759s
+
+OK
+{
+  "ok": true,
+  "python": "3.12.15 (main, Oct  1 2026, 02:35:59) [GCC 13.3.0]",
+  "results": [
+    {
+      "name": "environment",
+      "ok": true,
+      "detail": "python 3.12.15 on Linux-7.0.0-1017-azure-x86_64-with-glibc2.39"
+    },
+    {
+      "name": "core-imports",
+      "ok": true,
+      "detail": "all core modules import cleanly"
+    },
+    {
+      "name": "engine-contract",
+      "ok": true,
+      "detail": "the engine contract fails closed"
+    },
+    {
+      "name": "preview",
+      "ok": true,
+      "detail": "images and PDF pages preview correctly"
+    },
+    {
+      "name": "plugins",
+      "ok": true,
+      "detail": "plugins are installed and loaded"
+    },
+    {
+      "name": "gui-startup",
+      "ok": true,
+      "detail": "main window created with title 'Hebrew Notes Workbench 0.4.0'"
+    },
+    {
+      "name": "document-output",
+      "ok": true,
+      "detail": "synthetic fixture: project/raw text, TXT, RTL DOCX and rendered PDF; physical printer output is not tested"
+    }
+  ]
+}
+[PASS] environment: python 3.12.15 on Linux-7.0.0-1017-azure-x86_64-with-glibc2.39
+[PASS] core-imports: all core modules import cleanly
+[PASS] engine-contract: the engine contract fails closed
+[PASS] preview: images and PDF pages preview correctly
+[PASS] plugins: plugins are installed and loaded
+[PASS] gui-startup: main window created with title 'Hebrew Notes Workbench 0.4.0'
+[PASS] document-output: synthetic fixture: project/raw text, TXT, RTL DOCX and rendered PDF; physical printer output is not tested
