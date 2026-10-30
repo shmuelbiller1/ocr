@@ -1,0 +1,10 @@
+{
+  "project": "https://github.com/roni5604/hebrew-words-db",
+  "commit": "879f0f46f687015b97a02469dd745c824c0e8589",
+  "file": "data/words.txt",
+  "url": "https://api.github.com/repos/roni5604/hebrew-words-db/git/blobs/5545d281d987db95bb81efad800e6ee705e9bb14",
+  "encoding": "raw-github-blob",
+  "size": 2670751,
+  "sha256": "30a01c45da1381637da708d74af81c0f1b4ad225d9a3a85252683217fe107be3",
+  "license": "CC0-1.0 (upstream statement; AI-assisted compilation, provenance not independently audited)"
+}

@@ -24,7 +24,10 @@ TEMPLATE = ROOT / 'optional_plugins/hunspell_hebrew'
 def fetch(name, pin, cache):
     path = cache / name
     if not path.exists():
-        request = urllib.request.Request(pin['url'], headers={'User-Agent': 'HebrewNotesWorkbench-builder'})
+        headers = {'User-Agent': 'HebrewNotesWorkbench-builder'}
+        if pin.get('encoding') == 'raw-github-blob':
+            headers['Accept'] = 'application/vnd.github.raw+json'
+        request = urllib.request.Request(pin['url'], headers=headers)
         with urllib.request.urlopen(request, timeout=60) as response:
             data = response.read(16 * 1024 * 1024 + 1)
         if len(data) > 16 * 1024 * 1024:

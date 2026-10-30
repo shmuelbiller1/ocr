@@ -170,3 +170,17 @@ The core editions still contain no Hebrew dictionary. AGPL is **not a blanket
 ban on redistribution**; compliance and the actual combination matter. Existing
 release assets and model licensing are unchanged. Hspell 1.4's pre-2017 spelling
 standard is an explicit quality limitation, not a modern Hebrew certification.
+
+## Optional modern Hebrew spelling supplement
+
+`modern-hebrew-spelling` adds the exact `data/words.txt` from
+[hebrew-words-db](https://github.com/roni5604/hebrew-words-db) commit
+`879f0f46f687015b97a02469dd745c824c0e8589`, SHA-256
+`30a01c45da1381637da708d74af81c0f1b4ad225d9a3a85252683217fe107be3`,
+2,670,751 bytes, to the Hspell/Hunspell plugin. Upstream states CC0-1.0 for
+its AI-assisted data; its license text and source methodology are included
+in the plugin. This declaration/provenance is not independently audited.
+The list is not independently certified; using it as a whitelist may accept
+misspellings. Hspell remains AGPL-3.0-only and Hunspell LGPL/GPL/MPL, with
+all original notices and corresponding source supplied as before. The
+supplement does not override those licenses. See the modern plugin guide.

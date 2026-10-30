@@ -250,3 +250,12 @@ verification report. It uses pinned Hunspell 1.7.6 plus Hspell 1.4 data; Hspell
 not a proven best modern-school checker. Every change remains accept/reject.
 Personal vocabulary is stored outside the plugin; raw OCR is untouched.
 See [installation, licensing and limitations](optional_plugins/hunspell_hebrew/README.md).
+
+### Experimental modern Hebrew spelling supplement
+
+A second optional plugin adds a pinned, AI-assisted modern Hebrew word list as
+an acceptance-only supplement to Hspell. It avoids flags on selected 2017
+Academy examples but can also miss errors, and its suggestions still come from
+Hspell. It is not included in the existing releases and is not a certified
+modern spell-checker. Compare it with the original plugin and review each
+suggestion. See [the modern plugin guide](optional_plugins/modern_hebrew/README.md).

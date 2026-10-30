@@ -145,3 +145,21 @@ in current release downloads. Hspell 1.4 follows pre-June-2017 orthography;
 modern-school quality remains unverified. See
 [the plugin guide](../optional_plugins/hunspell_hebrew/README.md) for the AGPL
 source offer, install/remove steps, limits and build recipe.
+
+## Experimental modern-spelling supplement
+
+A second **optional** plugin, `modern-hebrew-spelling`, keeps the original
+Hspell/Hunspell engine and adds a pinned AI-assisted CC0 word list for exact
+acceptance only. It does not replace the unmodified `hunspell-hebrew` plugin,
+and neither plugin is included in the published v0.4.0 downloads. The modern
+list suppresses flags, so it can also suppress real errors if the list contains
+incorrect words. Suggestions still come from Hspell's old dictionary. Review
+and accept each one explicitly; the raw OCR baseline never changes.
+
+In one small developer smoke comparison of 16 examples from the Hebrew
+Academy's 2017 spelling update, original Hspell flagged seven and the modern
+supplement flagged none. Seven deliberately misspelled examples were flagged
+by both; five prefixed examples were accepted by both. This is **not** an
+independent or representative accuracy benchmark and does not establish
+modern-school performance. See the [plugin guide](../optional_plugins/modern_hebrew/README.md)
+for provenance, size, risks, installation and native Windows verification.

@@ -99,3 +99,14 @@ modern-school spelling gate: upstream Hspell 1.4 uses pre-June-2017 rules, and
 school/Aramaic/Yiddish vocabulary still needs checking. Frozen Windows plugin
 installation and native smoke checks are required in CI. The curated smoke
 fixtures are not an independent accuracy benchmark. See the plugin guide.
+
+## Follow-up: modern Hebrew spell-check candidate
+
+A second separately installed candidate supplements Hspell 1.4 with exact
+forms from a pinned AI-assisted CC0 word list. On 16 Academy 2017 examples,
+7 Hspell-only flags became 0; on seven selected obvious typo examples both
+flagged all seven. This narrow smoke test is not independent school-corpus
+validation. The list may accept incorrect forms, and no modern correction
+ranking or full Academy compliance is claimed. Baseline Hspell remains
+selectable, suggestions require acceptance, and released v0.4.0 is unchanged.
+See `optional_plugins/modern_hebrew/README.md`.
