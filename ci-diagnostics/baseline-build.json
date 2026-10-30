@@ -1,0 +1,7 @@
+{
+  "profile": "baseline",
+  "kraken_version": "7.1.1",
+  "excluded_modules": [],
+  "explicitly_removed_files": [],
+  "worker_bytes": 849988638
+}
