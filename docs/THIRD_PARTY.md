@@ -20,6 +20,7 @@ SHA-256 checksum that is verified before the file is used.
 | pypdfium2 | 4.30.0 | BSD-3-Clause / Apache-2.0 | PyPI (`pypdfium2`) | Rasterising PDF pages (PDFium, Apache-2.0/BSD-3) |
 | python-docx | 1.2.0 | MIT | PyPI (`python-docx`) | Writing the DOCX file |
 | lxml | 6.0.2 | BSD-3-Clause | PyPI (`lxml`) | Reading the corpus and the manifests |
+| hebrew-words-db (`hebrew_words_cc0.txt.gz`) | commit `879f0f46` | CC0-1.0 (Public Domain Dedication) | github.com/roni5604/hebrew-words-db | Bundled offline Hebrew spelling word list (196,227 words; compressed SHA-256 `49e44e39…05aa23c7d7eb`, uncompressed SHA-256 `30a01c45…107be3`); licence text in `docs/licences/CC0-1.0.txt` and `LICENCES/CC0-1.0.txt` |
 | PyInstaller | 6.16.0 | GPL-2.0-or-later **with a bundling exception** | PyPI (`pyinstaller`) | Build-time only; the exception permits shipping the result under any license |
 
 ## Bundled in the worker of the recognition
@@ -47,16 +48,12 @@ page are shipped with the program, unchanged, under
 
 | Component | Version | License | Source | Notes |
 | --- | --- | --- | --- | --- |
-| heb-ocr (`hebocr`) | 0.1.0 | MIT, Copyright (c) 2026 Itay Inbar | github.com/itayinbarr/heb-ocr | The line recognition and the page segmentation of the second engine; the text of the licence is in `docs/licences/HEB-OCR-MIT.txt` |
+| heb-ocr (`hebocr`) | 0.1.0 + project patches | MIT, Copyright (c) 2026 Itay Inbar | github.com/itayinbarr/heb-ocr (with segmentation algorithms adapted from MIT-licensed `barakplasma/mishkefet-app`) | Line recognition, wide-range deskew, quadratic curved-baseline straightening, density-gated line splitting, and single-pass TTA logit reuse; licence in `docs/licences/HEB-OCR-MIT.txt` |
 
-The copied code was not changed at all.  The parts of the project that
-build a training set, that fine-tune a model and that build a language
-model were **not** copied: the program never trains anything, and the text
-of a recognition is never changed by a language model.  The file of the
-model is loaded with the code of its author, which is a `pickle`; the file
-is safe to load because its SHA-256 is checked against the digest that
-this project pinned before it is read, and a file that does not match is
-deleted and is never used.
+The training and fine-tuning scripts of `heb-ocr` were **not** copied: the
+program never trains anything, and raw recognition text is never silently
+overwritten by a language model.  The checkpoint file is loaded after pinned
+SHA-256 verification; a file that does not match is deleted and never used.
 
 `PySide6-Essentials` is used instead of the full `PySide6` package on
 purpose: the Essentials package contains only modules that are available
@@ -142,8 +139,9 @@ on every launch; it then reuses the verified versioned application cache.
 
 | Material | License | Where it is used |
 | --- | --- | --- |
-| Pinkas corpus (handwritten Hebrew) | CC-BY-4.0 | Accuracy measurement of the handwriting engine, see `docs/OCR_ACCURACY.md` |
-| ivrit.ai Hebrew handwriting benchmark | ivrit.ai licence (gated) | The public benchmark of Hebrew handwriting; the model of the second engine was measured on it by its author, and the program does not download it |
+| Modern Hebrew Cursive Manuscripts (6 pages: Rachel Bluwstein, N. H. Imber, H. N. Bialik via Wikimedia Commons / `HeOCR/hash`) | PDM-1.0 (Public Domain Mark 1.0) | Verified modern cursive benchmark in `benchmark/modern_cursive/`, see `docs/OCR_ACCURACY.md` |
+| Pinkas corpus (handwritten Hebrew) | CC-BY-4.0 | Diagnostic historical handwriting benchmark, see `docs/OCR_ACCURACY.md` |
+| ivrit.ai Hebrew handwriting benchmark | ivrit.ai licence (gated) | External published benchmark; the program does not download it |
 
 Sample pages that are distributed with the application must carry the
 attribution of their original authors in `docs/SAMPLES.md`.

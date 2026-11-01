@@ -41,6 +41,23 @@ The tools that build the corpus and that measure the engines on it are ready: se
 
 <!-- RESULTS:END -->
 
+## Verified modern Hebrew cursive benchmark (`benchmark/modern_cursive`)
+
+While `benchmark/modern_school` awaits consented school notebook pages, the
+repository includes six real, independently human-verified public-domain
+(`PDM-1.0`) 20th-century modern Hebrew cursive manuscript pages in
+`benchmark/modern_cursive/` (three hands across graph paper, aged lined paper,
+cross-outs, and faint scans: Rachel Bluwstein, N. H. Imber, and H. N. Bialik,
+62 reference lines total; GPT-4o unverified pages excluded).
+
+<!-- CURSIVE:BEGIN -->
+
+Measured in CI (`ocr-engine` job, `ocr-accuracy-cursive.json`) across raw
+Kraken PP-OCRv6 (`small` / `medium`, CTC-masked to Hebrew + ASCII punctuation)
+and Mishkefet-v1 (`raw`, `beam`, and `assisted` in the All Models edition).
+
+<!-- CURSIVE:END -->
+
 ### What is measured, and what is not
 
 * The measurement is of the **raw recognition** of the engine.  No

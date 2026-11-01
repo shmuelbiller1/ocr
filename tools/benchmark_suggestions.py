@@ -444,6 +444,25 @@ def main(argv: list[str] | None = None) -> int:
                 ocr_cases,
             ),
         }
+        by_engine: dict[str, dict] = {}
+        engine_names = sorted({c.id.split(":", 1)[0] for c in ocr_cases})
+        for eng_name in engine_names:
+            eng_cases = [c for c in ocr_cases if c.id.startswith(eng_name + ":")]
+            by_engine[eng_name] = {
+                "spelling_only": evaluate_cases(
+                    _build_registry(enable_spelling=True, enable_grammar=False),
+                    eng_cases,
+                ),
+                "grammar_only": evaluate_cases(
+                    _build_registry(enable_spelling=False, enable_grammar=True),
+                    eng_cases,
+                ),
+                "spelling_and_grammar": evaluate_cases(
+                    _build_registry(enable_spelling=True, enable_grammar=True),
+                    eng_cases,
+                ),
+            }
+        payload["post_ocr_by_engine"] = by_engine
 
     args.output.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"

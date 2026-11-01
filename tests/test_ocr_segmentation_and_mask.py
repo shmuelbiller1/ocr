@@ -150,5 +150,65 @@ class MarginSpeckleAndKrakenMaskTests(unittest.TestCase):
         self.assertEqual(res[0][0][0], 2)
 
 
+def _has_torch() -> bool:
+    try:
+        import torch  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+@unittest.skipUnless(_has_torch() and _has_cv2_numpy(), "torch/numpy required")
+class MishkefetLogitCacheTests(unittest.TestCase):
+    def test_recognizer_reuses_scale_1_logits_between_read_and_read_tta(self) -> None:
+        import torch
+        from PIL import Image
+        from hebrew_workbench.engine.vendor.hebocr.charset import Charset
+        from hebrew_workbench.engine.vendor.hebocr.recognize import Recognizer
+
+        rec = Recognizer.__new__(Recognizer)
+        rec.charset = Charset(chars=["א", "ב", " "])
+        rec.device = torch.device("cpu")
+        rec.lm = None
+        rec.lm_weight = 0.4
+        rec.beam_width = 0
+        rec.length_bonus = 0.6
+        rec.tta = 3
+        rec.word_lm = None
+        rec.word_weight = 0.0
+        rec._last_logit_cache = None
+
+        forward_calls = []
+
+        class FakeModel:
+            def __call__(self, x):
+                forward_calls.append(tuple(x.shape))
+                b = x.shape[0]
+                t = max(2, x.shape[-1] // 16)
+                out = torch.full((b, t, 4), -8.0)
+                out[:, 0, 1] = -0.01  # 'א'
+                out[:, 1:, 0] = -0.01  # blank
+                return out
+
+            def output_lengths(self, widths):
+                return torch.clamp(widths // 16, min=2)
+
+        rec.model = FakeModel()
+        crops = [Image.new("RGB", (128, 32), "white"), Image.new("RGB", (160, 32), "white")]
+
+        raw_texts, raw_confs = rec.read(crops, return_confidence=True)
+        self.assertEqual(len(forward_calls), 1)
+        self.assertEqual(raw_texts, ["א", "א"])
+        self.assertEqual(len(raw_confs), 2)
+
+        # Switching to beam + 3-scale TTA reuses scale=1.0 logits and only
+        # evaluates the two resized scales (0.82 and 1.22), totaling 3 calls
+        # instead of 4.
+        rec.beam_width = 4
+        tta_texts = rec.read_tta(crops)
+        self.assertEqual(tta_texts, ["א", "א"])
+        self.assertEqual(len(forward_calls), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

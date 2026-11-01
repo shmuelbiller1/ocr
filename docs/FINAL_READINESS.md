@@ -28,8 +28,9 @@ in-process adapter is not evidence that the worker/model is missing.
 | Kraken medium recognition weights | Install explicitly | Included | Install explicitly |
 | Mishkefet recognition weights | Install explicitly; noncommercial | Included; noncommercial | Install explicitly; noncommercial |
 | Mishkefet character and word decoding priors | Install explicitly; noncommercial | Both included; noncommercial | Install explicitly; noncommercial |
-| Hebrew spelling dictionary | Not bundled | Not bundled | Not bundled |
-| Full Hebrew grammar / scholarly-style model | Not implemented | Not implemented | Not implemented |
+| Offline Hebrew spelling (`spelling-hebrew`, CC0-1.0 lexicon + OCR ranker + personal dictionary) | Included | Included | Included |
+| Offline Hebrew grammar (`grammar-hebrew`, deterministic morphosyntax + punctuation rules) | Included | Included | Included |
+| Scholarly style (`style-leshon-ha-sefer`) | Disabled placeholder frame | Disabled placeholder frame | Disabled placeholder frame |
 
 There are **five model files**, not five independent recognition engines:
 `small.safetensors`, `medium.safetensors`, `mishkefet-v1.pt`, `hebrew_char6.pkl`,
