@@ -1,0 +1,100 @@
+{
+  "name": "Public-Domain Modern Cursive Hebrew Manuscripts (HeOCR/hash PDM-1.0)",
+  "description": "Six public-domain (PDM-1.0) handwritten cursive Hebrew manuscript pages (1892-1930) by Rachel Bluwstein, H. N. Bialik, and N. H. Imber, with independently reviewed public-domain transcripts from Wikisource / HeOCR/hash. Includes graph-ruled notebook paper, wide-spaced short notes, faint low-DPI ink, and authorial cross-outs. Distinct from contemporary school notebooks (kept in benchmark/modern_school pending school consent), and distinct from early-modern 1500-1800 Pinkas records.",
+  "target": "modern_cursive",
+  "license": "PDM-1.0 (images and texts in the public domain; HeOCR/hash metadata CC0-1.0)",
+  "citation": "Wikimedia Commons PDM-1.0 scans; Wikisource Hebrew editions; HeOCR/hash index (https://github.com/HeOCR/hash, CC0-1.0).",
+  "url": "https://github.com/HeOCR/hash",
+  "pages": [
+    {
+      "image": "pages/commons__begani_netatikha__p0001.jpg",
+      "transcript": "transcripts/commons__begani_netatikha__p0001.txt",
+      "writer": "Rachel Bluwstein",
+      "date": "1930",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/6/6e/BeGani_Netatikha.jpg",
+      "transcript_source_url": "https://he.wikisource.org/wiki/%D7%91%D7%92%D7%A0%D7%99_%D7%A0%D7%98%D7%A2%D7%AA%D7%99%D7%9A_(%D7%A8%D7%97%D7%9C)",
+      "image_license": "PDM-1.0",
+      "transcript_license": "PD-old-70",
+      "notes": "Modern Hebrew cursive ink manuscript (1930) on unruled paper; verbatim public-domain diplomatic/Wikisource transcript from HeOCR/hash."
+    },
+    {
+      "image": "pages/commons__bialik_el_hazippor__p0001.jpg",
+      "transcript": "transcripts/commons__bialik_el_hazippor__p0001.txt",
+      "writer": "Hayyim Nahman Bialik",
+      "date": "1892",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/9/9a/El_hazippor.jpg",
+      "transcript_source_url": "https://he.wikisource.org/wiki/%D7%90%D7%9C%20%D7%94%D7%A6%D7%99%D7%A4%D7%95%D7%A8%20%28%D7%91%D7%99%D7%90%D7%9C%D7%99%D7%A7%29",
+      "image_license": "PDM-1.0",
+      "transcript_license": "PD-old-70",
+      "notes": "4-line wide-spaced cursive ink manuscript (1892) with vocalization marks; tests pitch estimation on short notes with wide line spacing (>15% page height)."
+    },
+    {
+      "image": "pages/commons__hatikvah_imber_manuscript__p0001.jpg",
+      "transcript": "transcripts/commons__hatikvah_imber_manuscript__p0001.txt",
+      "writer": "Naftali Herz Imber",
+      "date": "1907/1908",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/5/59/Hatikvah.jpg",
+      "transcript_source_url": "https://he.wikisource.org/wiki/%D7%AA%D7%A7%D7%95%D7%95%D7%AA%D7%A0%D7%95",
+      "image_license": "PDM-1.0",
+      "transcript_license": "PD-old-100",
+      "notes": "Autograph Hebrew cursive stanza, chorus, and author signature (1907-1908) on unruled paper."
+    },
+    {
+      "image": "pages/commons__rachel_aqara_1928__p0001.jpg",
+      "transcript": "transcripts/commons__rachel_aqara_1928__p0001.txt",
+      "writer": "Rachel Bluwstein",
+      "date": "1928",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/a/ad/Rachel%27s_handwritten_1928_poem_%E2%80%9CAqara%E2%80%9D.jpg",
+      "transcript_source_url": "https://he.wikisource.org/wiki/%D7%A2%D7%A7%D7%A8%D7%94%20%28%D7%A8%D7%97%D7%9C%29",
+      "image_license": "PDM-1.0",
+      "transcript_license": "PD-old-70",
+      "notes": "1928 cursive draft containing authorial strike-throughs and interlinear revisions; upstream reference carries the final intended reading, providing a realistic lower-bound stress test for crossed-out draft lines."
+    },
+    {
+      "image": "pages/commons__rachel_gan_naul__p0001.jpg",
+      "transcript": "transcripts/commons__rachel_gan_naul__p0001.txt",
+      "writer": "Rachel Bluwstein",
+      "date": "1929",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/4/47/Gan_Naul_-_Rachel_IMG_3496.JPG",
+      "transcript_source_url": "https://he.wikisource.org/wiki/%D7%92%D7%9F%20%D7%A0%D7%A2%D7%95%D7%9C%20%28%D7%A8%D7%97%D7%9C%29",
+      "image_license": "PDM-1.0",
+      "transcript_license": "PD-old-70",
+      "notes": "High-resolution photograph (3456x5184 EXIF-oriented) on graph-ruled notebook paper (נייר משובץ) with archival shelfmark top-left and Gnazim stamp bottom-right."
+    },
+    {
+      "image": "pages/commons__rachel_rak_al_atzmi__p0001.jpg",
+      "transcript": "transcripts/commons__rachel_rak_al_atzmi__p0001.txt",
+      "writer": "Rachel Bluwstein",
+      "date": "1930",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/b/b0/Rak_al_atzmi.jpg",
+      "transcript_source_url": "https://he.wikisource.org/wiki/%D7%A8%D7%A7%20%D7%A2%D7%9C%20%D7%A2%D7%A6%D7%9E%D7%99%20%28%D7%A8%D7%97%D7%9C%29",
+      "image_license": "PDM-1.0",
+      "transcript_license": "PD-old-70",
+      "notes": "Low-resolution scan (370x550) of thin/faint cursive strokes on aged notebook paper; tests thin-stroke binarization without morphological stroke erasure."
+    }
+  ]
+}
