@@ -673,30 +673,32 @@ def resolve_engines(
     engines = []
     warnings = []
     for identifier in model_ids:
-        artifact = MODEL_ARTIFACTS.get(identifier)
+        base_id, _, inline_mode = identifier.partition(":")
+        eff_mode = inline_mode or decoding_mode
+        artifact = MODEL_ARTIFACTS.get(base_id)
         if artifact is None:
             warnings.append(f"the model {identifier} is not known to the program")
             continue
         model_path = models_folder / artifact.filename
         if not model_path.is_file():
             warnings.append(
-                f"the model {identifier} is not installed ({model_path}), "
+                f"the model {base_id} is not installed ({model_path}), "
                 "it was not measured"
             )
             continue
         label = (
-            identifier
-            if artifact.engine != "mishkefet" or decoding_mode == "raw"
-            else f"{identifier}:{decoding_mode}"
+            base_id
+            if artifact.engine != "mishkefet" or eff_mode == "raw"
+            else f"{base_id}:{eff_mode}"
         )
         engines.append(
             (
                 _engine_for(
                     artifact,
                     model_path,
-                    identifier,
+                    base_id,
                     timeout,
-                    decoding_mode=decoding_mode,
+                    decoding_mode=eff_mode,
                 ),
                 label,
             )

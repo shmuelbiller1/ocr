@@ -88,12 +88,12 @@ VALID_PREFIXES: tuple[str, ...] = (
 
 # Handwritten & optical Hebrew character confusions, weighted by empirical frequency.
 PRIMARY_OCR_CONFUSIONS: dict[str, tuple[tuple[str, float], ...]] = {
-    "ד": (("ר", 0.32), ("ך", 0.36), ("ז", 0.45)),
+    "ד": (("ר", 0.32), ("ך", 0.36), ("ב", 0.40), ("ז", 0.45)),
     "ר": (("ד", 0.32), ("ך", 0.36), ("ו", 0.44)),
     "ו": (("י", 0.30), ("ז", 0.36), ("ן", 0.36), ("ר", 0.44), ("נ", 0.46)),
     "י": (("ו", 0.30), ("ז", 0.38), ("ן", 0.40), ("נ", 0.48)),
-    "ז": (("ו", 0.36), ("י", 0.38), ("ד", 0.45), ("ג", 0.48)),
-    "ב": (("כ", 0.32), ("פ", 0.46), ("נ", 0.48)),
+    "ז": (("ו", 0.36), ("י", 0.38), ("צ", 0.42), ("ד", 0.45), ("ג", 0.48)),
+    "ב": (("כ", 0.32), ("ד", 0.40), ("ג", 0.40), ("פ", 0.46), ("נ", 0.48)),
     "כ": (("ב", 0.32), ("ל", 0.44), ("פ", 0.46), ("ק", 0.48)),
     "ה": (("ח", 0.34), ("ת", 0.36), ("ק", 0.48)),
     "ח": (("ה", 0.34), ("ת", 0.34), ("מ", 0.46)),
@@ -103,16 +103,16 @@ PRIMARY_OCR_CONFUSIONS: dict[str, tuple[tuple[str, float], ...]] = {
     "מ": (("ם", 0.24), ("ס", 0.42), ("ט", 0.42), ("ת", 0.45), ("ח", 0.46)),
     "ט": (("מ", 0.42), ("ס", 0.44), ("ש", 0.48)),
     "נ": (("ג", 0.38), ("ו", 0.44), ("י", 0.46), ("ן", 0.24), ("ב", 0.48)),
-    "ג": (("נ", 0.38), ("ז", 0.46)),
+    "ג": (("נ", 0.38), ("ב", 0.40), ("ק", 0.42), ("ז", 0.46)),
     "ן": (("ו", 0.28), ("י", 0.32), ("נ", 0.24), ("ך", 0.42)),
     "ך": (("ד", 0.32), ("ר", 0.32), ("כ", 0.24), ("ן", 0.42)),
     "ף": (("פ", 0.24), ("ך", 0.45)),
     "פ": (("ף", 0.24), ("ב", 0.46), ("כ", 0.46)),
     "ץ": (("צ", 0.24), ("ע", 0.46)),
-    "צ": (("ע", 0.38), ("ץ", 0.24)),
+    "צ": (("ע", 0.38), ("ץ", 0.24), ("ז", 0.42)),
     "ע": (("צ", 0.38), ("ש", 0.48), ("א", 0.48)),
     "ל": (("כ", 0.44), ("ק", 0.48)),
-    "ק": (("ה", 0.46), ("כ", 0.48), ("ר", 0.48)),
+    "ק": (("ג", 0.42), ("ה", 0.46), ("כ", 0.48), ("ר", 0.48)),
     "ש": (("ט", 0.48), ("ע", 0.48)),
     "א": (("ע", 0.48), ("צ", 0.50)),
 }
@@ -169,6 +169,20 @@ SUPPLEMENT_WORDS: frozenset[str] = frozenset(
         "לקוטי",
         "ליקוטי",
         "אדמור",
+        "אלקים",
+        "הקבה",
+        "כתיב",
+        "קאמר",
+        "מתני",
+        "נפקמ",
+        "לכאורה",
+        "דלמא",
+        "אלמא",
+        "איפכא",
+        "מסתברא",
+        "שפיר",
+        "הלכתא",
+        "בעלמא",
         # Ketiv chaser / unpointed vocalized forms
         "לעתים",
         "אמתי",
@@ -375,12 +389,37 @@ class HebrewLexicon:
             return True
         return False
 
+    _PLURAL_POSSESSIVE_SUFFIXES = (
+        "ותיך",
+        "ותיו",
+        "ותיה",
+        "ותינו",
+        "ותיכם",
+        "ותיכן",
+        "ותיהם",
+        "ותיהן",
+    )
+
+    def _is_stem_known(
+        self,
+        stem: str,
+        extra_words: set[str] | frozenset[str] = frozenset(),
+    ) -> bool:
+        if stem in self.words or stem in extra_words:
+            return True
+        for suf in self._PLURAL_POSSESSIVE_SUFFIXES:
+            if stem.endswith(suf) and len(stem) >= len(suf) + 3:
+                plural_base = stem[: -len(suf)] + "ות"
+                if plural_base in self.words:
+                    return True
+        return False
+
     def _is_known_pure(
         self,
         word: str,
         extra_words: set[str] | frozenset[str] = frozenset(),
     ) -> bool:
-        if word in self.words or word in extra_words:
+        if self._is_stem_known(word, extra_words):
             return True
         for prefix in VALID_PREFIXES:
             if not word.startswith(prefix):
@@ -388,12 +427,12 @@ class HebrewLexicon:
             stem = word[len(prefix) :]
             if len(stem) < 3:
                 continue
-            if stem in self.words or stem in extra_words:
+            if self._is_stem_known(stem, extra_words):
                 return True
             # Consonantal vav/yod doubling after prefix (וועד -> ועד, יישוב -> ישוב)
-            if stem.startswith("וו") and len(stem) >= 4 and stem[1:] in self.words:
+            if stem.startswith("וו") and len(stem) >= 4 and self._is_stem_known(stem[1:], extra_words):
                 return True
-            if stem.startswith("יי") and len(stem) >= 4 and stem[1:] in self.words:
+            if stem.startswith("יי") and len(stem) >= 4 and self._is_stem_known(stem[1:], extra_words):
                 return True
         return False
 
