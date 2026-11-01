@@ -225,12 +225,14 @@ class SpellingModule(SuggestionModule):
         if path:
             try:
                 self.set_dictionary(path)
+                return
             except (OSError, ValueError):
                 self._path = None
                 self._words = {}
                 self._bundled = False
                 self._lexicon = None
-            return
+                if not opts.get("bundled"):
+                    return
         if opts.get("bundled"):
             personal = opts.get("personal_dictionary")
             self.use_bundled_lexicon(personal)
@@ -280,6 +282,10 @@ class SpellingModule(SuggestionModule):
             if end < len(text) and (text[end].isascii() and text[end].isalnum()):
                 continue
             word = m.group(0)
+            trimmed = word.rstrip('"״')
+            if trimmed and '"' not in trimmed and "״" not in trimmed:
+                end -= len(word) - len(trimmed)
+                word = trimmed
             if lexicon.is_known(word, self._personal):
                 continue
 

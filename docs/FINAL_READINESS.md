@@ -4,8 +4,9 @@
 
 **A usable OCR release is not the same as the whole original project being
 finished.** The All Models download contains all supported recognition models
-and decoding priors. It does not supply a complete spelling dictionary, a
-Hebrew grammar engine or implemented לשון הספר rules.
+and decoding priors, and all editions now include the bundled CC0-1.0 Hebrew
+spelling lexicon and deterministic Hebrew grammar rules; implemented לשון הספר
+rules and consented modern school benchmark pages remain open.
 
 This audit identified a real v0.4.0 defect: the printer factory called Qt 5
 page-size/margin APIs on Qt 6. Printing, print preview and PDF saving share
@@ -62,11 +63,13 @@ fix is not a verified Windows fix until the updated packaged checks pass.
 
 ## Remaining gates before calling the entire original scope final
 
-1. **Spelling:** supply a reviewed, redistribution-compatible Hebrew word list
-   and test its handling of school vocabulary, names and abbreviations. The
-   current adapter works with a user's list; it is not a supplied full lexicon.
-2. **Grammar:** implement and validate the desired language-level rules or an
-   approved offline model. The existing four rules cover punctuation/spacing.
+1. **Spelling:** validate the bundled CC0-1.0 Hebrew lexicon (`hebrew-words-db`)
+   against consented school classroom notebooks (abbreviations, names, and
+   subject terminology) once `benchmark/modern_school` is populated.
+2. **Grammar:** validate the expanded deterministic Hebrew grammar rules
+   (1sg future `א-` prefix, construct definite article, numeral & demonstrative
+   gender agreement, accidental duplications, and spacing) on school drafts and
+   document remaining syntactic limitations without installing unverified LLMs.
 3. **לשון הספר:** obtain the user's approved guide and examples; implement
    independently tested accept/reject proposals. Do not turn on the current
    placeholder or treat its unverified planned examples as authoritative rules.

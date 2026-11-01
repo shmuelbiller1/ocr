@@ -158,7 +158,7 @@ def _has_torch() -> bool:
         return False
 
 
-@unittest.skipUnless(_has_torch() and _has_cv2_numpy(), "torch/numpy required")
+@unittest.skipUnless(_has_torch() and _HAS_WORKER_VISION, "torch/numpy/opencv required")
 class MishkefetLogitCacheTests(unittest.TestCase):
     def test_recognizer_reuses_scale_1_logits_between_read_and_read_tta(self) -> None:
         import torch

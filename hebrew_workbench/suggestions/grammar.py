@@ -476,18 +476,52 @@ FEM_PLURAL_NOUNS: frozenset[str] = frozenset(
 )
 
 
+_NUMERAL_PAIR_RE = re.compile(r"(?<![א-ת])([א-ת]{2,10}) +([א-ת]{2,10})(?![א-ת])")
+_PREV_HEB_WORD_RE = re.compile(r"([א-ת]+)\s+$")
+_TEEN_UNITS: frozenset[str] = frozenset(
+    {
+        "אחד",
+        "אחת",
+        "שניים",
+        "שנים",
+        "שתיים",
+        "שתים",
+        "שלושה",
+        "שלוש",
+        "ארבעה",
+        "ארבע",
+        "חמישה",
+        "חמשה",
+        "חמש",
+        "שישה",
+        "ששה",
+        "שש",
+        "שבעה",
+        "שבע",
+        "שמונה",
+        "תשעה",
+        "תשע",
+    }
+)
+
+
 def numeral_gender_agreement(text: str) -> list[Suggestion]:
     """Check 3-10 numeral gender agreement before unambiguous plural nouns."""
     proposals: list[Suggestion] = []
     idx = 0
     while idx < len(text):
-        match = _TWO_WORD_HEB_RE.search(text, idx)
+        match = _NUMERAL_PAIR_RE.search(text, idx)
         if match is None:
             break
         raw_num = strip_nikud(match.group(1))
-        prefix = "ו" if raw_num.startswith("ו") and raw_num[1:] in (*FEM_NUM_TO_MASC, *MASC_NUM_TO_FEM) else ""
+        prefix = "\u05d5" if raw_num.startswith("\u05d5") and raw_num[1:] in (*FEM_NUM_TO_MASC, *MASC_NUM_TO_FEM) else ""
         num = raw_num[len(prefix):]
         noun = strip_nikud(match.group(2))
+        if num in ("עשר", "עשרה"):
+            prev = _PREV_HEB_WORD_RE.search(text, 0, match.start(1))
+            if prev and strip_nikud(prev.group(1)).lstrip("\u05d5") in _TEEN_UNITS:
+                idx = match.start(2)
+                continue
         if num in FEM_NUM_TO_MASC and noun in MASC_PLURAL_NOUNS:
             proposals.append(
                 _proposal(

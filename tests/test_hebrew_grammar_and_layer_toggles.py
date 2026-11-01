@@ -37,19 +37,23 @@ class HebrewGrammarRulesTests(unittest.TestCase):
 
     def test_numeral_gender_agreement_flags_clear_polarity_mismatches(self) -> None:
         proposals = self.grammar.check(
-            "בכיתה יש שלושה בנות, חמש ילדים ועשרה דקות להפסקה."
+            "בכיתה יש שלושה בנות, חמש ילדים, שש ימים ועשרה דקות להפסקה."
         )
         self.assertEqual(
             [(p.original, p.replacement) for p in proposals],
             [
                 ("שלושה", "שלוש"),
                 ("חמש", "חמישה"),
+                ("שש", "שישה"),
                 ("ועשרה", "ועשר"),
             ],
         )
 
-    def test_numeral_gender_agreement_skips_valid_forms_and_unpointed_shmone(self) -> None:
-        clean = "בכיתה יש שלוש בנות, חמישה ילדים, שמונה בנות ושמונה ילדים."
+    def test_numeral_gender_agreement_skips_valid_forms_teens_and_unpointed_shmone(self) -> None:
+        clean = (
+            "בכיתה יש שלוש בנות, חמישה ילדים, שמונה בנות ושמונה ילדים, "
+            "שלושה עשר ימים, שלוש עשרה שנים וחמש עשרה דקות."
+        )
         self.assertEqual(self.grammar.check(clean), [])
 
     def test_demonstrative_agreement_flags_masculine_feminine_mismatch(self) -> None:
@@ -187,6 +191,29 @@ class LayerIndependenceUITests(unittest.TestCase):
             second.close()
             second.deleteLater()
             self.app.processEvents()
+
+    def test_disabling_layer_on_another_document_invalidates_cached_sessions(self) -> None:
+        from pathlib import Path
+        from PIL import Image
+
+        page2 = Path(self.home.name) / "page2.png"
+        Image.new("RGB", (60, 30), "white").save(page2)
+        self.window.project.add(page2)
+        self.window._sync_document_list()
+
+        # Document 0 has spelling proposals
+        self.window.doc_list.setCurrentRow(0)
+        self.window.editor.setPlainText("התלמיריס בכיתה.")
+        self.window.check_suggestions()
+        self.assertEqual(len(self.window.suggestions.pending()), 1)
+
+        # Switch to Document 1 (no proposals) and disable spelling
+        self.window.doc_list.setCurrentRow(1)
+        self.window.suggestions_pane.spelling_toggle.setChecked(False)
+
+        # Returning to Document 0 must not show stale spelling proposals
+        self.window.doc_list.setCurrentRow(0)
+        self.assertEqual(self.window.suggestions.pending(), [])
 
 
 if __name__ == "__main__":

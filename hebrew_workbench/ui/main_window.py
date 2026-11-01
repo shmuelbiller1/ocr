@@ -1126,7 +1126,10 @@ class MainWindow(QMainWindow):
     def set_suggestion_layer_enabled(self, kind: str, enabled: bool) -> None:
         """Independently switch spelling, grammar, or style proposals on/off."""
         enabled = bool(enabled)
-        had_proposals = bool(self.suggestions.suggestions)
+        had_current_proposals = bool(self.suggestions.suggestions)
+        had_any_proposals = had_current_proposals or any(
+            bool(session.suggestions) for session in self._sessions.values()
+        )
         plugins_of_kind = self.plugins.by_kind(kind)
         if plugins_of_kind:
             if enabled:
@@ -1147,13 +1150,17 @@ class MainWindow(QMainWindow):
             self.suggestion_modules.set_enabled(kind, enabled)
             self._sync_layer_toggles()
 
-        if had_proposals:
+        if had_any_proposals:
             self._clear_the_proposals()
-            if self._shown_entry is not None and any(
+        if (
+            had_current_proposals
+            and self._shown_entry is not None
+            and any(
                 self.suggestion_modules.is_enabled(k)
                 for k in ("spelling", "grammar", "style")
-            ):
-                self.check_suggestions()
+            )
+        ):
+            self.check_suggestions()
 
     def save_text(self) -> None:
         content = self.editor.toPlainText()

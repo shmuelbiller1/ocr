@@ -43,7 +43,7 @@ archive.  The release is not made when one of them is missing.
 
 The engine *Mishkefet-v1* is written in Python by Itay Inbar and
 published under the MIT licence.  The parts of that code that recognise a
-page are shipped with the program, unchanged, under
+page are shipped with the program under
 `hebrew_workbench/engine/vendor/hebocr/`:
 
 | Component | Version | License | Source | Notes |
@@ -164,7 +164,8 @@ attribution of their original authors in `docs/SAMPLES.md`.
 - Build dependencies: CMake 3.31.6 and a local C++ compiler; not app runtime
   dependencies. No externally supplied spelling executables are downloaded.
 
-The core editions still contain no Hebrew dictionary. AGPL is **not a blanket
+The core editions bundle the permissive CC0-1.0 `hebrew-words-db` word list
+rather than the AGPL Hspell dictionary. AGPL is **not a blanket
 ban on redistribution**; compliance and the actual combination matter. Existing
 release assets and model licensing are unchanged. Hspell 1.4's pre-2017 spelling
 standard is an explicit quality limitation, not a modern Hebrew certification.

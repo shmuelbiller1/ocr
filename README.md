@@ -87,14 +87,17 @@ the engine, but they are not what the program is made for.
 
 ### What is not there yet
 
-* **A dictionary of Hebrew spelling.**  The program does not ship one:
-  the core spelling module uses a user word list. An optional native
-  Hunspell/Hspell plugin is now available to build separately; it is
-  experimental, AGPL-licensed and uses pre-2017 spelling rules. AGPL
-  redistribution requires compliance, not a blanket prohibition. See
-  [the plugin guide](optional_plugins/hunspell_hebrew/README.md).
-* **A grammar engine.**  The grammar module has a few punctuation and
-  spacing rules.  It is not a grammar checker.
+* **Full morphological Hunspell affix analysis in the core bundle.**  The core
+  application bundles a permissive CC0-1.0 Hebrew lexicon (`hebrew_words_cc0.txt.gz`,
+  196,227 words) with conservative prefix/suffix checks and OCR-error ranking;
+  an optional native Hunspell/Hspell plugin is also available to build
+  separately (experimental, AGPL-licensed, pre-2017 spelling rules; see
+  [the plugin guide](optional_plugins/hunspell_hebrew/README.md)).
+* **Full syntactic/neural Hebrew grammar parsing.**  The built-in `grammar-hebrew`
+  module implements high-precision deterministic rules (1st-person future `א-`
+  prefix, construct definite article, numeral & demonstrative gender agreement,
+  accidental duplications, and spacing) rather than unconstrained sentence
+  rewriting.
 * **לשון הספר.**  The module is a frame, it is switched off, and it
   proposes nothing.  See `docs/SUGGESTIONS.md`.
 * **Automatic correction.**  Nothing in the program changes the text of

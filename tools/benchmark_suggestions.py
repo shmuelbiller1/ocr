@@ -60,6 +60,7 @@ class BenchmarkCase:
     category: str
     noisy: str
     reference: str
+    engine: str = ""
 
 
 DEFAULT_SUITE: tuple[BenchmarkCase, ...] = (
@@ -225,36 +226,37 @@ def evaluate_cases(
                 case_false += 1
                 continue
 
-            # Count at most one target error per gold span (never double-count!).
+            # Claim all overlapping gold spans covered by this single proposal
+            # (e.g. "הבית ספר" -> "בית הספר" resolves two character-diff spans
+            # in one phrase-level suggestion, without double-counting).
             unclaimed = [idx for idx in overlapping_gold if idx not in matched_gold]
             if not unclaimed:
                 continue
-            g_idx = unclaimed[0]
-            matched_gold.add(g_idx)
-            detected_errors += 1
+            n_claimed = len(unclaimed)
+            for g_i in unclaimed:
+                matched_gold.add(g_i)
+            detected_errors += n_claimed
 
-            # Check whether top-1 or any ranked alternative reconstructs the
-            # local reference slice cleanly.
+            # Check whether top-1 or any ranked alternative reconstructs all
+            # covered gold edits cleanly across the union slice.
             primary = bucket[0]
-            all_replacements: list[str] = []
-            for s in bucket:
-                for cand in (s.replacement, *s.alternatives):
-                    if cand and cand not in all_replacements:
-                        all_replacements.append(cand)
-
-            g_start, g_end, g_target = gold_spans[g_idx]
-            union_start = min(p_start, g_start)
-            union_end = max(p_end, g_end)
-            expected_slice = (
-                case.noisy[union_start:g_start]
-                + g_target
-                + case.noisy[g_end:union_end]
+            covered_spans = sorted(
+                (gold_spans[g_i] for g_i in overlapping_gold), key=lambda x: x[0]
             )
 
             def _reconstructs(cand_text: str, s_obj: Suggestion) -> bool:
-                u_s = min(s_obj.start, g_start)
-                u_e = max(s_obj.end, g_end)
-                exp = case.noisy[u_s:g_start] + g_target + case.noisy[g_end:u_e]
+                u_s = min(s_obj.start, covered_spans[0][0])
+                u_e = max(s_obj.end, covered_spans[-1][1])
+                parts: list[str] = []
+                cursor = u_s
+                for gs, ge, gt in covered_spans:
+                    if gs > cursor:
+                        parts.append(case.noisy[cursor:gs])
+                    parts.append(gt)
+                    cursor = ge
+                if cursor < u_e:
+                    parts.append(case.noisy[cursor:u_e])
+                exp = "".join(parts)
                 got = (
                     case.noisy[u_s : s_obj.start]
                     + cand_text
@@ -263,16 +265,16 @@ def evaluate_cases(
                 return normalise(got) == normalise(exp)
 
             if primary.replacement and _reconstructs(primary.replacement, primary):
-                correct_top1 += 1
-                case_top1 += 1
+                correct_top1 += n_claimed
+                case_top1 += n_claimed
             if any(
                 _reconstructs(cand, s)
                 for s in bucket
                 for cand in ((s.replacement,) + tuple(s.alternatives))
                 if cand
             ):
-                correct_any_rank += 1
-                case_any += 1
+                correct_any_rank += n_claimed
+                case_any += n_claimed
 
         # Apply non-empty top-1 proposals via SuggestionSession to measure
         # unwanted text changes and net CER/WER delta.
@@ -379,15 +381,21 @@ def evaluate_ocr_report(report_path: Path, corpus_folder: Path) -> list[Benchmar
         model = engine_entry.get("model") or engine_entry.get("engine", "ocr")
         for item in engine_entry.get("results", []):
             page_name = item.get("page", "")
-            hyp = item.get("hypothesis_text") or item.get("hypothesis_sample", "")
+            has_hyp = "hypothesis_text" in item or "hypothesis_sample" in item
+            hyp = (
+                item["hypothesis_text"]
+                if "hypothesis_text" in item
+                else item.get("hypothesis_sample", "")
+            )
             ref = ref_by_name.get(page_name, "")
-            if hyp and ref:
+            if has_hyp and ref:
                 cases.append(
                     BenchmarkCase(
-                        id=f"{model}:{page_name}",
+                        id=f"{model}::{page_name}",
                         category="post_ocr",
                         noisy=hyp,
                         reference=ref,
+                        engine=model,
                     )
                 )
     return cases
@@ -445,9 +453,11 @@ def main(argv: list[str] | None = None) -> int:
             ),
         }
         by_engine: dict[str, dict] = {}
-        engine_names = sorted({c.id.split(":", 1)[0] for c in ocr_cases})
+        engine_names = sorted({c.engine or c.id.split("::", 1)[0] for c in ocr_cases})
         for eng_name in engine_names:
-            eng_cases = [c for c in ocr_cases if c.id.startswith(eng_name + ":")]
+            eng_cases = [
+                c for c in ocr_cases if (c.engine or c.id.split("::", 1)[0]) == eng_name
+            ]
             by_engine[eng_name] = {
                 "spelling_only": evaluate_cases(
                     _build_registry(enable_spelling=True, enable_grammar=False),

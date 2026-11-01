@@ -367,8 +367,10 @@ class HebrewLexicon:
             if len(cleaned) >= 3 and cleaned[0] in "גזצדתח" and cleaned[1] in ("'", "׳"):
                 return True
 
-        if not all("א" <= c <= "ת" for c in cleaned):
+        core = cleaned.rstrip('"״')
+        if not core or not all("א" <= c <= "ת" for c in core):
             return True
+        cleaned = core
 
         # Words with misplaced medial/final letter forms are NEVER valid Hebrew
         if self._has_final_form_violation(cleaned):

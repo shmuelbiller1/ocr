@@ -71,6 +71,25 @@ class OfflineHebrewSpellingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             HebrewLexicon.load_bundled(bad_gz)
 
+    def test_misspelling_before_closing_quote_keeps_quote_outside_span(self) -> None:
+        sample = 'הוא אמר "התלמיריס".'
+        proposals = self.module.check(sample)
+        self.assertEqual(len(proposals), 1)
+        self.assertEqual(proposals[0].original, "התלמיריס")
+        self.assertEqual(proposals[0].replacement, "התלמידים")
+        self.assertEqual(sample[proposals[0].start : proposals[0].end], "התלמיריס")
+
+    def test_missing_custom_dictionary_falls_back_to_bundled_lexicon(self) -> None:
+        mod = SpellingModule(
+            {
+                "bundled": True,
+                "dictionary": str(Path(self.temp.name) / "missing.dic"),
+                "personal_dictionary": str(self.personal),
+            }
+        )
+        self.assertTrue(mod.available())
+        self.assertEqual(mod.check("התלמיריס")[0].replacement, "התלמידים")
+
 
 if __name__ == "__main__":
     unittest.main()
