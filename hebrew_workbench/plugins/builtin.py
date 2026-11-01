@@ -108,13 +108,16 @@ BUILTIN_MANIFESTS: tuple[PluginManifest, ...] = (
     ),
     PluginManifest(
         id="grammar-hebrew",
-        name="בדיקת ניסוח עברית",
-        version="1.0.0",
+        name="בדיקת דקדוק וניסוח עברית",
+        version="2.0.0",
         kind=KIND_GRAMMAR,
         entry="hebrew_workbench.suggestions.grammar:GrammarModule",
         license="MIT",
         license_url="https://opensource.org/license/mit",
-        description="פסיקים ורווחים: הצעות, ולא שינויים.",
+        description=(
+            "בדיקת דקדוק ופיסוק עברית לא-מקוונת (אותיות אית״ן, סמיכות, שם המספר, "
+            "כינויי רמז, כפילויות ורווחי פיסוק): הצעות לבדיקה ולא שינוי אוטומטי."
+        ),
         builtin=True,
     ),
     PluginManifest(
