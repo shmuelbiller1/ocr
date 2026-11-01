@@ -93,14 +93,18 @@ BUILTIN_MANIFESTS: tuple[PluginManifest, ...] = (
     ),
     PluginManifest(
         id="spelling-hebrew",
-        name="בדיקת איות עברית",
-        version="1.0.0",
+        name="בדיקת איות עברית (מובנה, לא-מקוון)",
+        version="2.0.0",
         kind=KIND_SPELLING,
         entry="hebrew_workbench.suggestions.spelling:SpellingModule",
-        license="MIT",
-        license_url="https://opensource.org/license/mit",
-        description="מילים שאינן במילון שהמשתמש בוחר.",
+        license="MIT AND CC0-1.0",
+        license_url="https://creativecommons.org/publicdomain/zero/1.0/",
+        description=(
+            "בדיקת איות עברית לא-מקוונת מובנית (לקסיקון CC0 של 196 אלף מילים, "
+            "תחיליות דקדוקיות, דירוג טעויות OCR בכתב יד ומילון אישי מתמיד)."
+        ),
         builtin=True,
+        options={"bundled": True},
     ),
     PluginManifest(
         id="grammar-hebrew",

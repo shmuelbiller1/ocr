@@ -131,9 +131,16 @@ class WindowSuggestionsTests(unittest.TestCase):
         self.assertEqual(self.window.project[0].changes, [])
 
     def test_the_spell_checker_needs_a_word_list(self) -> None:
+        from hebrew_workbench.suggestions import SpellingModule
+
+        # Bare SpellingModule() without bundled=True requires an explicit dictionary,
+        # while the built-in window plugin works offline out of the box and still
+        # accepts a custom user dictionary override.
+        self.assertFalse(SpellingModule().available())
         module = self.window.suggestion_modules.module("spelling")
         self.assertIsNotNone(module)
-        self.assertFalse(module.available())
+        self.assertTrue(module.available())
+        self.assertEqual(module.check("שלום עולם"), [])
         with tempfile.TemporaryDirectory() as folder:
             words = Path(folder) / "words.txt"
             words.write_text("שלום\nעולם\n", encoding="utf-8")

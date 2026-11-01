@@ -71,6 +71,11 @@ COMPONENTS = [
         "MIT",
         "https://github.com/itayinbarr/heb-ocr",
     ),
+    (
+        "hebrew-words-db (offline Hebrew spelling lexicon, CC0-1.0)",
+        "CC0-1.0",
+        "https://github.com/roni5604/hebrew-words-db",
+    ),
 ]
 
 #: The licence texts that are not inside the packages, with the place
@@ -100,6 +105,11 @@ LICENCE_TEXTS = [
         "HEB-OCR-MIT.txt",
         "",
         "MIT License",
+    ),
+    (
+        "CC0-1.0.txt",
+        "",
+        "CC0 1.0 Universal",
     ),
 ]
 

@@ -385,6 +385,47 @@ def _check_document_output(report: _Report) -> None:
                "physical printer output is not tested")
 
 
+def _check_bundled_suggestions(report: _Report) -> None:
+    """Verify bundled offline Hebrew spelling + personal dictionary in frozen builds."""
+    import tempfile
+
+    from .suggestions import SpellingModule
+
+    with tempfile.TemporaryDirectory() as folder:
+        personal = Path(folder) / "personal_dictionary.txt"
+        module = SpellingModule({"bundled": True, "personal_dictionary": str(personal)})
+        if not module.available():
+            raise RuntimeError("bundled Hebrew spelling module is not available")
+        valid = 'ובירושלים שָׁלוֹם רש"י וכו\' סברא דאורייתא English 123'
+        flagged = module.check(valid)
+        if flagged:
+            raise RuntimeError(
+                f"bundled spelling flagged valid Hebrew tokens: {[p.original for p in flagged]}"
+            )
+        sample = "שלומ תלמיידים בירישלים"
+        proposals = {p.original: p for p in module.check(sample)}
+        for orig, target in (
+            ("שלומ", "שלום"),
+            ("תלמיידים", "תלמידים"),
+            ("בירישלים", "בירושלים"),
+        ):
+            prop = proposals.get(orig)
+            if prop is None or prop.replacement != target:
+                raise RuntimeError(
+                    f"bundled spelling failed on {orig!r}: got {prop!r}"
+                )
+        if not module.keep_word("מונחבדיקהייחודי"):
+            raise RuntimeError("personal dictionary persistence failed")
+        if module.check("מונחבדיקהייחודי"):
+            raise RuntimeError("kept personal-dictionary word was still flagged")
+
+    report.add(
+        "bundled-hebrew-spelling",
+        True,
+        "bundled CC0-1.0 Hebrew lexicon, OCR-confusion ranker, and personal dictionary verified",
+    )
+
+
 def _check_optional_spelling(report: _Report) -> None:
     """Opt-in CI check of the real installed native plugin in a frozen app."""
     from .plugins import PluginRegistry
@@ -425,6 +466,7 @@ def run_checks() -> list[CheckResult]:
         ("engine-contract", _check_engine_contract),
         ("preview", _check_preview),
         ("plugins", _check_plugins),
+        ("bundled-hebrew-spelling", _check_bundled_suggestions),
         ("gui-startup", _check_gui),
         ("document-output", _check_document_output),
     ):
