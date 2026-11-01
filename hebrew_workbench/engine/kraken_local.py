@@ -34,6 +34,8 @@ __all__ = [
     "build_manifest",
     "make_engine",
     "OCR_DPI",
+    "disallowed_ctc_labels",
+    "script_masked_decoder",
 ]
 
 #: The resolution that a page is read at.  A page of a PDF that is
@@ -106,13 +108,18 @@ def make_engine(options: dict | None = None) -> "KrakenEngine":
 
     settings = dict(options or {})
     artifact_id = str(settings.get("model_id", "kraken-ppocrv6-small"))
+    restrict_script = bool(settings.get("restrict_script", True))
     artifact = MODEL_ARTIFACTS.get(artifact_id)
     model_path = None
     if artifact is not None:
         candidate = models_directory() / artifact.filename
         if candidate.is_file():
             model_path = candidate
-    return KrakenEngine(model_path, artifact_id=artifact_id)
+    return KrakenEngine(
+        model_path,
+        artifact_id=artifact_id,
+        restrict_script=restrict_script,
+    )
 
 
 class KrakenEngine:
@@ -131,12 +138,15 @@ class KrakenEngine:
         model_path: str | Path | None = None,
         artifact_id: str = "kraken-ppocrv6-small",
         timeout_seconds: float = 900.0,
+        restrict_script: bool = True,
     ) -> None:
         self.model_path = Path(model_path) if model_path else None
         self.artifact_id = artifact_id
         self.timeout_seconds = timeout_seconds
+        self.restrict_script = bool(restrict_script)
         self._segmentation_model = None
         self._recognition_model = None
+        self._disallowed_labels: list[int] = []
 
     # -- availability ------------------------------------------------------
     def manifest(self) -> EngineManifest:
@@ -221,6 +231,10 @@ class KrakenEngine:
             raise EngineUnavailable("קובץ מודל הפילוח (blla) אינו נמצא בתוך kraken.")
         self._segmentation_model = SegmentationTaskModel.load_model(str(segmentation_path))
         self._recognition_model = RecognitionTaskModel.load_model(str(self.model_path))
+        codec = getattr(getattr(self._recognition_model, "net", None), "codec", None)
+        self._disallowed_labels = (
+            disallowed_ctc_labels(codec) if self.restrict_script else []
+        )
 
     def _recognize_page(
         self, number: int, image, budget: float | None = None
@@ -256,15 +270,24 @@ class KrakenEngine:
         return outcome["page"]
 
     def _recognize_page_now(self, number: int, image) -> PageResult:
+        import kraken.lib.ctc_decoder
         from kraken.configs import RecognitionInferenceConfig, SegmentationInferenceConfig
 
         self._load_models()
 
         segmentation_config = SegmentationInferenceConfig(text_direction="horizontal-rl")
+        decoder = kraken.lib.ctc_decoder.greedy_decoder
+        if self.restrict_script and self._disallowed_labels:
+            decoder = script_masked_decoder(decoder, self._disallowed_labels)
+        # Note: keep batch_size=1 in kraken 7.1.0; CTCRecognitionInferenceMixin
+        # fails to flush trailing queued lines when batch_size > 1 and the last
+        # segmented crop is blank or degenerate.
         recognition_config = RecognitionInferenceConfig(
             bidi_reordering=True,
             padding=16,
             num_line_workers=0,
+            batch_size=1,
+            decoder=decoder,
         )
 
         segmentation = self._segmentation_model.predict(
@@ -301,6 +324,87 @@ class KrakenEngine:
             confidence=page_confidence,
             lines=tuple(lines),
         )
+
+
+def _is_target_document_char(ch: str) -> bool:
+    code = ord(ch)
+    if 0x0590 <= code <= 0x05FF or 0xFB1D <= code <= 0xFB4F:
+        return True  # Hebrew & presentation forms
+    if 0x0020 <= code <= 0x024F:
+        return True  # ASCII, digits, punctuation, Latin
+    if 0x2000 <= code <= 0x22FF:
+        return True  # Unicode spaces, quotes, dashes, bidi, currency, math
+    return False
+
+
+def disallowed_ctc_labels(codec) -> list[int]:
+    """CTC class indices (>0) for non-Hebrew/non-Latin scripts in multilingual heads.
+
+    PP-OCRv6 models cover 43 scripts (Hangul, CJK, Georgian, Cyrillic, Arabic,
+    Devanagari, etc.) and otherwise leak foreign-script glyphs onto cursive
+    Hebrew strokes. Only active when the codec actually contains Hebrew labels.
+    """
+    l2c = getattr(codec, "l2c", None)
+    if not isinstance(l2c, dict) or not l2c:
+        return []
+    has_hebrew = any(
+        any(0x0590 <= ord(ch) <= 0x05FF for ch in grapheme)
+        for grapheme in l2c.values()
+        if isinstance(grapheme, str)
+    )
+    if not has_hebrew:
+        return []
+    disallowed: list[int] = []
+    for labels, grapheme in l2c.items():
+        if not isinstance(labels, tuple) or len(labels) != 1:
+            continue
+        idx = int(labels[0])
+        if idx <= 0 or not isinstance(grapheme, str) or not grapheme:
+            continue
+        if not any(_is_target_document_char(ch) for ch in grapheme):
+            disallowed.append(idx)
+    return sorted(set(disallowed))
+
+
+def script_masked_decoder(base_decoder, disallowed_labels: list[int]):
+    """Wrap a CTC decoder to zero non-target-script probabilities before argmax."""
+    if not disallowed_labels:
+        return base_decoder
+
+    def _decode(outputs, seq_lens=None):
+        if hasattr(outputs, "clone"):
+            tensor = outputs.clone()
+            ndim = int(tensor.dim())
+            c_dim = tensor.shape[0] if ndim == 2 else tensor.shape[1]
+            valid = [i for i in disallowed_labels if 0 < i < c_dim]
+            if valid:
+                if ndim == 2:
+                    tensor[valid, :] = 0.0
+                elif ndim == 3:
+                    tensor[:, valid, :] = 0.0
+            return base_decoder(tensor, seq_lens)
+        if hasattr(outputs, "copy") and hasattr(outputs, "ndim"):
+            arr = outputs.copy()
+            c_dim = arr.shape[0] if arr.ndim == 2 else arr.shape[1]
+            valid = [i for i in disallowed_labels if 0 < i < c_dim]
+            if valid:
+                if arr.ndim == 2:
+                    arr[valid, :] = 0.0
+                elif arr.ndim == 3:
+                    arr[:, valid, :] = 0.0
+            return base_decoder(arr, seq_lens)
+        if isinstance(outputs, list) and outputs and isinstance(outputs[0], list):
+            copied = [
+                [
+                    [0.0 if c_idx in disallowed_labels else val for val in row]
+                    for c_idx, row in enumerate(sample)
+                ]
+                for sample in outputs
+            ]
+            return base_decoder(copied, seq_lens)
+        return base_decoder(outputs, seq_lens)
+
+    return _decode
 
 
 def _mean_confidence(record) -> float | None:

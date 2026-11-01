@@ -329,7 +329,7 @@ class MishkefetEngine:
         # greedy, even when the user requests an experimental alternative.
         if self.mode == "raw":
             texts, confidences = recognizer.read(crops, return_confidence=True)
-            assisted = None
+            alt_lines = None
         else:
             width = recognizer.beam_width
             try:
@@ -337,12 +337,18 @@ class MishkefetEngine:
                 texts, confidences = recognizer.read(crops, return_confidence=True)
             finally:
                 recognizer.beam_width = width
-            alternative = ((line or "").strip() for line in recognizer.read_tta(crops))
-            assisted = "\n".join(line for line in alternative if line)
+            alt_lines = [(line or "").strip() for line in recognizer.read_tta(crops)]
 
         lines: list[LineResult] = []
-        for text, confidence, box in zip(texts, confidences, boxes):
+        kept_alt: list[str] = []
+        for idx, (text, confidence, box) in enumerate(
+            zip(texts, confidences, boxes)
+        ):
             text = (text or "").strip()
+            if _is_margin_speckle(text, confidence, box):
+                continue
+            if alt_lines is not None and idx < len(alt_lines) and alt_lines[idx]:
+                kept_alt.append(alt_lines[idx])
             if not text:
                 continue
             lines.append(
@@ -352,6 +358,7 @@ class MishkefetEngine:
                     box=(float(box.x), float(box.y), float(box.w), float(box.h)),
                 )
             )
+        assisted = None if alt_lines is None else "\n".join(kept_alt)
         page_text = "\n".join(line.text for line in lines)
         values = [line.confidence for line in lines if line.confidence is not None]
         page_confidence = round(sum(values) / len(values), 4) if values else None
@@ -362,6 +369,19 @@ class MishkefetEngine:
             lines=tuple(lines),
             assisted_text=assisted,
         )
+
+
+def _is_margin_speckle(text: str, confidence, box) -> bool:
+    """Return True for tiny, narrow, very-low-confidence margin noise speckles."""
+    if not text or len(text) > 2:
+        return False
+    try:
+        conf = float(confidence)
+        w = float(box.w)
+        h = float(box.h)
+    except (AttributeError, TypeError, ValueError):
+        return False
+    return h >= 12.0 and w < h * 1.4 and conf < 0.55
 
 
 def _round(value) -> float | None:

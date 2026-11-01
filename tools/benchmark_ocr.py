@@ -173,7 +173,9 @@ def measure(engine, page: Page, name: str = "") -> dict | None:
 
     # When measuring non-raw Mishkefet decoding explicitly, evaluate the
     # assisted text produced by that mode; default "raw" evaluates raw text.
-    mode = getattr(engine, "decoding_mode", "raw")
+    mode = getattr(engine, "mode", None) or getattr(
+        engine, "decoding_mode", "raw"
+    )
     recognised_text = (
         recognised.assisted_text
         if mode != "raw" and getattr(recognised, "assisted_text", None)
@@ -644,7 +646,7 @@ def _engine_for(
             model_path,
             artifact_id=identifier,
             timeout_seconds=timeout,
-            decoding_mode=decoding_mode,
+            mode=decoding_mode,
         )
     return _kraken_engine()(
         model_path, artifact_id=identifier, timeout_seconds=timeout
