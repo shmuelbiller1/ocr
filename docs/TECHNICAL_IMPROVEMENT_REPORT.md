@@ -155,7 +155,7 @@ Measured in GitHub Actions `ocr-engine` (`ubuntu-latest` CPU, run `41395748886`)
 
 ## 5. Architectural Changes Made
 
-Organized as clean, reviewable commits on `arena/79dcb59d-ocr` (PR #22), growing the automated test suite from **520 to 562 passing tests**:
+Organized as clean, reviewable commits on `arena/79dcb59d-ocr` (PR #22), growing the automated test suite from **520 to 563 passing tests**:
 
 1. **Verified Modern Cursive Benchmark & Metrics (`benchmark/modern_cursive/`, `hebrew_workbench/benchmark/metrics.py`, `tools/benchmark_ocr.py`, `tools/benchmark_suggestions.py`, `tools/benchmark_photocraft_audit.py`):**
    - Added 6 SHA-256-verified `PDM-1.0` modern cursive pages + transcripts, DP line-alignment metrics (`missing_lines`, `extra_lines`, `duplicated_lines`, `reading_order_inversions`), CPU/RSS telemetry, inline `mishkefet-v1:beam` & `mishkefet-v1:assisted` profiling, span-grouped suggestion benchmarking, and a 10-suite multi-color/regional PhotoCraft audit benchmark.

@@ -90,6 +90,21 @@ class OfflineHebrewSpellingTests(unittest.TestCase):
         self.assertTrue(mod.available())
         self.assertEqual(mod.check("התלמיריס")[0].replacement, "התלמידים")
 
+    def test_loanwords_ending_in_medial_pe_and_overlong_tokens_behave_safely(
+        self,
+    ) -> None:
+        import time
+
+        self.assertEqual(self.module.check("הסתכלנו בטלסקופ ובמיקרוסקופ במעבדה."), [])
+        # Pathological 4,000-character uninterrupted Hebrew run returns in <0.1s without hanging
+        long_token = "אבגדהוזחטי" * 400
+        t0 = time.perf_counter()
+        res = self.module.check(long_token)
+        elapsed = time.perf_counter() - t0
+        self.assertLess(elapsed, 0.2)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0].alternatives, ())
+
 
 if __name__ == "__main__":
     unittest.main()

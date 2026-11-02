@@ -292,6 +292,15 @@ def run_neural_ocr_comparison(
     old_env = os.environ.get("HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT")
     try:
         for engine, engine_id in engine_pairs:
+            # Untimed 1-page warm-up so checkpoint verification / model loading
+            # does not bias `baseline_off` vs `photocraft_on` timing comparisons.
+            if loaded:
+                os.environ["HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT"] = "0"
+                engine._recognize_page_now(0, loaded[0][1])
+
+            mode = getattr(engine, "mode", None) or getattr(
+                engine, "decoding_mode", "raw"
+            )
             suites = (
                 suites_override
                 if suites_override is not None
@@ -317,7 +326,12 @@ def run_neural_ocr_comparison(
                         t0 = time.perf_counter()
                         page_res = engine._recognize_page_now(idx, vim)
                         dt = time.perf_counter() - t0
-                        pred_text = page_res.text
+                        pred_text = (
+                            page_res.assisted_text
+                            if mode != "raw"
+                            and getattr(page_res, "assisted_text", None)
+                            else page_res.text
+                        )
 
                         ref_norm = normalise(gt)
                         hyp_norm = normalise(pred_text)

@@ -72,6 +72,14 @@ class HebrewGrammarRulesTests(unittest.TestCase):
         )
         idiomatic = "התקדמנו לאט לאט, יום יום, והתוצאה הייתה טובה מאוד מאוד וממש ממש ברורה."
         self.assertEqual(self.grammar.check(idiomatic), [])
+        # Distinct lexical nouns starting with מ- (משקל השקל, מפתח הפתח) are NOT preposition echoes
+        self.assertEqual(
+            self.grammar.check("משקל השקל הוא שבעה גרם ומפתח הפתח שמור במגירה."),
+            [],
+        )
+        # Passive future יבדק preserves passive voice אבדק
+        passive = self.grammar.check("מחר אני יבדק אצל הרופא.")
+        self.assertEqual([(p.original, p.replacement) for p in passive], [("יבדק", "אבדק")])
 
     def test_bracket_inner_spaces_are_flagged(self) -> None:
         proposals = self.grammar.check("הערה קצרה ( בדיקה ) בסוגריים.")

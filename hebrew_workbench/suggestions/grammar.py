@@ -285,7 +285,7 @@ FUTURE_3MS_TO_1SG: dict[str, str] = {
     "יכין": "אכין",
     "ישתמש": "אשתמש",
     "יתקשר": "אתקשר",
-    "יבדק": "אבדוק",
+    "יבדק": "אבדק",
     "יוכל": "אוכל",
     "יוסיף": "אוסיף",
     "יוציא": "אוציא",
@@ -721,11 +721,16 @@ def accidental_duplication(text: str) -> list[Suggestion]:
             )
         )
 
+    from hebrew_workbench.suggestions.hebrew_lexicon import bundled_lexicon
+
+    base_words = bundled_lexicon().words
     for match in _ECHO_ARTICLE_RE.finditer(text):
         stem = strip_nikud(match.group(2))
         if stem in IDIOMATIC_REDUPLICATIONS or stem in ("בית", "יום", "שנת", "כל"):
             continue
         first_word = match.group(1) + match.group(2)
+        if strip_nikud(first_word) in base_words:
+            continue
         proposals.append(
             _proposal(
                 text,

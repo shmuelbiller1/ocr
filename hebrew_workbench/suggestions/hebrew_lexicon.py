@@ -381,13 +381,23 @@ class HebrewLexicon:
 
         return self._is_known_pure(cleaned, extra_words)
 
-    @staticmethod
-    def _has_final_form_violation(word: str) -> bool:
+    def _has_final_form_violation(self, word: str) -> bool:
         if len(word) < 3:
             return False
-        if word[-1] in FINAL_OF_MEDIAL:
-            return True
         if any(ch in MEDIAL_OF_FINAL for ch in word[:-1]):
+            return True
+        if word[-1] in FINAL_OF_MEDIAL:
+            # Academy-standard hard-/p/ loanwords end in medial פ (טלסקופ, מיקרוסקופ, סירופ)
+            if word[-1] == "פ" and (
+                word in self.words
+                or any(
+                    word.startswith(p)
+                    and len(word) - len(p) >= 3
+                    and word[len(p) :] in self.words
+                    for p in VALID_PREFIXES
+                )
+            ):
+                return False
             return True
         return False
 
@@ -446,7 +456,7 @@ class HebrewLexicon:
         limit: int = 4,
     ) -> list[str]:
         word = strip_nikud(raw_token)
-        if not word or not all("א" <= c <= "ת" for c in word):
+        if not word or len(word) > 32 or not all("א" <= c <= "ת" for c in word):
             return []
 
         scored: dict[str, float] = {}
@@ -536,13 +546,15 @@ class HebrewLexicon:
 
         # 4. 1-edit and 2-edit handwritten OCR confusion substitutions
         confusion_1: list[tuple[str, float, int]] = []
+        keep_two_edit = len(word) <= 14
         for i, ch in enumerate(word):
             for repl, c_cost in PRIMARY_OCR_CONFUSIONS.get(ch, ()):
                 cand = word[:i] + repl + word[i + 1 :]
                 if len(cand) >= 2 and cand[-1] in FINAL_OF_MEDIAL:
                     cand = cand[:-1] + FINAL_OF_MEDIAL[cand[-1]]
                 _add(cand, c_cost)
-                confusion_1.append((cand, c_cost, i))
+                if keep_two_edit:
+                    confusion_1.append((cand, c_cost, i))
 
         # Two optical confusions in the same word (e.g. בירישלים -> בירושלים,
         # שיעיר -> שיעור, התלמירים -> התלמידים, הכתיכה -> הכתיבה)

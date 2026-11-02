@@ -656,9 +656,22 @@ def prepare_page_for_ocr(
         hl_px = cv2.GaussianBlur(
             hl_dil.astype(np.float32) * (1.0 / 255.0), (0, 0), sigmaX=2.0
         )
-        # Preserve multi-color pen ink (absorbs >=2 RGB channels) outside highlighter wash
-        proj = np.maximum(proj, np.median(-diff, axis=2))
-        passband_ink = np.clip(float(np.max(key_full[0, 0])) - rgb_max, 0.0, 1.0)
+        # Preserve multi-color pen ink (absorbs >=2 RGB channels) both outside
+        # and inside broad highlighter washes via morphological white top-hat
+        # (`drops_mid - MORPH_OPEN(drops_mid)` removes smooth highlighter wash
+        # of any hue while keeping full contrast on thin colored pen strokes).
+        drops_mid = np.median(-diff, axis=2).astype(np.float32)
+        proj = np.maximum(proj, drops_mid)
+        hl_wash_mid = cv2.morphologyEx(
+            drops_mid,
+            cv2.MORPH_OPEN,
+            cv2.getStructuringElement(cv2.MORPH_RECT, (11, 11)),
+        )
+        stroke_tophat = np.clip(drops_mid - hl_wash_mid, 0.0, 1.0)
+        passband_ink = np.maximum(
+            np.clip(float(np.max(key_full[0, 0])) - rgb_max, 0.0, 1.0),
+            stroke_tophat,
+        )
         proj = proj * (1.0 - hl_px) + passband_ink * hl_px
 
     # Linear noise-safe tone remap onto clean paper ground (252)

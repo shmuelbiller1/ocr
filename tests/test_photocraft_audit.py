@@ -44,13 +44,17 @@ class PhotoCraftAuditLightweightTests(unittest.TestCase):
             "assert 'cv2' not in sys.modules, 'cv2 loaded eagerly'; "
             "assert 'numpy' not in sys.modules, 'numpy loaded eagerly'"
         )
-        proc = subprocess.run(
-            [sys.executable, "-c", code],
-            cwd=str(REPO_ROOT),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", code],
+                cwd=str(REPO_ROOT),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            self.fail("import check timed out after 60 seconds")
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
 
     def test_non_pil_mock_sentinel_passes_through_untouched(self) -> None:
@@ -169,10 +173,12 @@ class PhotoCraftVisionAuditTests(unittest.TestCase):
 
         im = Image.new("RGB", (520, 420), (250, 250, 248))
         draw = ImageDraw.Draw(im)
-        # Yellow highlighter band over row 2
+        # Yellow highlighter band over row 2 (with both black AND red strokes inside)
         draw.rectangle([40, 125, 480, 165], fill=(250, 242, 82))
-        self._draw_strokes(im, (32, 32, 38), rows=(65, 145))
-        # Red low-luma-contrast annotation only in bottom rows
+        self._draw_strokes(im, (32, 32, 38), rows=(65,))
+        draw.line([(90, 145), (170, 145)], fill=(32, 32, 38), width=4)
+        draw.line([(290, 145), (390, 145)], fill=(232, 72, 58), width=4)
+        # Red low-luma-contrast annotation in bottom rows
         self._draw_strokes(im, (232, 82, 78), rows=(310, 365))
 
         out, audit = prepare_page_for_ocr(im)
@@ -182,6 +188,8 @@ class PhotoCraftVisionAuditTests(unittest.TestCase):
         enh = np.asarray(out.convert("L"), dtype=np.float32)
         # Yellow highlighter background away from ink is lifted near white (>235)
         self.assertGreater(float(np.percentile(enh[126:164, 40:480], 85)), 235.0)
+        # Red-pen stroke INSIDE the yellow highlighter band stays visible (<145)
+        self.assertLess(float(np.min(enh[140:151, 290:390])), 145.0)
         # Red-pen strokes at bottom stay dark (<120) rather than being washed out
         self.assertLess(float(np.percentile(enh[295:385, :], 2)), 120.0)
 
