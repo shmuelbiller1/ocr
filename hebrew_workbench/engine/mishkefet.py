@@ -33,6 +33,8 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from .photocraft_audit import prepare_page_for_ocr
+
 from .mishkefet_decoding import decoding_mode, load_language_models
 
 from .base import (
@@ -320,7 +322,13 @@ class MishkefetEngine:
         from .vendor.hebocr.page.segment import segment_page
 
         recognizer = self._load_recognizer()
-        crops, boxes, _skew = segment_page(image)
+        prepared_image, audit = prepare_page_for_ocr(image)
+        inv_scale = (
+            1.0 / audit.scale_factor
+            if audit is not None and audit.scale_factor > 0.0
+            else 1.0
+        )
+        crops, boxes, _skew = segment_page(prepared_image)
         if not crops:
             return PageResult(number=number, text="", confidence=None, lines=(),
                               assisted_text=None if self.mode == "raw" else "")
@@ -355,7 +363,12 @@ class MishkefetEngine:
                 LineResult(
                     text=text,
                     confidence=_round(confidence),
-                    box=(float(box.x), float(box.y), float(box.w), float(box.h)),
+                    box=(
+                        float(box.x) * inv_scale,
+                        float(box.y) * inv_scale,
+                        float(box.w) * inv_scale,
+                        float(box.h) * inv_scale,
+                    ),
                 )
             )
         assisted = None if alt_lines is None else "\n".join(kept_alt)

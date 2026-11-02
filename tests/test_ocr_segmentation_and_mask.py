@@ -167,7 +167,7 @@ class MishkefetLogitCacheTests(unittest.TestCase):
         from hebrew_workbench.engine.vendor.hebocr.recognize import Recognizer
 
         rec = Recognizer.__new__(Recognizer)
-        rec.charset = Charset(chars=["א", "ב", " "])
+        rec.charset = Charset(chars=["", "א", "ב", " "])
         rec.device = torch.device("cpu")
         rec.lm = None
         rec.lm_weight = 0.4

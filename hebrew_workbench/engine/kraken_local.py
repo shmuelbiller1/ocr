@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from .photocraft_audit import prepare_page_for_ocr
+
 from .base import (
     EngineCancelled,
     EngineFailure,
@@ -290,12 +292,20 @@ class KrakenEngine:
             decoder=decoder,
         )
 
+        prepared_image, audit = prepare_page_for_ocr(image)
+        inv_scale = (
+            1.0 / audit.scale_factor
+            if audit is not None and audit.scale_factor > 0.0
+            else 1.0
+        )
         segmentation = self._segmentation_model.predict(
-            im=image, config=segmentation_config
+            im=prepared_image, config=segmentation_config
         )
         records = list(
             self._recognition_model.predict(
-                im=image, segmentation=segmentation, config=recognition_config
+                im=prepared_image,
+                segmentation=segmentation,
+                config=recognition_config,
             )
         )
 
@@ -304,11 +314,22 @@ class KrakenEngine:
             text = (getattr(record, "prediction", "") or "").strip()
             if not text:
                 continue
+            raw_box = _line_box(record)
+            scaled_box = (
+                (
+                    raw_box[0] * inv_scale,
+                    raw_box[1] * inv_scale,
+                    raw_box[2] * inv_scale,
+                    raw_box[3] * inv_scale,
+                )
+                if raw_box is not None and abs(inv_scale - 1.0) > 1e-6
+                else raw_box
+            )
             lines.append(
                 LineResult(
                     text=text,
                     confidence=_mean_confidence(record),
-                    box=_line_box(record),
+                    box=scaled_box,
                 )
             )
         page_text = "\n".join(line.text for line in lines)

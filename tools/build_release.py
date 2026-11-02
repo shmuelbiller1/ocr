@@ -76,6 +76,11 @@ COMPONENTS = [
         "CC0-1.0",
         "https://github.com/roni5604/hebrew-words-db",
     ),
+    (
+        "PhotoCraft (document visual audit and chromatic unmixing algorithms, adapted)",
+        "MIT",
+        "https://github.com/storytold/photocraft",
+    ),
 ]
 
 #: The licence texts that are not inside the packages, with the place
@@ -110,6 +115,11 @@ LICENCE_TEXTS = [
         "CC0-1.0.txt",
         "",
         "CC0 1.0 Universal",
+    ),
+    (
+        "PHOTOCRAFT-MIT.txt",
+        "",
+        "MIT License",
     ),
 ]
 
