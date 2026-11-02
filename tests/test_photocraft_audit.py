@@ -185,6 +185,30 @@ class PhotoCraftVisionAuditTests(unittest.TestCase):
         # Red-pen strokes at bottom stay dark (<120) rather than being washed out
         self.assertLess(float(np.percentile(enh[295:385, :], 2)), 120.0)
 
+    def test_moderate_neutral_shadow_fast_paths_while_severe_occlusion_relights(
+        self,
+    ) -> None:
+        # Moderate neutral corner shade (drop ~0.35 <= 0.58) defers to per-line normalizer
+        mod_im = Image.new("RGB", (480, 360), (242, 242, 242))
+        draw_mod = ImageDraw.Draw(mod_im)
+        draw_mod.rectangle([0, 180, 240, 360], fill=(158, 158, 158))
+        self._draw_strokes(mod_im, (30, 30, 30), rows=(70, 140, 220, 290))
+        out_mod, aud_mod = prepare_page_for_ocr(mod_im)
+        assert aud_mod is not None
+        self.assertFalse(aud_mod.needs_shadow_relight)
+        self.assertIs(out_mod, mod_im)
+
+        # Severe near-black corner shadow across >=2 tiles (drop ~0.72 > 0.58) relights
+        sev_im = Image.new("RGB", (480, 360), (246, 246, 246))
+        draw_sev = ImageDraw.Draw(sev_im)
+        draw_sev.rectangle([0, 180, 300, 360], fill=(62, 62, 62))
+        self._draw_strokes(sev_im, (18, 18, 18), rows=(70, 140, 220, 290))
+        out_sev, aud_sev = prepare_page_for_ocr(sev_im)
+        assert aud_sev is not None
+        self.assertTrue(aud_sev.needs_shadow_relight)
+        self.assertTrue(aud_sev.needs_adjustment)
+        self.assertIsNot(out_sev, sev_im)
+
     def test_benchmark_neural_ocr_comparison_harness(self) -> None:
         from types import SimpleNamespace
 

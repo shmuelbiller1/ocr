@@ -338,11 +338,14 @@ def prepare_page_for_ocr(
     luma_unit = np.array([-0.299, -0.587, -0.114], dtype=np.float32)
     luma_unit /= float(np.linalg.norm(luma_unit))
 
-    # Ultra-fast clean monochrome exit (~4ms): neutral gray, upright, even illumination!
+    # Ultra-fast clean monochrome exit (~4ms): neutral gray, upright, no severe occlusion!
+    # Moderate neutral shadows (shadow_drop <= 0.58) are left to hebocr's native
+    # local Gaussian ratio + per-line normalization, which empirically outperforms
+    # global shadow flattening on aged parchment scans.
     if (
         not inverted
         and (im.mode == "L" or p98_chroma < 0.045)
-        and max_shadow_drop <= 0.25
+        and max_shadow_drop <= 0.58
     ):
         lc_fast = max(0.0, float(p92_luma - p08_luma))
         snr_fast = round(lc_fast / 0.02, 2)
@@ -530,7 +533,7 @@ def prepare_page_for_ocr(
                         tile_weights[gy, gx] = tw
                         any_chrom = True
                         continue
-                if shadow_drop > 0.26:
+                if shadow_drop > 0.58:
                     tile_mode[gy, gx] = 1
                     any_shadow = True
 

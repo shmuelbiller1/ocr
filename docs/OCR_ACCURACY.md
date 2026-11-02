@@ -56,9 +56,9 @@ Measured with kraken PP-OCRv6 (Apache-2.0) on 6 pages of Public-Domain Modern Cu
 
 | | |
 | --- | --- |
-| Character error rate | **83.2%** |
-| Word error rate | **96.4%** |
-| Seconds per page | 13.74 |
+| Character error rate | **80.5%** |
+| Word error rate | **95.1%** |
+| Seconds per page | 14.05 |
 | Pages measured | 6 |
 | Pages seen | 6 |
 | Characters of the ground truth | 1112 |
@@ -72,20 +72,20 @@ The rate of the errors is what decides which engine is the better one; the time 
 
 | Engine | Character error rate | Word error rate | Seconds per page | Pages |
 | --- | --- | --- | --- | --- |
-| kraken-ppocrv6-small | 83.2% | 96.4% | 13.74 | 6 |
-| kraken-ppocrv6-medium | 84.9% | 95.5% | 14.13 | 6 |
-| mishkefet-v1 | 41.4% | 92.0% | 4.74 | 6 |
-| mishkefet-v1:beam | 42.6% | 91.1% | 12.4 | 6 |
-| mishkefet-v1:assisted | 43.6% | 94.2% | 12.97 | 6 |
+| kraken-ppocrv6-small | 80.5% | 95.1% | 14.05 | 6 |
+| kraken-ppocrv6-medium | 81.6% | 94.6% | 14.8 | 6 |
+| mishkefet-v1 | 38.2% | 89.7% | 4.98 | 6 |
+| mishkefet-v1:beam | 39.4% | 88.4% | 12.67 | 6 |
+| mishkefet-v1:assisted | 39.7% | 91.1% | 13.26 | 6 |
 
 | Page | Characters in the ground truth | Character error rate | Word error rate | Seconds | Ground truth |
 | --- | --- | --- | --- | --- | --- |
-| pages/commons__begani_netatikha__p0001.jpg | 153 | 93.5% | 100.0% | 15.56 | complete |
-| pages/commons__bialik_el_hazippor__p0001.jpg | 106 | 88.7% | 100.0% | 20.89 | complete |
-| pages/commons__hatikvah_imber_manuscript__p0001.jpg | 167 | 96.4% | 100.0% | 16.84 | complete |
-| pages/commons__rachel_aqara_1928__p0001.jpg | 240 | 64.2% | 85.4% | 9.75 | complete |
-| pages/commons__rachel_gan_naul__p0001.jpg | 181 | 77.3% | 97.5% | 10.24 | complete |
-| pages/commons__rachel_rak_al_atzmi__p0001.jpg | 265 | 87.9% | 100.0% | 9.15 | complete |
+| pages/commons__begani_netatikha__p0001.jpg | 153 | 86.9% | 96.9% | 16.09 | complete |
+| pages/commons__bialik_el_hazippor__p0001.jpg | 106 | 88.7% | 100.0% | 20.72 | complete |
+| pages/commons__hatikvah_imber_manuscript__p0001.jpg | 167 | 96.4% | 100.0% | 16.82 | complete |
+| pages/commons__rachel_aqara_1928__p0001.jpg | 240 | 64.2% | 83.3% | 10.05 | complete |
+| pages/commons__rachel_gan_naul__p0001.jpg | 181 | 77.3% | 97.5% | 10.3 | complete |
+| pages/commons__rachel_rak_al_atzmi__p0001.jpg | 265 | 80.4% | 98.2% | 10.34 | complete |
 
 These pages are the *diagnostic* corpus of the old handwriting. They are not the material the program is made for, and they do not decide which engine is the better one.
 
