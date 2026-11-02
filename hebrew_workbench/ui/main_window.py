@@ -237,6 +237,24 @@ class MainWindow(QMainWindow):
         self.choose_dictionary_action = QAction("בחירת מילון לאיות...", self)
         self.choose_dictionary_action.triggered.connect(self.choose_dictionary)
 
+        self.toggle_spelling_action = QAction("הצעות איות", self)
+        self.toggle_spelling_action.setCheckable(True)
+        self.toggle_spelling_action.toggled.connect(
+            lambda checked: self.set_suggestion_layer_enabled("spelling", checked)
+        )
+
+        self.toggle_grammar_action = QAction("הצעות דקדוק וניסוח", self)
+        self.toggle_grammar_action.setCheckable(True)
+        self.toggle_grammar_action.toggled.connect(
+            lambda checked: self.set_suggestion_layer_enabled("grammar", checked)
+        )
+
+        self.toggle_style_action = QAction("הצעות לשון הספר (סגנון)", self)
+        self.toggle_style_action.setCheckable(True)
+        self.toggle_style_action.toggled.connect(
+            lambda checked: self.set_suggestion_layer_enabled("style", checked)
+        )
+
         self.cancel_action = QAction("ביטול המשימה", self)
         self.cancel_action.triggered.connect(self.cancel_task)
         self.cancel_action.setEnabled(False)
@@ -282,6 +300,11 @@ class MainWindow(QMainWindow):
 
         suggestions_menu = self.menuBar().addMenu("הצעות תיקון")
         suggestions_menu.addAction(self.check_suggestions_action)
+        suggestions_menu.addSeparator()
+        suggestions_menu.addAction(self.toggle_spelling_action)
+        suggestions_menu.addAction(self.toggle_grammar_action)
+        suggestions_menu.addAction(self.toggle_style_action)
+        suggestions_menu.addSeparator()
         suggestions_menu.addAction(self.undo_changes_action)
         suggestions_menu.addSeparator()
         suggestions_menu.addAction(self.choose_dictionary_action)
@@ -335,6 +358,7 @@ class MainWindow(QMainWindow):
         self.suggestions_pane.refuse_requested.connect(self.refuse_suggestion)
         self.suggestions_pane.accept_all_requested.connect(self.accept_all_suggestions)
         self.suggestions_pane.refuse_all_requested.connect(self.refuse_all_suggestions)
+        self.suggestions_pane.layer_toggled.connect(self.set_suggestion_layer_enabled)
         self.suggestions_pane.accept_selected_requested.connect(
             self.accept_selected_suggestions
         )
@@ -1070,14 +1094,73 @@ class MainWindow(QMainWindow):
             # Every module of proposals was switched off: the program
             # must not keep the ones it had before.
             self.suggestion_modules = SuggestionRegistry([])
+            self._sync_layer_toggles()
             return
         registry = SuggestionRegistry(modules)
         for kind in ("spelling", "grammar", "style"):
             registry.set_enabled(kind, self.plugins.kind_enabled(kind))
         self.suggestion_modules = registry
+        self._sync_layer_toggles()
         # The settings of every plugin were given to it by the registry
         # when it was loaded, so the word list of the spelling is
         # already in place.
+
+    def _sync_layer_toggles(self) -> None:
+        """Keep menu checkmarks and pane checkboxes aligned with active layers."""
+        spelling_on = self.suggestion_modules.is_enabled("spelling")
+        grammar_on = self.suggestion_modules.is_enabled("grammar")
+        style_on = self.suggestion_modules.is_enabled("style")
+        for action, state in (
+            (self.toggle_spelling_action, spelling_on),
+            (self.toggle_grammar_action, grammar_on),
+            (self.toggle_style_action, style_on),
+        ):
+            action.blockSignals(True)
+            action.setChecked(bool(state))
+            action.blockSignals(False)
+        if hasattr(self, "suggestions_pane"):
+            self.suggestions_pane.set_layer_states(
+                spelling_on, grammar_on, style_on
+            )
+
+    def set_suggestion_layer_enabled(self, kind: str, enabled: bool) -> None:
+        """Independently switch spelling, grammar, or style proposals on/off."""
+        enabled = bool(enabled)
+        had_current_proposals = bool(self.suggestions.suggestions)
+        had_any_proposals = had_current_proposals or any(
+            bool(session.suggestions) for session in self._sessions.values()
+        )
+        plugins_of_kind = self.plugins.by_kind(kind)
+        if plugins_of_kind:
+            if enabled:
+                target = (
+                    self.plugins.chosen(kind)
+                    or self.plugins.active(kind)
+                    or plugins_of_kind[0]
+                )
+                if self.plugins.settings.active.get(kind) == "":
+                    self.plugins.set_active(kind, target.id)
+                self.plugins.set_enabled(target.id, True)
+            else:
+                for item in plugins_of_kind:
+                    if self.plugins.is_enabled(item.id):
+                        self.plugins.set_enabled(item.id, False)
+            self._refresh_suggestion_modules()
+        else:
+            self.suggestion_modules.set_enabled(kind, enabled)
+            self._sync_layer_toggles()
+
+        if had_any_proposals:
+            self._clear_the_proposals()
+        if (
+            had_current_proposals
+            and self._shown_entry is not None
+            and any(
+                self.suggestion_modules.is_enabled(k)
+                for k in ("spelling", "grammar", "style")
+            )
+        ):
+            self.check_suggestions()
 
     def save_text(self) -> None:
         content = self.editor.toPlainText()

@@ -4,8 +4,9 @@
 
 **A usable OCR release is not the same as the whole original project being
 finished.** The All Models download contains all supported recognition models
-and decoding priors. It does not supply a complete spelling dictionary, a
-Hebrew grammar engine or implemented לשון הספר rules.
+and decoding priors, and all editions now include the bundled CC0-1.0 Hebrew
+spelling lexicon and deterministic Hebrew grammar rules; implemented לשון הספר
+rules and consented modern school benchmark pages remain open.
 
 This audit identified a real v0.4.0 defect: the printer factory called Qt 5
 page-size/margin APIs on Qt 6. Printing, print preview and PDF saving share
@@ -28,8 +29,9 @@ in-process adapter is not evidence that the worker/model is missing.
 | Kraken medium recognition weights | Install explicitly | Included | Install explicitly |
 | Mishkefet recognition weights | Install explicitly; noncommercial | Included; noncommercial | Install explicitly; noncommercial |
 | Mishkefet character and word decoding priors | Install explicitly; noncommercial | Both included; noncommercial | Install explicitly; noncommercial |
-| Hebrew spelling dictionary | Not bundled | Not bundled | Not bundled |
-| Full Hebrew grammar / scholarly-style model | Not implemented | Not implemented | Not implemented |
+| Offline Hebrew spelling (`spelling-hebrew`, CC0-1.0 lexicon + OCR ranker + personal dictionary) | Included | Included | Included |
+| Offline Hebrew grammar (`grammar-hebrew`, deterministic morphosyntax + punctuation rules) | Included | Included | Included |
+| Scholarly style (`style-leshon-ha-sefer`) | Disabled placeholder frame | Disabled placeholder frame | Disabled placeholder frame |
 
 There are **five model files**, not five independent recognition engines:
 `small.safetensors`, `medium.safetensors`, `mishkefet-v1.pt`, `hebrew_char6.pkl`,
@@ -61,11 +63,13 @@ fix is not a verified Windows fix until the updated packaged checks pass.
 
 ## Remaining gates before calling the entire original scope final
 
-1. **Spelling:** supply a reviewed, redistribution-compatible Hebrew word list
-   and test its handling of school vocabulary, names and abbreviations. The
-   current adapter works with a user's list; it is not a supplied full lexicon.
-2. **Grammar:** implement and validate the desired language-level rules or an
-   approved offline model. The existing four rules cover punctuation/spacing.
+1. **Spelling:** validate the bundled CC0-1.0 Hebrew lexicon (`hebrew-words-db`)
+   against consented school classroom notebooks (abbreviations, names, and
+   subject terminology) once `benchmark/modern_school` is populated.
+2. **Grammar:** validate the expanded deterministic Hebrew grammar rules
+   (1sg future `א-` prefix, construct definite article, numeral & demonstrative
+   gender agreement, accidental duplications, and spacing) on school drafts and
+   document remaining syntactic limitations without installing unverified LLMs.
 3. **לשון הספר:** obtain the user's approved guide and examples; implement
    independently tested accept/reject proposals. Do not turn on the current
    placeholder or treat its unverified planned examples as authoritative rules.

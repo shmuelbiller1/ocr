@@ -6,9 +6,11 @@ user accepting it**.
 
 | Module | What it proposes | State |
 | --- | --- | --- |
-| `spelling` (איות) | The words that are not in the word list of the user | works, with a word list that the user brings |
-| `grammar` (ניסוח) | Punctuation and spacing: a space before a comma, a missing space after a comma, two spaces in a row, a space before a closing quote | works, a few rules only |
+| `spelling` (איות) | Offline Hebrew spelling proposals using the bundled CC0-1.0 lexicon (196,227 words), conservative prefix/proclitic stripping, OCR visual-confusion candidate ranking (ד/ר, ה/ח/ת, ו/י/ז, ב/כ, ס/ם, ן/ו, ע/צ), persistent personal dictionary, and optional custom word list override | works out-of-the-box offline |
+| `grammar` (דקדוק וניסוח) | High-precision deterministic offline Hebrew grammar and punctuation rules: 1st-person singular future `א-` prefix (`אני ילך -> אני אלך`), construct definite article (`הבית ספר -> בית הספר`), 3–10 numeral gender agreement, demonstrative gender agreement (`הבעיה הזה -> הבעיה הזאת`), accidental word/article duplication (`על על -> על`, `בדף הדף -> בדף`), and comma/quote/bracket/sentence spacing | works out-of-the-box offline |
 | `style` (לשון הספר) | The rules of the guide of the Israel Academy | **not implemented** - the module is a frame, and it says so |
+
+Each of the post-OCR layers (`איות`, `דקדוק וניסוח`, `לשון הספר`) has its own independent one-click checkbox at the top of the **הצעות תיקון** pane and in the **הצעות תיקון** menu, persisted across sessions.
 
 ## How a proposal is used
 
@@ -72,28 +74,24 @@ wrote after it, and the program asks before it does that.
 
 ## The word list of the spelling module
 
-The program does **not** ship a Hebrew dictionary.  The Hebrew Hunspell
-dictionary of LibreOffice (`he_IL`) requires AGPL compliance for
-redistribution; it is not categorically forbidden. The legacy module works
-with a custom word list that the user has:
+The built-in `spelling-hebrew` plugin ships out-of-the-box with a compressed
+CC0-1.0 Hebrew word list (`hebrew_workbench/suggestions/data/hebrew_words_cc0.txt.gz`,
+196,227 words from `roni5604/hebrew-words-db` commit `879f0f46`), combined with:
 
-* **הצעות תיקון > בחירת מילון לאיות** points at the file.
-* The file is a text file with one word in every line.  A line may hold
-  the word and its alternatives, separated by a slash in this custom
-  format (not actual Hunspell affix flags):
+* Conservative Hebrew proclitic/conjunction prefix recognition (`ו`, `ה`, `ב`,
+  `כ`, `ל`, `מ`, `ש` and standard two-letter combinations) gated against minimum
+  stem length and valid final-letter rules.
+* False-positive guards for Hebrew abbreviations and numerals (`״` / `׳`),
+  standard Aramaic/rabbinic study terms in Hebrew script, and short tokens.
+* OCR-specific weighted edit-distance ranking that prioritises common handwritten
+  Hebrew letter confusions (`ד↔ר`, `ה↔ח↔ת`, `ו↔י↔ז↔ן`, `ב↔כ`, `ס↔ם`, `ע↔צ`, `ג↔נ`)
+  and safe run-on word splits (`ביתהספר -> בית הספר`).
+* A persistent personal dictionary (`personal_dictionary.txt` inside the user's
+  application data folder) updated whenever the user clicks *לשמור את המילה*.
 
-  ```
-  שלום/תחתונות
-  בית
-  ```
-
-* A word that is shorter than four letters is not proposed, because a
-  short word is often an abbreviation or a name.
-* If a file with the name `LICENSE`, `LICENCE` or `COPYING` is next to
-  the word list, its text is read, so that the licence of the list is
-  known.
-* *לשמור את המילה* adds the word to the end of that file, with the
-  same format.
+Users who prefer their own custom word list (or the optional AGPL Hunspell/Hspell
+plugin) can still point **הצעות תיקון > בחירת מילון לאיות** at any `.txt`/`.dic`
+file (`שלום/תחתונות` slash-variant format remains supported).
 
 ## The rules of the style module
 

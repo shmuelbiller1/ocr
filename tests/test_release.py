@@ -132,11 +132,19 @@ class ReleaseTests(unittest.TestCase):
                 self.assertIn(
                     "HebrewNotesWorkbench/LICENCES/HEB-OCR-MIT.txt", names
                 )
+                self.assertIn(
+                    "HebrewNotesWorkbench/LICENCES/PHOTOCRAFT-MIT.txt", names
+                )
                 text = archive.read(
                     "HebrewNotesWorkbench/LICENCES/HEB-OCR-MIT.txt"
                 ).decode("utf-8")
+                pc_text = archive.read(
+                    "HebrewNotesWorkbench/LICENCES/PHOTOCRAFT-MIT.txt"
+                ).decode("utf-8")
             self.assertIn("MIT License", text)
             self.assertIn("Itay Inbar", text)
+            self.assertIn("MIT License", pc_text)
+            self.assertIn("PhotoCraft", pc_text)
 
     def test_the_release_is_not_made_without_the_licence_of_the_vendored_code(self) -> None:
         """A program that is given to somebody has to carry the licence

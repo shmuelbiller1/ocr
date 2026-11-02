@@ -71,6 +71,16 @@ COMPONENTS = [
         "MIT",
         "https://github.com/itayinbarr/heb-ocr",
     ),
+    (
+        "hebrew-words-db (offline Hebrew spelling lexicon, CC0-1.0)",
+        "CC0-1.0",
+        "https://github.com/roni5604/hebrew-words-db",
+    ),
+    (
+        "PhotoCraft (document visual audit and chromatic unmixing algorithms, adapted)",
+        "MIT",
+        "https://github.com/storytold/photocraft",
+    ),
 ]
 
 #: The licence texts that are not inside the packages, with the place
@@ -98,6 +108,16 @@ LICENCE_TEXTS = [
         # that there is nothing to fetch, and a release without the text
         # is not made.
         "HEB-OCR-MIT.txt",
+        "",
+        "MIT License",
+    ),
+    (
+        "CC0-1.0.txt",
+        "",
+        "CC0 1.0 Universal",
+    ),
+    (
+        "PHOTOCRAFT-MIT.txt",
         "",
         "MIT License",
     ),

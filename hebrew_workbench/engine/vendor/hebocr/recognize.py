@@ -86,6 +86,51 @@ class Recognizer:
         epoch = state.get("epoch")
         self.trained_epochs = (epoch + 1) if isinstance(epoch, int) else 0
         self.trained_steps = state.get("step")
+        self._last_logit_cache: tuple[tuple[Image.Image, ...], list[tuple[torch.Tensor, torch.Tensor]]] | None = None
+
+    def _forward_lines(
+        self, images: list[Image.Image], batch_size: int = 12
+    ) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        """Compute or reuse `(1, T, C)` logprobs and `(1,)` lengths per line.
+
+        Caches only the single most-recent `images` batch by object identity
+        (holding references until replaced so Python never reuses `id()` across
+        resized TTA views) so a raw greedy pass followed immediately by
+        `read_tta` (scale=1.0 + beam) skips a duplicate ViT+CNN forward pass.
+        """
+        if (
+            self._last_logit_cache is not None
+            and len(self._last_logit_cache[0]) == len(images)
+            and all(a is b for a, b in zip(self._last_logit_cache[0], images))
+        ):
+            return self._last_logit_cache[1]
+
+        order = sorted(range(len(images)), key=lambda i: images[i].width / max(images[i].height, 1))
+        per_line: dict[int, tuple[torch.Tensor, torch.Tensor]] = {}
+        amp = self.device.type == "cuda"
+
+        for start in range(0, len(order), batch_size):
+            chunk = order[start : start + batch_size]
+            arrays = [torch.from_numpy(preprocess(images[i])) for i in chunk]
+            widths = torch.tensor([a.shape[-1] for a in arrays], dtype=torch.long)
+            padded = torch.zeros(len(arrays), 1, arrays[0].shape[-2], int(widths.max()))
+            for j, a in enumerate(arrays):
+                padded[j, :, :, : a.shape[-1]] = a
+
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp):
+                logprobs = self.model(padded.to(self.device))
+            logprobs = logprobs.float().cpu()
+            lengths = self.model.output_lengths(widths).cpu()
+            for j, i in enumerate(chunk):
+                t_len = int(lengths[j].item())
+                per_line[i] = (
+                    logprobs[j : j + 1, :t_len, :].contiguous(),
+                    torch.tensor([t_len], dtype=torch.long),
+                )
+
+        ordered = [per_line[i] for i in range(len(images))]
+        self._last_logit_cache = (tuple(images), ordered)
+        return ordered
 
     @torch.no_grad()
     def read(
@@ -104,43 +149,28 @@ class Recognizer:
         if not images:
             return ([], []) if return_confidence else []
 
-        order = sorted(range(len(images)), key=lambda i: images[i].width / max(images[i].height, 1))
-        texts: dict[int, str] = {}
-        confs: dict[int, float] = {}
-        amp = self.device.type == "cuda"
+        line_outputs = self._forward_lines(images, batch_size=batch_size)
+        ordered_texts: list[str] = []
+        ordered_confs: list[float] = []
 
-        for start in range(0, len(order), batch_size):
-            chunk = order[start : start + batch_size]
-            arrays = [torch.from_numpy(preprocess(images[i])) for i in chunk]
-            widths = torch.tensor([a.shape[-1] for a in arrays], dtype=torch.long)
-            padded = torch.zeros(len(arrays), 1, arrays[0].shape[-2], int(widths.max()))
-            for j, a in enumerate(arrays):
-                padded[j, :, :, : a.shape[-1]] = a
-
-            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp):
-                logprobs = self.model(padded.to(self.device))
-            logprobs = logprobs.float()
-
-            lengths = self.model.output_lengths(widths)
+        for logprobs_1, lengths_1 in line_outputs:
             if self.beam_width and self.beam_width > 1:
                 decoded = beam_decode(
-                    logprobs, lengths, self.charset,
+                    logprobs_1, lengths_1, self.charset,
                     beam_width=self.beam_width, lm=self.lm,
                     lm_weight=self.lm_weight, length_bonus=self.length_bonus,
                     word_lm=self.word_lm, word_weight=self.word_weight,
                 )
             else:
-                decoded = greedy_decode(logprobs, lengths, self.charset)
+                decoded = greedy_decode(logprobs_1, lengths_1, self.charset)
             # Confidence always comes from the best path: it is a rejection
             # signal, and a beam's score is not comparable across line lengths.
-            scores = greedy_confidence(logprobs, lengths, emitting_only=emitting_only)
-            for j, i in enumerate(chunk):
-                texts[i] = decoded[j]
-                confs[i] = scores[j]
+            scores = greedy_confidence(logprobs_1, lengths_1, emitting_only=emitting_only)
+            ordered_texts.append(decoded[0])
+            ordered_confs.append(scores[0])
 
-        ordered_texts = [texts[i] for i in range(len(images))]
         if return_confidence:
-            return ordered_texts, [confs[i] for i in range(len(images))]
+            return ordered_texts, ordered_confs
         return ordered_texts
 
     # Horizontal rescalings used for test-time augmentation. Real hands vary
@@ -205,8 +235,8 @@ class Recognizer:
             return "", []
 
         if self.tta and self.tta > 1:
-            texts = self.read_tta(crops)
             _, confs = self.read(crops, return_confidence=True)
+            texts = self.read_tta(crops)
         else:
             texts, confs = self.read(crops, return_confidence=True)
         records = [

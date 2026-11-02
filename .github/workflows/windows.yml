@@ -119,6 +119,7 @@ jobs:
           python -m PyInstaller --noconfirm --clean --onedir --windowed `
             --add-data "samples;samples" `
             --add-data "LICENSE;." `
+            --add-data "hebrew_workbench/suggestions/data;hebrew_workbench/suggestions/data" `
             --hidden-import unicodedata `
             --name HebrewNotesWorkbench app.py 2>&1 | Tee-Object -FilePath build-windows.log
           if ($LASTEXITCODE -ne 0) { throw 'the application could not be built' }
@@ -213,6 +214,7 @@ jobs:
         shell: pwsh
         run: |
           python -m PyInstaller --noconfirm --onefile --console `
+            --add-data "hebrew_workbench/suggestions/data;hebrew_workbench/suggestions/data" `
             --name HebrewNotesWorkbench-console app.py 2>&1 | Tee-Object -FilePath build-console.log
       - name: Show what the console build reports
         if: failure()
@@ -243,6 +245,11 @@ jobs:
           $archive = Get-ChildItem 'release' -Filter '*-win64.zip' | Select-Object -First 1
           if (-not $archive) { throw 'the complete release ZIP is missing' }
           $base = $archive.Name -replace '-win64\.zip$', ''
+          $telemetry = @{
+            zip_name = $archive.Name
+            zip_bytes = $archive.Length
+            editions = @{}
+          }
           # A small permissively licensed edition and a full edition
           # with Mishkefet + its optional language models (noncommercial).
           foreach ($edition in @('lite', 'full')) {
@@ -270,16 +277,35 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "One-click EXE build failed: $edition" }
             $exe = Join-Path 'release' ($name + '.exe')
             $report = "one-click-$edition-selftest.json"
-            pwsh -File tools/run_windows_exe.ps1 `
-              -Exe $exe -Report $report `
-              -StdOut "one-click-$edition-out.txt" `
-              -StdErr "one-click-$edition-err.txt" `
-              -TimeoutSeconds 300
-            if ($LASTEXITCODE -ne 0) { throw "Offline EXE failed first launch: $edition" }
+            $coldElapsed = Measure-Command {
+              pwsh -File tools/run_windows_exe.ps1 `
+                -Exe $exe -Report $report `
+                -StdOut "one-click-$edition-out.txt" `
+                -StdErr "one-click-$edition-err.txt" `
+                -TimeoutSeconds 300
+              if ($LASTEXITCODE -ne 0) { throw "Offline EXE failed first launch: $edition" }
+            }
             if (-not (Test-Path $report)) { throw "Offline report missing: $edition" }
             $check = Get-Content $report -Raw | ConvertFrom-Json
             if (-not $check.ok) { throw "Offline selftest failed: $edition" }
+            $warmReport = "one-click-$edition-warm-selftest.json"
+            $warmElapsed = Measure-Command {
+              pwsh -File tools/run_windows_exe.ps1 `
+                -Exe $exe -Report $warmReport `
+                -StdOut "one-click-$edition-warm-out.txt" `
+                -StdErr "one-click-$edition-warm-err.txt" `
+                -TimeoutSeconds 300
+              if ($LASTEXITCODE -ne 0) { throw "Offline EXE failed second launch: $edition" }
+            }
+            $exeSize = (Get-Item $exe).Length
+            $telemetry.editions[$edition] = @{
+              exe_name = ($name + '.exe')
+              exe_bytes = $exeSize
+              first_launch_selftest_seconds = [math]::Round($coldElapsed.TotalSeconds, 2)
+              subsequent_launch_selftest_seconds = [math]::Round($warmElapsed.TotalSeconds, 2)
+            }
           }
+          $telemetry | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 'one-click-telemetry.json'
           $root = Join-Path $env:LOCALAPPDATA 'HebrewNotesWorkbench/one-click'
           $manifests = @(Get-ChildItem $root -Filter OFFLINE-MODELS.json -Recurse -File)
           if ($manifests.Count -lt 2) { throw 'Both offline editions were not unpacked' }
@@ -337,7 +363,7 @@ jobs:
         run: |
           Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py --branch=ci/diagnostics modern-spelling-build.txt modern-spelling-check.txt modern-spelling-windows.json spelling-build.txt spelling-check.txt spelling-windows.json test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-out.txt.exit.txt release-selftest-err.txt release-selftest.json release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
+          python tools/publish_diagnostics.py --branch=ci/diagnostics one-click-telemetry.json one-click-lite-selftest.json one-click-full-selftest.json modern-spelling-build.txt modern-spelling-check.txt modern-spelling-windows.json spelling-build.txt spelling-check.txt spelling-windows.json test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-out.txt.exit.txt release-selftest-err.txt release-selftest.json release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
@@ -420,7 +446,30 @@ jobs:
           # Hebrew cursive.  Its licence is not a commercial one, and the
           # file is checked against the digest that the project pinned.
           python tools/download_model.py --model mishkefet-v1 --target .cache/models 2>&1 | tee model-download-mishkefet.log
-          if [ "$?" -ne 0 ]; then throw 'the model of the second engine could not be downloaded'; fi
+          if [ "$?" -ne 0 ]; then exit 1; fi
+          python tools/download_model.py --model mishkefet-char-lm --target .cache/models
+          python tools/download_model.py --model mishkefet-word-lm --target .cache/models
+      - name: Measure accuracy on verified modern Hebrew cursive corpus
+        run: |
+          set -o pipefail
+          python tools/build_benchmark.py \
+            --corpus benchmark/modern_cursive \
+            --output build/manifest-modern-cursive.json \
+            2>&1 | tee benchmark-cursive-manifest.log
+          python tools/benchmark_ocr.py \
+            --corpus benchmark/modern_cursive \
+            --models .cache/models \
+            --engines kraken-ppocrv6-small kraken-ppocrv6-medium mishkefet-v1 mishkefet-v1:beam mishkefet-v1:assisted \
+            --output ocr-accuracy-cursive.json 2>&1 | tee benchmark-cursive.log
+          python tools/benchmark_suggestions.py \
+            --ocr-report ocr-accuracy-cursive.json \
+            --corpus benchmark/modern_cursive \
+            --output suggestions-benchmark.json 2>&1 | tee benchmark-suggestions.log
+          python tools/benchmark_photocraft_audit.py \
+            --corpus benchmark/modern_cursive \
+            --models .cache/models \
+            --engines mishkefet-v1 kraken-ppocrv6-small \
+            --output photocraft-audit-benchmark.json 2>&1 | tee benchmark-photocraft.log
       - name: Check the corpus of the modern school handwriting
         run: |
           set -o pipefail
@@ -506,6 +555,9 @@ jobs:
           if [ -f ocr-accuracy-modern.json ]; then
             python tools/write_accuracy_results.py --report ocr-accuracy-modern.json --document docs/OCR_ACCURACY.md
           fi
+          if [ -f ocr-accuracy-cursive.json ]; then
+            python tools/write_accuracy_results.py --report ocr-accuracy-cursive.json --document docs/OCR_ACCURACY.md --begin '<!-- CURSIVE:BEGIN -->' --end '<!-- CURSIVE:END -->'
+          fi
           if [ -f ocr-accuracy.json ]; then
             python tools/write_accuracy_results.py --report ocr-accuracy.json --document docs/OCR_ACCURACY.md --begin '<!-- DIAGNOSTIC:BEGIN -->' --end '<!-- DIAGNOSTIC:END -->'
           fi
@@ -541,10 +593,20 @@ jobs:
           name: ocr-accuracy-modern-report
           path: ocr-accuracy-modern.json
           if-no-files-found: warn
+      - name: Upload verified modern cursive and suggestion benchmarks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-cursive-and-suggestions-benchmarks
+          path: |
+            ocr-accuracy-cursive.json
+            suggestions-benchmark.json
+            photocraft-audit-benchmark.json
+          if-no-files-found: warn
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/smoke-small.txt build/smoke/smoke-medium.txt build/smoke/smoke-mishkefet-v1.txt build/smoke/smoke-test.json decoding-comparison.log build/decoding-comparison/decoding-comparison.json build/decoding-comparison/decoding-raw.txt build/decoding-comparison/decoding-comparison-raw.txt build/decoding-comparison/decoding-assisted.txt
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark-cursive-manifest.log benchmark-cursive.log ocr-accuracy-cursive.json benchmark-suggestions.log suggestions-benchmark.json benchmark-photocraft.log photocraft-audit-benchmark.json benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/smoke-small.txt build/smoke/smoke-medium.txt build/smoke/smoke-mishkefet-v1.txt build/smoke/smoke-test.json decoding-comparison.log build/decoding-comparison/decoding-comparison.json build/decoding-comparison/decoding-raw.txt build/decoding-comparison/decoding-comparison-raw.txt build/decoding-comparison/decoding-assisted.txt
 
   ocr-worker-windows:
     name: OCR worker (Windows)

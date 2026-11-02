@@ -74,8 +74,8 @@ the engine, but they are not what the program is made for.
 | Accuracy on the handwriting of old times (a diagnostic) | **Works** | 57.6% character error rate with the small model and 55.7% with the medium model, on the 4 pages of early modern cursive whose ground truth is complete - the build reads 5 pages of the dataset, and the numbers are in `docs/OCR_ACCURACY.md` |
 | Comparing several engines on the same pages | **Works** | Every engine is measured on the same pages, and the numbers of each of them are written into `docs/OCR_ACCURACY.md`; choosing the default engine by the measurement is the plan and is not done by the program yet - the user chooses the engine in the settings screen, and a choice of the user is never overridden |
 | A warning about the numbers of the second engine | **Written down** | *Mishkefet-v1* was trained on part of the Pinkas corpus, so its rates on the pages of that corpus are optimistic and are **not** a clean comparison with the first engine; the clean comparison is the school corpus, which is still empty - see `docs/OCR_ACCURACY.md` and `docs/ENGINES.md` |
-| Spelling proposals | **Works, needs a word list** | The word list of the user; the program ships no dictionary (the Hebrew Hunspell dictionary is AGPL) |
-| Grammar proposals | **Works, a few rules** | Punctuation and spacing |
+| Spelling proposals | **Works out-of-the-box** | Bundled CC0-1.0 Hebrew word list (196,227 words), prefix morphology, OCR letter-confusion candidate ranking, persistent personal dictionary, and optional custom dictionary / Hunspell plugin support |
+| Grammar proposals | **Works out-of-the-box** | Deterministic offline Hebrew grammar and punctuation rules (`א-` 1sg future prefix, construct definite article, numeral & demonstrative gender agreement, accidental duplications, and spacing) |
 | `לשון הספר` proposals | **Not implemented** | The module exists, is switched off, and says so; see `docs/SUGGESTIONS.md` |
 | Accepting and refusing proposals | **Works** | Every proposal is shown first and is accepted or refused on its own; every accepted change is logged and can be undone |
 | Working on many proposals at once | **Works** | Accept or refuse all of them, or only the ones that were checked; change one word in all its places; keep a word in the word list of the user; take the last group of changes back as one action; go back to the text that the recognition gave.  Nothing is applied without the press of the user - there is no button that applies the corrections it judges to be safe |
@@ -87,14 +87,17 @@ the engine, but they are not what the program is made for.
 
 ### What is not there yet
 
-* **A dictionary of Hebrew spelling.**  The program does not ship one:
-  the core spelling module uses a user word list. An optional native
-  Hunspell/Hspell plugin is now available to build separately; it is
-  experimental, AGPL-licensed and uses pre-2017 spelling rules. AGPL
-  redistribution requires compliance, not a blanket prohibition. See
-  [the plugin guide](optional_plugins/hunspell_hebrew/README.md).
-* **A grammar engine.**  The grammar module has a few punctuation and
-  spacing rules.  It is not a grammar checker.
+* **Full morphological Hunspell affix analysis in the core bundle.**  The core
+  application bundles a permissive CC0-1.0 Hebrew lexicon (`hebrew_words_cc0.txt.gz`,
+  196,227 words) with conservative prefix/suffix checks and OCR-error ranking;
+  an optional native Hunspell/Hspell plugin is also available to build
+  separately (experimental, AGPL-licensed, pre-2017 spelling rules; see
+  [the plugin guide](optional_plugins/hunspell_hebrew/README.md)).
+* **Full syntactic/neural Hebrew grammar parsing.**  The built-in `grammar-hebrew`
+  module implements high-precision deterministic rules (1st-person future `א-`
+  prefix, construct definite article, numeral & demonstrative gender agreement,
+  accidental duplications, and spacing) rather than unconstrained sentence
+  rewriting.
 * **לשון הספר.**  The module is a frame, it is switched off, and it
   proposes nothing.  See `docs/SUGGESTIONS.md`.
 * **Automatic correction.**  Nothing in the program changes the text of

@@ -63,7 +63,9 @@ from hebrew_workbench.benchmark.corpus import (  # noqa: E402
 from hebrew_workbench.benchmark.metrics import (  # noqa: E402
     character_error_rate,
     levenshtein,
+    line_alignment_metrics,
     normalise,
+    process_memory_mb,
     word_error_rate,
 )
 
@@ -163,15 +165,30 @@ def measure(engine, page: Page, name: str = "") -> dict | None:
         return None
 
     started = time.monotonic()
+    cpu_started = time.process_time()
     recognised = engine.recognize(page.image)
     seconds = time.monotonic() - started
+    cpu_seconds = max(0.0, time.process_time() - cpu_started)
+    peak_rss_mb = process_memory_mb()
+
+    # When measuring non-raw Mishkefet decoding explicitly, evaluate the
+    # assisted text produced by that mode; default "raw" evaluates raw text.
+    mode = getattr(engine, "mode", None) or getattr(
+        engine, "decoding_mode", "raw"
+    )
+    recognised_text = (
+        recognised.assisted_text
+        if mode != "raw" and getattr(recognised, "assisted_text", None)
+        else recognised.text
+    )
 
     reference = normalise(reference_raw)
-    hypothesis = normalise(recognised.text)
+    hypothesis = normalise(recognised_text)
     reference_points = normalise(reference_raw, keep_points=True)
-    hypothesis_points = normalise(recognised.text, keep_points=True)
+    hypothesis_points = normalise(recognised_text, keep_points=True)
     reference_words = reference.split()
     hypothesis_words = hypothesis.split()
+    line_stats = line_alignment_metrics(reference_raw, recognised_text)
 
     return {
         "page": name,
@@ -181,6 +198,7 @@ def measure(engine, page: Page, name: str = "") -> dict | None:
         # What the file of the ground truth really holds, so that the
         # measurement can be understood and not only believed.
         "ground_truth": dict(page.report),
+        "decoding_mode": mode,
         "characters_reference": len(reference),
         "characters_hypothesis": len(hypothesis),
         "cer": round(character_error_rate(reference, hypothesis), 4),
@@ -196,26 +214,33 @@ def measure(engine, page: Page, name: str = "") -> dict | None:
         "words_reference": len(reference_words),
         "word_errors": levenshtein(reference_words, hypothesis_words),
         "seconds": round(seconds, 2),
+        "cpu_seconds": round(cpu_seconds, 2),
+        "cpu_utilization_pct": round(
+            100.0 * cpu_seconds / max(seconds, 1e-6), 1
+        ),
+        "peak_rss_mb": peak_rss_mb,
         # A short piece of both texts, so that a report that says
         # "the error rate is 1200%" can be looked at and understood.
         "reference_sample": reference[:200],
         "hypothesis_sample": hypothesis[:200],
+        "hypothesis_text": recognised_text,
         # The first lines of both sides, one by one, so that a
         # difference between the two can be seen and not only counted.
         "reference_lines_sample": [
             line[:70] for line in reference_raw.splitlines() if line.strip()
         ][:4],
         "hypothesis_lines_sample": [
-            line[:70] for line in recognised.text.splitlines() if line.strip()
+            line[:70] for line in recognised_text.splitlines() if line.strip()
         ][:4],
         # The lines are counted before the text is normalised, because
         # the normalisation turns every line into one long line.
-        "lines_reference": len(
-            [line for line in reference_raw.splitlines() if line.strip()]
-        ),
-        "lines_hypothesis": len(
-            [line for line in recognised.text.splitlines() if line.strip()]
-        ),
+        "lines_reference": line_stats["lines_reference"],
+        "lines_hypothesis": line_stats["lines_hypothesis"],
+        "matched_lines": line_stats["matched_lines"],
+        "missing_lines": line_stats["missing_lines"],
+        "extra_lines": line_stats["extra_lines"],
+        "duplicated_lines": line_stats["duplicated_lines"],
+        "reading_order_inversions": line_stats["reading_order_inversions"],
     }
 
 
@@ -276,6 +301,31 @@ def summarise(results: list[dict]) -> dict:
             1, total_words
         )
         seconds = sum(item["seconds"] for item in measured_pages) / len(measured_pages)
+        cpu_seconds = sum(
+            item.get("cpu_seconds", 0.0) for item in measured_pages
+        ) / len(measured_pages)
+        peak_rss_mb = max(
+            (item.get("peak_rss_mb", 0.0) for item in measured_pages),
+            default=0.0,
+        )
+        lines_reference = sum(
+            item.get("lines_reference", 0) for item in measured_pages
+        )
+        lines_hypothesis = sum(
+            item.get("lines_hypothesis", 0) for item in measured_pages
+        )
+        missing_lines = sum(
+            item.get("missing_lines", 0) for item in measured_pages
+        )
+        extra_lines = sum(
+            item.get("extra_lines", 0) for item in measured_pages
+        )
+        duplicated_lines = sum(
+            item.get("duplicated_lines", 0) for item in measured_pages
+        )
+        reading_order_inversions = sum(
+            item.get("reading_order_inversions", 0) for item in measured_pages
+        )
     else:
         # There is no page that may be measured: there is no rate, and
         # not a rate of zero.
@@ -284,13 +334,31 @@ def summarise(results: list[dict]) -> dict:
         total_cer = None
         total_wer = None
         seconds = None
+        cpu_seconds = None
+        peak_rss_mb = None
+        lines_reference = 0
+        lines_hypothesis = 0
+        missing_lines = None
+        extra_lines = None
+        duplicated_lines = None
+        reading_order_inversions = None
 
     return {
         "cer": None if total_cer is None else round(total_cer, 4),
         "wer": None if total_wer is None else round(total_wer, 4),
         "seconds_per_page": None if seconds is None else round(seconds, 2),
+        "cpu_seconds_per_page": None
+        if cpu_seconds is None
+        else round(cpu_seconds, 2),
+        "peak_rss_mb": peak_rss_mb,
         "characters_reference": total_reference,
         "words_reference": total_words,
+        "lines_reference": lines_reference,
+        "lines_hypothesis": lines_hypothesis,
+        "missing_lines": missing_lines,
+        "extra_lines": extra_lines,
+        "duplicated_lines": duplicated_lines,
+        "reading_order_inversions": reading_order_inversions,
         "pages_measured": len(measured_pages),
         "ground_truth_complete": not incomplete,
         "pages_with_incomplete_ground_truth": incomplete,
@@ -559,7 +627,13 @@ def _kraken_engine():
     return KrakenEngine
 
 
-def _engine_for(artifact, model_path: Path, identifier: str, timeout: float):
+def _engine_for(
+    artifact,
+    model_path: Path,
+    identifier: str,
+    timeout: float,
+    decoding_mode: str = "raw",
+):
     """The engine that reads a given model.
 
     Every model belongs to an engine, and the catalogue says which one,
@@ -569,14 +643,22 @@ def _engine_for(artifact, model_path: Path, identifier: str, timeout: float):
         from hebrew_workbench.engine.mishkefet import MishkefetEngine
 
         return MishkefetEngine(
-            model_path, artifact_id=identifier, timeout_seconds=timeout
+            model_path,
+            artifact_id=identifier,
+            timeout_seconds=timeout,
+            mode=decoding_mode,
         )
     return _kraken_engine()(
         model_path, artifact_id=identifier, timeout_seconds=timeout
     )
 
 
-def resolve_engines(model_ids: list[str], models_folder: Path, timeout: float = 1800.0):
+def resolve_engines(
+    model_ids: list[str],
+    models_folder: Path,
+    timeout: float = 1800.0,
+    decoding_mode: str = "raw",
+):
     """The engines to measure, and the reasons for the ones that are left out.
 
     The models are looked for in the folder that is given, so that a
@@ -591,21 +673,34 @@ def resolve_engines(model_ids: list[str], models_folder: Path, timeout: float = 
     engines = []
     warnings = []
     for identifier in model_ids:
-        artifact = MODEL_ARTIFACTS.get(identifier)
+        base_id, _, inline_mode = identifier.partition(":")
+        eff_mode = inline_mode or decoding_mode
+        artifact = MODEL_ARTIFACTS.get(base_id)
         if artifact is None:
             warnings.append(f"the model {identifier} is not known to the program")
             continue
         model_path = models_folder / artifact.filename
         if not model_path.is_file():
             warnings.append(
-                f"the model {identifier} is not installed ({model_path}), "
+                f"the model {base_id} is not installed ({model_path}), "
                 "it was not measured"
             )
             continue
+        label = (
+            base_id
+            if artifact.engine != "mishkefet" or eff_mode == "raw"
+            else f"{base_id}:{eff_mode}"
+        )
         engines.append(
             (
-                _engine_for(artifact, model_path, identifier, timeout),
-                identifier,
+                _engine_for(
+                    artifact,
+                    model_path,
+                    base_id,
+                    timeout,
+                    decoding_mode=eff_mode,
+                ),
+                label,
             )
         )
     return engines, warnings
@@ -646,6 +741,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pages", type=int, default=10, help="how many pages to recognise")
     parser.add_argument("--output", default="ocr-accuracy.json", help="report file")
     parser.add_argument("--timeout", type=float, default=1800.0)
+    parser.add_argument(
+        "--decoding-mode",
+        choices=("raw", "beam", "assisted"),
+        default="raw",
+        help="Mishkefet decoding profile (default: raw optical greedy)",
+    )
     args = parser.parse_args(argv)
 
     if not args.corpus and not args.pinkas:
@@ -759,7 +860,10 @@ def main(argv: list[str] | None = None) -> int:
     else:
         models_folder = Path(args.models) if args.models else models_directory()
         engines, warnings = resolve_engines(
-            model_ids, models_folder, timeout=args.timeout
+            model_ids,
+            models_folder,
+            timeout=args.timeout,
+            decoding_mode=args.decoding_mode,
         )
         for warning in warnings:
             print(f"warning: {warning}", file=sys.stderr)
@@ -770,10 +874,16 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     # -- the measurement ----------------------------------------------------
+    what_is_measured = (
+        "the raw recognition of the engine"
+        if args.decoding_mode == "raw"
+        else f"explicit Mishkefet decoding profile: {args.decoding_mode}"
+    )
     report = {
         "corpus": description,
         "measurement": {
-            "what_is_measured": "the raw recognition of the engine",
+            "what_is_measured": what_is_measured,
+            "decoding_mode": args.decoding_mode,
             "no_corrections": (
                 "the proposals of the spelling, of the grammar and of the "
                 "scholarly style are not part of the measurement"

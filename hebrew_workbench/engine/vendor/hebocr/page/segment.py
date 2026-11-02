@@ -1,27 +1,20 @@
-"""Line segmentation for full-page mode.
+"""Line segmentation and baseline straightening for full-page handwritten Hebrew.
 
-The benchmark's ten pages are photographs of handwritten notebooks: ruled
-paper, spiral bindings, torn edges, dark table backgrounds, perspective skew,
-mixed pen colours, and on three pages a layout that is not a column of text at
-all (a mind map, a boxed diagram, a two-column table).
-
-The design follows from how the mode is scored. The leaderboard ranks full-page
-by *word coverage*, which is order-independent -- "segmentation and
-reading-order differences don't count against it". So this segmenter is tuned
-for recall of text regions, not for a perfect reading order. Missing a line
-costs coverage; ordering it wrongly costs only the secondary page-CER number.
-
-Every threshold here is derived from the image's own measured stroke size
-rather than being a pixel constant, so nothing is fitted to these ten pages.
-That matters: they are the test set, and hand-tuning constants against them
-would quietly turn the benchmark into a training set.
+Every threshold here is derived from the image's own measured stroke size and
+line pitch rather than fixed pixel constants, with safeguards for:
+1. Low-DPI or faint pencil/aged-ink scans (`min_side` upscaling + adaptive C fallback),
+2. Short 3-6 line notes (`estimate_line_pitch` lags up to half-page height),
+3. Steeply tilted phone photographs (`estimate_skew` coarse-to-fine up to +-44 deg),
+4. Dense multi-line cursive paragraphs where descenders touch across >12 lines
+   (density-gated `find_lines` + `split_tall`), and
+5. Curved or sagging handwritten lines (`straighten_line` 2-pass quadratic fit).
 """
 
 from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 
 @dataclass
@@ -59,25 +52,55 @@ def _flatten(gray: np.ndarray) -> np.ndarray:
     return np.clip(flat * 128.0, 0, 255).astype(np.uint8)
 
 
-def binarize(image: Image.Image, max_side: int = 2000) -> tuple[np.ndarray, float]:
+def binarize(
+    image: Image.Image,
+    max_side: int = 2000,
+    min_side: int = 900,
+) -> tuple[np.ndarray, float]:
     """Page -> binary ink mask (255 = ink), plus the scale it was worked at.
 
-    Downscaling first is not just for speed: at full resolution the adaptive
-    threshold window sits inside single pen strokes and shatters them.
+    Downscaling large scans keeps adaptive-threshold windows wider than single
+    pen strokes; upscaling low-resolution scans (`min_side`) prevents thin
+    cursive strokes from being erased by thresholding and speckle opening.
     """
     gray = np.asarray(image.convert("L"), dtype=np.uint8)
-    scale = min(1.0, max_side / max(gray.shape))
-    if scale < 1.0:
+    longest = max(gray.shape)
+    shortest = max(1, min(gray.shape))
+    if longest > max_side:
+        scale = max_side / float(longest)
         gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    elif shortest < min_side:
+        scale = min(max_side / float(longest), min_side / float(shortest))
+        if scale > 1.05:
+            gray = cv2.resize(
+                gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC
+            )
+        else:
+            scale = 1.0
+    else:
+        scale = 1.0
 
     flat = _flatten(gray)
     block = max(15, (min(flat.shape) // 40) | 1)  # odd, and scaled to the page
     binary = cv2.adaptiveThreshold(
         flat, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, block, 12
     )
-    # Speckle removal: a lone pixel is sensor noise, never ink.
-    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
-    return binary, scale
+    opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+
+    # Faint-ink fallback: aged pencil or washed-out scans can lose nearly all
+    # strokes under C=12 + 2x2 opening. Re-threshold gently only when needed.
+    if float((opened > 0).mean()) < 0.008:
+        gentle = cv2.adaptiveThreshold(
+            flat, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, block, 6
+        )
+        gentle_open = cv2.morphologyEx(
+            gentle, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8)
+        )
+        if float((gentle_open > 0).mean()) >= 0.004:
+            return gentle_open, scale
+        if float((gentle > 0).mean()) > float((opened > 0).mean()):
+            return gentle, scale
+    return opened, scale
 
 
 def _oriented_line_kernel(length: int, angle_deg: float) -> np.ndarray:
@@ -90,40 +113,32 @@ def _oriented_line_kernel(length: int, angle_deg: float) -> np.ndarray:
     return kernel
 
 
-def remove_rules(binary: np.ndarray, pitch: float, angles=(-2.0, -1.0, -0.4, 0.0, 0.4, 1.0, 2.0)) -> np.ndarray:
-    """Erase printed rules -- both the horizontal lines and the margin rules.
-
-    Must run *after* deskewing. A ruled line drifts vertically across the page
-    when the photo is even slightly rotated, so a long flat kernel does not fit
-    inside it and the opening finds nothing; that failure is what fused every
-    text line into one blob on the first attempt.
-
-    Only *thin* long runs are removed. A long run that is also thick is a
-    deliberate pen stroke -- a table border or an underline -- and erasing it
-    would punch a hole through the writing that sits on it.
-    """
+def remove_rules(
+    binary: np.ndarray,
+    pitch: float,
+    angles=(-2.0, -1.0, -0.4, 0.0, 0.4, 1.0, 2.0),
+) -> np.ndarray:
+    """Erase thin printed horizontal and vertical rules after deskewing."""
     length = max(40, int(pitch * 2.0))
     thickness = max(3, int(pitch * 0.28))
 
-    # A photographed page is never perfectly flat or perfectly square to the
-    # lens, so its rules sag and tilt by a degree or two. A single flat kernel
-    # finds none of them -- measured on this benchmark, it removed 0.0% of the
-    # ink on page 1 -- so the opening is repeated over a small fan of angles and
-    # the results unioned.
     horizontal = np.zeros_like(binary)
     for angle in angles:
         horizontal = cv2.bitwise_or(
-            horizontal, cv2.morphologyEx(binary, cv2.MORPH_OPEN, _oriented_line_kernel(length, angle))
+            horizontal,
+            cv2.morphologyEx(
+                binary, cv2.MORPH_OPEN, _oriented_line_kernel(length, angle)
+            ),
         )
     vertical = np.zeros_like(binary)
     for angle in angles:
         kernel = np.ascontiguousarray(_oriented_line_kernel(length, angle).T)
-        vertical = cv2.bitwise_or(vertical, cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel))
+        vertical = cv2.bitwise_or(
+            vertical, cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+        )
 
     out = binary
     for runs, thin_kernel in ((horizontal, (1, thickness)), (vertical, (thickness, 1))):
-        # A long run that is also thick is a pen stroke -- a table border or an
-        # underline -- and cutting it would punch through the writing on it.
         thick = cv2.morphologyEx(
             runs, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, thin_kernel)
         )
@@ -135,11 +150,9 @@ def remove_rules(binary: np.ndarray, pitch: float, angles=(-2.0, -1.0, -0.4, 0.0
 def estimate_line_pitch(binary: np.ndarray) -> float:
     """Distance from one text line to the next, by autocorrelating row ink.
 
-    Far more robust than a median connected-component height, which on these
-    pages is dominated by speckles, vowel-sized marks and rule fragments and
-    came out at 13 px when the true line spacing was 73. Ruled writing is
-    strongly periodic vertically, so the first real peak of the projection
-    profile's autocorrelation is the line pitch.
+    Searches lags up to half the page height (`len(profile) // 2`) so short
+    3-6 line notes find their true inter-line spacing rather than intra-line
+    stroke texture.
     """
     profile = binary.sum(axis=1, dtype=np.float64)
     profile = profile - profile.mean()
@@ -147,40 +160,93 @@ def estimate_line_pitch(binary: np.ndarray) -> float:
         return 30.0
 
     corr = np.correlate(profile, profile, mode="full")[len(profile) - 1 :]
-    lo = max(8, int(len(profile) * 0.004))       # below this is stroke texture
-    hi = min(len(corr) - 1, int(len(profile) * 0.15))  # above this is page structure
+    lo = max(12, int(len(profile) * 0.012))
+    hi = min(len(corr) - 1, max(lo + 4, len(profile) // 2))
     if hi <= lo + 2:
         return 30.0
 
     window = corr[lo:hi]
-    # First local maximum that stands above its neighbours, not just the argmax:
-    # the argmax can land on a harmonic when a page has paragraph gaps.
+    min_prominence = max(0.0, float(corr[0]) * 0.05)
     peaks = [
-        i for i in range(1, len(window) - 1)
-        if window[i] > window[i - 1] and window[i] >= window[i + 1] and window[i] > 0
+        i
+        for i in range(1, len(window) - 1)
+        if window[i] > window[i - 1]
+        and window[i] >= window[i + 1]
+        and window[i] > min_prominence
     ]
+    if not peaks:
+        peaks = [
+            i
+            for i in range(1, len(window) - 1)
+            if window[i] > window[i - 1] and window[i] >= window[i + 1] and window[i] > 0
+        ]
     return float(lo + (peaks[0] if peaks else int(np.argmax(window))))
 
 
-def estimate_skew(binary: np.ndarray, limit: float = 6.0, step: float = 0.5) -> float:
-    """Find the rotation that makes horizontal projection most peaked.
+def _projection_score(binary: np.ndarray, valid_mask: np.ndarray, angle: float) -> float:
+    h, w = binary.shape
+    center = (w / 2.0, h / 2.0)
+    m = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(binary, m, (w, h), flags=cv2.INTER_NEAREST)
+    rot_valid = cv2.warpAffine(valid_mask, m, (w, h), flags=cv2.INTER_NEAREST)
+    valid_cols = (rot_valid > 0).sum(axis=1, dtype=np.float64)
+    keep = valid_cols >= (w * 0.35)
+    if int(keep.sum()) < 8:
+        return -1.0
+    norm_profile = np.zeros(h, dtype=np.float64)
+    norm_profile[keep] = (
+        rotated[keep].sum(axis=1, dtype=np.float64) / valid_cols[keep]
+    )
+    active = norm_profile[keep]
+    return float(np.var(np.diff(active)))
 
-    When lines are level, the row-sum profile alternates hard between text rows
-    and blank gaps, so its variance is maximal. Searching that variance is more
-    robust on handwriting than Hough lines, which lock onto the ruled paper.
+
+def estimate_skew(binary: np.ndarray, limit: float = 44.0, step: float = 0.5) -> float:
+    """Find the rotation that makes the horizontal ink projection most peaked.
+
+    Uses a coarse-to-fine search when `limit > 10` so steeply rotated phone
+    captures (up to +-44 deg) are deskewed accurately without slowing down
+    level scans.
     """
-    small = cv2.resize(binary, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+    if limit > 10.0:
+        coarse_scale = min(1.0, 500.0 / max(1, max(binary.shape)))
+        coarse = (
+            cv2.resize(
+                binary,
+                None,
+                fx=coarse_scale,
+                fy=coarse_scale,
+                interpolation=cv2.INTER_AREA,
+            )
+            if coarse_scale < 1.0
+            else binary
+        )
+        coarse_valid = np.full_like(coarse, 255)
+        coarse_angle, coarse_best = 0.0, -1.0
+        for angle in np.arange(-limit, limit + 2.0, 2.0):
+            score = _projection_score(coarse, coarse_valid, float(angle))
+            if score > coarse_best:
+                coarse_angle, coarse_best = float(angle), score
+        lo = max(-limit, coarse_angle - 3.0)
+        hi = min(limit, coarse_angle + 3.0)
+    else:
+        lo, hi = -limit, limit
+
+    fine_scale = 0.5 if max(binary.shape) > 700 else 1.0
+    small = (
+        cv2.resize(
+            binary, None, fx=fine_scale, fy=fine_scale, interpolation=cv2.INTER_AREA
+        )
+        if fine_scale < 1.0
+        else binary
+    )
+    valid = np.full_like(small, 255)
     best_angle, best_score = 0.0, -1.0
-    h, w = small.shape
-    center = (w / 2, h / 2)
-    for angle in np.arange(-limit, limit + step, step):
-        m = cv2.getRotationMatrix2D(center, angle, 1.0)
-        rotated = cv2.warpAffine(small, m, (w, h), flags=cv2.INTER_NEAREST)
-        profile = rotated.sum(axis=1, dtype=np.float64)
-        score = float(np.var(np.diff(profile)))
+    for angle in np.arange(lo, hi + step * 0.5, step):
+        score = _projection_score(small, valid, float(angle))
         if score > best_score:
             best_angle, best_score = float(angle), score
-    return best_angle
+    return round(best_angle, 2)
 
 
 def _rotate(image: np.ndarray, angle: float, fill: int = 0) -> np.ndarray:
@@ -189,25 +255,22 @@ def _rotate(image: np.ndarray, angle: float, fill: int = 0) -> np.ndarray:
     h, w = image.shape[:2]
     m = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1.0)
     return cv2.warpAffine(
-        image, m, (w, h), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=fill
+        image,
+        m,
+        (w, h),
+        flags=cv2.INTER_NEAREST,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=fill,
     )
 
 
 def find_lines(binary: np.ndarray, pitch: float) -> list[LineBox]:
-    """Group ink into text lines by run-length smearing.
-
-    Smearing horizontally by roughly a word-gap joins the characters of a line
-    into one blob while leaving separate lines apart; a small vertical smear
-    then bridges the gap between a letter body and its dots. Connected
-    components of the result are the lines. Both extents are fractions of the
-    line pitch, so the same code works on a page shot from 20 cm and one shot
-    from a metre.
-    """
+    """Group ink into text lines by run-length smearing."""
     smear_x = max(8, int(pitch * 0.55))
-    # Kept deliberately small: vertical smearing is what welds a line to the one
-    # below it. `split_tall` recovers lines that are joined by their descenders.
     smear_y = max(1, int(pitch * 0.05))
-    smeared = cv2.dilate(binary, cv2.getStructuringElement(cv2.MORPH_RECT, (smear_x, smear_y)))
+    smeared = cv2.dilate(
+        binary, cv2.getStructuringElement(cv2.MORPH_RECT, (smear_x, smear_y))
+    )
     smeared = cv2.morphologyEx(
         smeared, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (smear_x, 1))
     )
@@ -216,32 +279,36 @@ def find_lines(binary: np.ndarray, pitch: float) -> list[LineBox]:
     boxes = []
     for i in range(1, n):
         x, y, w, h, area = (
-            stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP],
-            stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT],
+            stats[i, cv2.CC_STAT_LEFT],
+            stats[i, cv2.CC_STAT_TOP],
+            stats[i, cv2.CC_STAT_WIDTH],
+            stats[i, cv2.CC_STAT_HEIGHT],
             stats[i, cv2.CC_STAT_AREA],
         )
-        # A line is wider than one character and not a blot or a page edge.
         if w < pitch * 0.8 or h < pitch * 0.25:
             continue
-        if h > pitch * 12.0:  # spans a whole column: a box outline, not text
-            continue
+        # Only discard >12-pitch components when their unsmeared ink density
+        # indicates a solid dark block (`raw_fill >= 0.35`) or a narrow
+        # vertical border/binding (`w < 2 * pitch`). Sparse wide multi-line
+        # cursive paragraphs (`raw_fill ~ 0.05-0.20`) are sliced by `split_tall`.
+        if h > pitch * 12.0:
+            raw_fill = float((binary[y : y + h, x : x + w] > 0).mean())
+            if raw_fill >= 0.35 or w < pitch * 2.0:
+                continue
         if area < pitch * pitch * 0.12:
             continue
         boxes.append(LineBox(int(x), int(y), int(w), int(h)))
+    # Defensive cap against pathological background noise (e.g. un-inverted
+    # dark ground when preprocessing is disabled) so O(N^2) overlap merging
+    # remains bounded in milliseconds on CPU.
+    if len(boxes) > 500:
+        boxes.sort(key=lambda b: b.w * b.h, reverse=True)
+        boxes = boxes[:500]
     return boxes
 
 
 def split_tall(binary: np.ndarray, boxes: list[LineBox], pitch: float) -> list[LineBox]:
-    """Cut components that swallowed more than one text line.
-
-    In dense cursive the descenders of one line reach into the next, so the two
-    are genuinely connected ink and no amount of careful smearing separates
-    them. But the *amount* of ink per row still dips between them, so a
-    component roughly N pitches tall is split at the N-1 quietest rows near
-    where the boundaries are expected. Searching only a narrow window around
-    each expected boundary stops the cut from wandering into the middle of a
-    line, where a short row of text would also look like a minimum.
-    """
+    """Cut components that swallowed more than one text line."""
     out: list[LineBox] = []
     for box in boxes:
         n = int(round(box.h / pitch))
@@ -268,7 +335,6 @@ def split_tall(binary: np.ndarray, boxes: list[LineBox], pitch: float) -> list[L
             cols = np.where(band.sum(axis=0) > 0)[0]
             if len(rows) == 0 or len(cols) == 0:
                 continue
-            # Tighten onto the actual ink so the crop is not mostly blank paper.
             out.append(
                 LineBox(
                     x=box.x + int(cols[0]),
@@ -281,12 +347,7 @@ def split_tall(binary: np.ndarray, boxes: list[LineBox], pitch: float) -> list[L
 
 
 def merge_overlapping(boxes: list[LineBox], pitch: float) -> list[LineBox]:
-    """Join fragments of one line that the smear left separate.
-
-    Two boxes belong together when they occupy the same band vertically and sit
-    within a word-gap horizontally -- the usual case being a line broken across
-    a wide space or interrupted by a ruled line the cleanup missed.
-    """
+    """Join fragments of one line that the smear left separate."""
     if not boxes:
         return []
     boxes = sorted(boxes, key=lambda b: (b.y, b.x))
@@ -311,13 +372,7 @@ def merge_overlapping(boxes: list[LineBox], pitch: float) -> list[LineBox]:
 
 
 def reading_order(boxes: list[LineBox], pitch: float) -> list[LineBox]:
-    """Sort into Hebrew reading order: rows top to bottom, then right to left.
-
-    Boxes whose vertical centres fall within roughly one line height are treated
-    as the same row -- side-by-side cells of a table, or a heading beside a
-    marginal note -- and within a row the rightmost comes first, because Hebrew
-    is read right to left.
-    """
+    """Sort into Hebrew reading order: rows top to bottom, then right to left."""
     if not boxes:
         return []
     ordered = sorted(boxes, key=lambda b: b.y + b.h / 2)
@@ -332,24 +387,94 @@ def reading_order(boxes: list[LineBox], pitch: float) -> list[LineBox]:
     return [b for row in rows for b in sorted(row, key=lambda b: -(b.x + b.w))]
 
 
-def segment_page(image: Image.Image, max_side: int = 2000, deskew: bool = True):
-    """Page image -> (line crops in reading order, their boxes, skew angle).
+def straighten_line(crop: Image.Image) -> Image.Image:
+    """Flatten curved or locally tilted handwritten baselines via 2-pass quadratic fit.
 
-    Order matters. Deskew comes first, because rule removal needs the rules to
-    be genuinely horizontal, and line-pitch estimation needs the rows of text to
-    stack cleanly in the projection profile. Doing it the other way round leaves
-    the rules in place, and the smear then welds every line on the page into one
-    component.
-
-    Crops come from the *deskewed original* rather than the binary mask, so the
-    recognizer sees real greyscale ink and applies its own preprocessing.
+    Leaves already-straight lines (`max|deviation| < 0.15 * h`) untouched so
+    crisp horizontal lines incur zero resampling blur.
     """
+    arr = np.asarray(crop)
+    gray = (
+        cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+        if arr.ndim == 3
+        else arr.astype(np.uint8)
+    )
+    h, w = gray.shape
+    if h < 20 or w < max(40, h * 2):
+        return crop
+
+    bg = cv2.GaussianBlur(gray, (0, 0), max(h / 4.0, 3.0))
+    flat = np.clip(
+        gray.astype(np.float32) / np.maximum(bg.astype(np.float32), 1.0) * 128.0,
+        0,
+        255,
+    ).astype(np.uint8)
+    _, ink_mask = cv2.threshold(
+        flat, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+    )
+    weights = (ink_mask > 0).astype(np.float32)
+    col_mass = weights.sum(axis=0)
+    valid_x = np.where(col_mass >= 2.0)[0]
+    if len(valid_x) < max(12, w // 12):
+        return crop
+
+    ys = np.arange(h, dtype=np.float32)[:, None]
+    centroids = (weights[:, valid_x] * ys).sum(axis=0) / col_mass[valid_x]
+    xs = valid_x.astype(np.float32)
+
+    poly = np.polyfit(xs, centroids, 2)
+    resid = np.abs(centroids - np.polyval(poly, xs))
+    sigma = max(float(np.median(resid)) * 1.4826, 2.0)
+    band = max(2.5 * sigma, 0.22 * h)
+    inliers = resid <= band
+    if int(inliers.sum()) >= max(10, len(xs) // 2):
+        poly = np.polyfit(xs[inliers], centroids[inliers], 2)
+
+    all_x = np.arange(w, dtype=np.float32)
+    # Clamp polynomial outside observed ink span so margins never extrapolate wildly.
+    clamped_x = np.clip(all_x, float(xs[0]), float(xs[-1]))
+    curve = np.polyval(poly, clamped_x).astype(np.float32)
+    centre_y = float(np.median(curve))
+    deviation = curve - centre_y
+    max_dev = float(np.max(np.abs(deviation)))
+    if max_dev < max(4.0, 0.15 * h) or max_dev > 0.85 * h:
+        return crop
+
+    grid_y, grid_x = np.meshgrid(
+        np.arange(h, dtype=np.float32), all_x, indexing="ij"
+    )
+    map_y = (grid_y + deviation[None, :]).astype(np.float32)
+    border_val = (
+        tuple(int(v) for v in np.median(arr[[0, -1], :], axis=(0, 1)))
+        if arr.ndim == 3
+        else int(np.median(np.concatenate([arr[0], arr[-1]])))
+    )
+    warped = cv2.remap(
+        arr,
+        grid_x,
+        map_y,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=border_val,
+    )
+    return Image.fromarray(warped)
+
+
+def segment_page(
+    image: Image.Image,
+    max_side: int = 2000,
+    deskew: bool = True,
+    straighten: bool = True,
+):
+    """Page image -> (line crops in reading order, their boxes, skew angle)."""
+    image = ImageOps.exif_transpose(image) or image
     binary, scale = binarize(image, max_side=max_side)
 
     angle = estimate_skew(binary) if deskew else 0.0
     if abs(angle) > 1e-3:
         binary = _rotate(binary, angle)
-        work_image = image.rotate(angle, resample=Image.BICUBIC, fillcolor=(255, 255, 255))
+        fill = (255, 255, 255) if image.mode == "RGB" else 255
+        work_image = image.rotate(angle, resample=Image.BICUBIC, fillcolor=fill)
     else:
         work_image = image
 
@@ -362,10 +487,17 @@ def segment_page(image: Image.Image, max_side: int = 2000, deskew: bool = True):
     boxes = merge_overlapping(boxes, pitch)
     boxes = reading_order(boxes, pitch)
 
-    # Map boxes from the downscaled working image back to page coordinates.
     inv = 1.0 / scale if scale > 0 else 1.0
     full = [
-        LineBox(int(b.x * inv), int(b.y * inv), int(b.w * inv), int(b.h * inv))
+        LineBox(
+            int(round(b.x * inv)),
+            int(round(b.y * inv)),
+            max(1, int(round(b.w * inv))),
+            max(1, int(round(b.h * inv))),
+        )
         for b in boxes
     ]
-    return [b.crop(work_image) for b in full], full, angle
+    crops = [b.crop(work_image) for b in full]
+    if straighten:
+        crops = [straighten_line(c) for c in crops]
+    return crops, full, angle

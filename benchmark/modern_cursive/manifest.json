@@ -1,0 +1,122 @@
+{
+  "corpus": {
+    "name": "Public-Domain Modern Cursive Hebrew Manuscripts (HeOCR/hash PDM-1.0)",
+    "description": "Six public-domain (PDM-1.0) handwritten cursive Hebrew manuscript pages (1892-1930) by Rachel Bluwstein, H. N. Bialik, and N. H. Imber, with independently reviewed public-domain transcripts from Wikisource / HeOCR/hash. Includes graph-ruled notebook paper, wide-spaced short notes, faint low-DPI ink, and authorial cross-outs. Distinct from contemporary school notebooks (kept in benchmark/modern_school pending school consent), and distinct from early-modern 1500-1800 Pinkas records.",
+    "target": "modern_cursive",
+    "license": "PDM-1.0 (images and texts in the public domain; HeOCR/hash metadata CC0-1.0)",
+    "citation": "Wikimedia Commons PDM-1.0 scans; Wikisource Hebrew editions; HeOCR/hash index (https://github.com/HeOCR/hash, CC0-1.0).",
+    "url": "https://github.com/HeOCR/hash",
+    "pages": 6,
+    "pages_measured": 6,
+    "pages_without_verification": [],
+    "verified": true
+  },
+  "pages": [
+    {
+      "image": "pages/commons__begani_netatikha__p0001.jpg",
+      "transcript": "transcripts/commons__begani_netatikha__p0001.txt",
+      "sha256": "8e59f73f0d06cd34e6b3b629c5a7619f6a7383a52d0d49ae8080fa6453023ad8",
+      "writer": "Rachel Bluwstein",
+      "date": "1930",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "verified": true,
+      "complete": true,
+      "lines": 10,
+      "characters": 237,
+      "notes": "Modern Hebrew cursive ink manuscript (1930) on unruled paper; verbatim public-domain diplomatic/Wikisource transcript from HeOCR/hash."
+    },
+    {
+      "image": "pages/commons__bialik_el_hazippor__p0001.jpg",
+      "transcript": "transcripts/commons__bialik_el_hazippor__p0001.txt",
+      "sha256": "bdd6f1a3b9f8821bbca0c0c836eebf3914a335f816662f1a7f0c4495e45e624e",
+      "writer": "Hayyim Nahman Bialik",
+      "date": "1892",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "verified": true,
+      "complete": true,
+      "lines": 4,
+      "characters": 170,
+      "notes": "4-line wide-spaced cursive ink manuscript (1892) with vocalization marks; tests pitch estimation on short notes with wide line spacing (>15% page height)."
+    },
+    {
+      "image": "pages/commons__hatikvah_imber_manuscript__p0001.jpg",
+      "transcript": "transcripts/commons__hatikvah_imber_manuscript__p0001.txt",
+      "sha256": "76ff45560516d84b987e6651a023fb2d0f05c26d05125cfbc5eb787d046da3e8",
+      "writer": "Naftali Herz Imber",
+      "date": "1907/1908",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "verified": true,
+      "complete": true,
+      "lines": 10,
+      "characters": 242,
+      "notes": "Autograph Hebrew cursive stanza, chorus, and author signature (1907-1908) on unruled paper."
+    },
+    {
+      "image": "pages/commons__rachel_aqara_1928__p0001.jpg",
+      "transcript": "transcripts/commons__rachel_aqara_1928__p0001.txt",
+      "sha256": "00ce84cbf0126c170ffd3e03b6a19073a205274aad1c709d34eb4a9190c34c05",
+      "writer": "Rachel Bluwstein",
+      "date": "1928",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "verified": true,
+      "complete": true,
+      "lines": 17,
+      "characters": 348,
+      "notes": "1928 cursive draft containing authorial strike-throughs and interlinear revisions; upstream reference carries the final intended reading, providing a realistic lower-bound stress test for crossed-out draft lines."
+    },
+    {
+      "image": "pages/commons__rachel_gan_naul__p0001.jpg",
+      "transcript": "transcripts/commons__rachel_gan_naul__p0001.txt",
+      "sha256": "e207d74b6968ba8c5719da17f479b96e40da2c1624f58e69a96f56788b17cbdd",
+      "writer": "Rachel Bluwstein",
+      "date": "1929",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "verified": true,
+      "complete": true,
+      "lines": 9,
+      "characters": 275,
+      "notes": "High-resolution photograph (3456x5184 EXIF-oriented) on graph-ruled notebook paper (נייר משובץ) with archival shelfmark top-left and Gnazim stamp bottom-right."
+    },
+    {
+      "image": "pages/commons__rachel_rak_al_atzmi__p0001.jpg",
+      "transcript": "transcripts/commons__rachel_rak_al_atzmi__p0001.txt",
+      "sha256": "d80d5d4271a4939d0e6d548402aab055538d9ed386eee4f6d3dce9d805821e62",
+      "writer": "Rachel Bluwstein",
+      "date": "1930",
+      "verified_by": [
+        "Wikisource Hebrew editors (public-domain edition)",
+        "HeOCR/hash reviewed index (CC0-1.0)"
+      ],
+      "verified": true,
+      "complete": true,
+      "lines": 12,
+      "characters": 417,
+      "notes": "Low-resolution scan (370x550) of thin/faint cursive strokes on aged notebook paper; tests thin-stroke binarization without morphological stroke erasure."
+    }
+  ],
+  "pages_measured": [
+    "pages/commons__begani_netatikha__p0001.jpg",
+    "pages/commons__bialik_el_hazippor__p0001.jpg",
+    "pages/commons__hatikvah_imber_manuscript__p0001.jpg",
+    "pages/commons__rachel_aqara_1928__p0001.jpg",
+    "pages/commons__rachel_gan_naul__p0001.jpg",
+    "pages/commons__rachel_rak_al_atzmi__p0001.jpg"
+  ],
+  "verified": true,
+  "note": "the pages that were measured have a transcript that was checked by somebody who is not the one who wrote it down"
+}

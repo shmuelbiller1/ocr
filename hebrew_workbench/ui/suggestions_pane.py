@@ -155,6 +155,7 @@ class SuggestionsPane(QWidget):
     refuse_selected_requested = Signal(list)
     accept_all_requested = Signal()
     refuse_all_requested = Signal()
+    layer_toggled = Signal(str, bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -167,6 +168,31 @@ class SuggestionsPane(QWidget):
 
         title = QLabel("<b>הצעות תיקון</b>")
         layout.addWidget(title)
+
+        layers = QHBoxLayout()
+        self.spelling_toggle = QCheckBox("איות")
+        self.spelling_toggle.setChecked(True)
+        self.spelling_toggle.setToolTip("הפעלה או כיבוי של הצעות איות עברית")
+        self.spelling_toggle.toggled.connect(
+            lambda checked: self.layer_toggled.emit("spelling", checked)
+        )
+        self.grammar_toggle = QCheckBox("דקדוק וניסוח")
+        self.grammar_toggle.setChecked(True)
+        self.grammar_toggle.setToolTip("הפעלה או כיבוי של הצעות דקדוק ופיסוק")
+        self.grammar_toggle.toggled.connect(
+            lambda checked: self.layer_toggled.emit("grammar", checked)
+        )
+        self.style_toggle = QCheckBox("לשון הספר")
+        self.style_toggle.setChecked(False)
+        self.style_toggle.setToolTip("הפעלה או כיבוי של שכבת סגנון כתיבה")
+        self.style_toggle.toggled.connect(
+            lambda checked: self.layer_toggled.emit("style", checked)
+        )
+        layers.addWidget(self.spelling_toggle)
+        layers.addWidget(self.grammar_toggle)
+        layers.addWidget(self.style_toggle)
+        layers.addStretch(1)
+        layout.addLayout(layers)
 
         self.summary = QLabel("אין עדיין הצעות.")
         self.summary.setWordWrap(True)
@@ -297,6 +323,18 @@ class SuggestionsPane(QWidget):
 
     def set_restore_available(self, available: bool) -> None:
         self.restore_button.setEnabled(bool(available))
+
+    def set_layer_states(
+        self, spelling: bool, grammar: bool, style: bool
+    ) -> None:
+        for widget, state in (
+            (self.spelling_toggle, spelling),
+            (self.grammar_toggle, grammar),
+            (self.style_toggle, style),
+        ):
+            widget.blockSignals(True)
+            widget.setChecked(bool(state))
+            widget.blockSignals(False)
 
     def clear(self) -> None:
         self.show_suggestions([])
