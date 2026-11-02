@@ -298,6 +298,12 @@ def find_lines(binary: np.ndarray, pitch: float) -> list[LineBox]:
         if area < pitch * pitch * 0.12:
             continue
         boxes.append(LineBox(int(x), int(y), int(w), int(h)))
+    # Defensive cap against pathological background noise (e.g. un-inverted
+    # dark ground when preprocessing is disabled) so O(N^2) overlap merging
+    # remains bounded in milliseconds on CPU.
+    if len(boxes) > 500:
+        boxes.sort(key=lambda b: b.w * b.h, reverse=True)
+        boxes = boxes[:500]
     return boxes
 
 

@@ -44,12 +44,15 @@ from PIL import Image, ImageOps  # noqa: E402
 from hebrew_workbench.benchmark.corpus import load_corpus  # noqa: E402
 from hebrew_workbench.benchmark.metrics import (  # noqa: E402
     character_error_rate,
+    levenshtein,
     line_alignment_metrics,
+    normalise,
     process_memory_mb,
     word_error_rate,
 )
 from hebrew_workbench.engine.photocraft_audit import prepare_page_for_ocr  # noqa: E402
 from hebrew_workbench.engine.vendor.hebocr.page.segment import segment_page  # noqa: E402
+from tools.benchmark_ocr import resolve_engines  # noqa: E402
 
 ALL_SUITES: tuple[str, ...] = (
     "unmodified",
@@ -209,11 +212,7 @@ def run_segmentation_benchmark(corpus_dir: Path) -> list[dict[str, Any]]:
             vim, matte = synthesize_color_variant(orig_im, suite)
             gt_total += gt_n
 
-            if suite == "dark_slate_light_ink":
-                # Unadjusted dark ground inverts binary mask; avoid 60s noise scan
-                c_b = []
-            else:
-                c_b, _, _ = segment_page(vim, deskew=False, straighten=False)
+            c_b, _, _ = segment_page(vim, deskew=False, straighten=False)
 
             t0 = time.perf_counter()
             vim_pc, aud = prepare_page_for_ocr(vim, enabled=True)
@@ -254,26 +253,26 @@ def run_segmentation_benchmark(corpus_dir: Path) -> list[dict[str, Any]]:
     return results
 
 
-def _build_engine(engine_id: str, models_dir: Path):
-    if engine_id == "mishkefet-v1":
-        from hebrew_workbench.engine.mishkefet import MishkefetEngine
-
-        return MishkefetEngine(
-            model_path=models_dir / "mishkefet-v1.pt", mode="raw"
+def _build_engines(
+    engine_ids: list[str], models_dir: Path
+) -> list[tuple[Any, str]]:
+    engines, warnings = resolve_engines(engine_ids, models_dir)
+    for w in warnings:
+        print(f"[WARN] {w}", flush=True)
+    if not engines:
+        raise RuntimeError(
+            f"No requested OCR models ({engine_ids}) found in {models_dir}"
         )
-    if engine_id == "kraken-ppocrv6-small":
-        from hebrew_workbench.engine.kraken_local import KrakenEngine
-
-        return KrakenEngine(model_path=models_dir / "small.safetensors")
-    if engine_id == "kraken-ppocrv6-medium":
-        from hebrew_workbench.engine.kraken_local import KrakenEngine
-
-        return KrakenEngine(model_path=models_dir / "medium.safetensors")
-    raise ValueError(f"Unsupported engine_id: {engine_id}")
+    return engines
 
 
 def run_neural_ocr_comparison(
-    corpus_dir: Path, models_dir: Path, engine_ids: list[str]
+    corpus_dir: Path,
+    models_dir: Path,
+    engine_ids: list[str],
+    *,
+    resolved_engines: list[tuple[Any, str]] | None = None,
+    suites_override: tuple[str, ...] | None = None,
 ) -> list[dict[str, Any]]:
     corpus = load_corpus(corpus_dir)
     loaded = []
@@ -284,13 +283,23 @@ def run_neural_ocr_comparison(
         im.load()
         loaded.append((page.image.stem, im, page.text))
 
+    engine_pairs = (
+        resolved_engines
+        if resolved_engines is not None
+        else _build_engines(engine_ids, models_dir)
+    )
     comparisons: list[dict[str, Any]] = []
     old_env = os.environ.get("HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT")
     try:
-        for engine_id in engine_ids:
-            engine = _build_engine(engine_id, models_dir)
+        for engine, engine_id in engine_pairs:
             suites = (
-                ALL_SUITES if engine_id.startswith("mishkefet") else KRAKEN_SUITES
+                suites_override
+                if suites_override is not None
+                else (
+                    ALL_SUITES
+                    if engine_id.startswith("mishkefet")
+                    else KRAKEN_SUITES
+                )
             )
             for suite in suites:
                 suite_variants = [
@@ -305,30 +314,30 @@ def run_neural_ocr_comparison(
                     elapsed_s: list[float] = []
                     per_page: list[dict[str, Any]] = []
                     for idx, (pid, vim, gt) in enumerate(suite_variants, start=1):
-                        # Guard baseline Mishkefet on dark inverted pages against long noise deskew
-                        if (
-                            flag == "0"
-                            and suite == "dark_slate_light_ink"
-                            and engine_id.startswith("mishkefet")
-                        ):
-                            t0 = time.perf_counter()
-                            pred_text = ""
-                            dt = time.perf_counter() - t0
-                        else:
-                            t0 = time.perf_counter()
-                            page_res = engine._recognize_page_now(idx, vim)
-                            dt = time.perf_counter() - t0
-                            pred_text = page_res.text
+                        t0 = time.perf_counter()
+                        page_res = engine._recognize_page_now(idx, vim)
+                        dt = time.perf_counter() - t0
+                        pred_text = page_res.text
 
-                        cer, ce, cl = character_error_rate(pred_text, gt)
-                        wer, we, wl = word_error_rate(pred_text, gt)
-                        lalign = line_alignment_metrics(pred_text, gt)
+                        ref_norm = normalise(gt)
+                        hyp_norm = normalise(pred_text)
+                        ref_words = ref_norm.split()
+                        hyp_words = hyp_norm.split()
+
+                        cer = character_error_rate(ref_norm, hyp_norm)
+                        wer = word_error_rate(ref_norm, hyp_norm)
+                        ce = levenshtein(list(ref_norm), list(hyp_norm))
+                        cl = len(ref_norm)
+                        we = levenshtein(ref_words, hyp_words)
+                        wl = len(ref_words)
+                        lalign = line_alignment_metrics(gt, pred_text)
+
                         char_ed += ce
                         char_tot += cl
                         word_ed += we
                         word_tot += wl
-                        det_lines += lalign["predicted_lines"]
-                        gt_lines_tot += lalign["reference_lines"]
+                        det_lines += lalign["lines_hypothesis"]
+                        gt_lines_tot += lalign["lines_reference"]
                         missing_tot += lalign["missing_lines"]
                         extra_tot += lalign["extra_lines"]
                         elapsed_s.append(dt)
@@ -337,8 +346,8 @@ def run_neural_ocr_comparison(
                                 "id": pid,
                                 "cer": round(cer, 4),
                                 "wer": round(wer, 4),
-                                "pred_lines": lalign["predicted_lines"],
-                                "ref_lines": lalign["reference_lines"],
+                                "pred_lines": lalign["lines_hypothesis"],
+                                "ref_lines": lalign["lines_reference"],
                                 "seconds": round(dt, 3),
                             }
                         )

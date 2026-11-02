@@ -177,6 +177,34 @@ class PhotoCraftVisionAuditTests(unittest.TestCase):
         self.assertTrue(audit.needs_adjustment)
         self.assertTrue(audit.needs_highlighter_suppression)
 
+    def test_benchmark_neural_ocr_comparison_harness(self) -> None:
+        from types import SimpleNamespace
+
+        import numpy as np
+
+        from tools.benchmark_photocraft_audit import run_neural_ocr_comparison
+
+        class _StubEngine:
+            def _recognize_page_now(self, index: int, image: Image.Image):
+                out_im, _ = prepare_page_for_ocr(image)
+                gray = np.asarray(out_im.convert("L"), dtype=np.float32)
+                # Dark-slate inverted pages only yield dark strokes when PhotoCraft runs
+                has_dark_ink = float(np.percentile(gray, 2)) < float(np.median(gray)) - 25.0
+                text = "נודי צפורי\nאשרת" if has_dark_ink else ""
+                return SimpleNamespace(page=index, text=text)
+
+        repo_root = Path(__file__).resolve().parents[1]
+        rows = run_neural_ocr_comparison(
+            corpus_dir=repo_root / "benchmark" / "modern_cursive",
+            models_dir=repo_root,
+            engine_ids=["mishkefet-v1"],
+            resolved_engines=[(_StubEngine(), "mishkefet-v1")],
+            suites_override=("dark_slate_light_ink",),
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertLess(rows[0]["delta_cer_pp"], 0.0)
+        self.assertGreater(rows[0]["photocraft"]["predicted_lines"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
