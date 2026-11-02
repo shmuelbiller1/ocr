@@ -71,6 +71,22 @@ class SettingsDialog(QDialog):
             self.active_boxes[kind] = box
             form.addRow(name, box)
 
+        self.page_enhancement_box = QComboBox()
+        self.page_enhancement_box.addItem(
+            "מופעל — שיפור דף אוטומטי לפני OCR (נייר צבעוני, רשת וצל כבד)",
+            True,
+        )
+        self.page_enhancement_box.addItem(
+            "כבוי — שימוש בתמונה המקורית ללא עיבוד מקדים",
+            False,
+        )
+        self.page_enhancement_box.currentIndexChanged.connect(
+            self._on_page_enhancement_changed
+        )
+        form.addRow(
+            "שיפור דף אוטומטי (Automatic page enhancement)",
+            self.page_enhancement_box,
+        )
         self.decoding_box = QComboBox()
         self.decoding_box.addItem("Raw / בסיסי — ללא מודל שפה", "raw")
         self.decoding_box.addItem("Beam 12 + 3 scales — ללא מודל שפה (ניסיוני)", "beam")
@@ -181,12 +197,33 @@ class SettingsDialog(QDialog):
             box.blockSignals(False)
 
         plugin = self.registry.chosen("ocr") or self.registry.active("ocr")
+        self.page_enhancement_box.blockSignals(True)
+        enh_index = self.page_enhancement_box.findData(
+            bool(self.registry.page_enhancement)
+        )
+        self.page_enhancement_box.setCurrentIndex(max(0, enh_index))
+        self.page_enhancement_box.blockSignals(False)
+
         is_mishkefet = plugin is not None and plugin.id in ("mishkefet", "mishkefet-worker")
         self.decoding_box.blockSignals(True)
         self.decoding_box.setEnabled(is_mishkefet)
         mode = self.registry.options_of(plugin).get("decoding_mode", "raw") if is_mishkefet else "raw"
         self.decoding_box.setCurrentIndex(max(0, self.decoding_box.findData(mode)))
         self.decoding_box.blockSignals(False)
+
+    def _on_page_enhancement_changed(self, _index: int) -> None:
+        parent = self.parent()
+        if getattr(parent, "task", None) is not None:
+            QMessageBox.information(
+                self, "שיפור דף אוטומטי", "יש להמתין לסיום המשימה לפני שינוי המצב."
+            )
+            self.refresh()
+            return
+        enabled = bool(self.page_enhancement_box.currentData())
+        if enabled != self.registry.page_enhancement:
+            self.registry.set_page_enhancement(enabled)
+            self.changed.emit()
+        self.refresh()
 
     def _on_decoding_changed(self, _index: int) -> None:
         """Persist the selected Mishkefet plugin's opt-in decoding profile."""

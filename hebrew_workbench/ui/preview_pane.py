@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QImage, QPixmap, QTransform
+import io
+import json
+import subprocess
+import tempfile
+from pathlib import Path
+
+from PIL import Image
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QTransform
 from PySide6.QtWidgets import (
+    QComboBox,
     QGraphicsScene,
     QGraphicsView,
     QHBoxLayout,
@@ -15,13 +23,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..engine.photocraft_audit import (
+    prepare_page_for_ocr,
+    resolve_page_enhancement_enabled,
+)
 from ..preview.loader import DocumentPreview, PreviewError
 
-__all__ = ["PreviewPane", "pil_to_qimage"]
+__all__ = ["PreviewPane", "pil_to_qimage", "VIEW_MODES"]
 
 BASE_RENDER_WIDTH = 1600
 MINIMUM_ZOOM = 0.02
 MAXIMUM_ZOOM = 8.0
+VIEW_MODES = ("original", "processed", "compare")
 
 
 def pil_to_qimage(image) -> QImage:
@@ -35,12 +48,20 @@ def pil_to_qimage(image) -> QImage:
 class PreviewPane(QWidget):
     """Shows one document, one page at a time, completely offline."""
 
+    view_mode_changed = Signal(str)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._preview: DocumentPreview | None = None
         self._page = 1
         self._zoom = 1.0
         self._rotation = 0
+        self._view_mode = "original"
+        self._page_enhancement_enabled = True
+        # Optional OCR-produced per-page cache: page_num -> (png_bytes|None, enhanced, enh_enabled)
+        self._ocr_processed_pages: dict[int, tuple[bytes | None, bool, bool]] = {}
+        # On-demand preview cache invalidated when document or enhancement setting changes
+        self._live_processed_cache: dict[tuple[int, bool], tuple[Image.Image, bool, str]] = {}
 
         self.view = QGraphicsView(self)
         self.view.setRenderHints(self.view.renderHints())
@@ -109,7 +130,18 @@ class PreviewPane(QWidget):
 
         self.page_label = QLabel("—")
         self.page_label.setAlignment(Qt.AlignCenter)
-        self.page_label.setMinimumWidth(110)
+        self.page_label.setMinimumWidth(90)
+
+        self.view_mode_box = QComboBox()
+        self.view_mode_box.setToolTip(
+            "מעבר בין התמונה המקורית, התמונה לאחר עיבוד מקדים, והשוואה זה לצד זה"
+        )
+        self.view_mode_box.addItem("תצוגה: מקור", "original")
+        self.view_mode_box.addItem("תצוגה: לאחר עיבוד", "processed")
+        self.view_mode_box.addItem("תצוגה: השוואה (מקור | מעובד)", "compare")
+        self.view_mode_box.currentIndexChanged.connect(
+            self._on_view_mode_combo_changed
+        )
 
         for widget in (
             self.first_button,
@@ -119,6 +151,7 @@ class PreviewPane(QWidget):
         ):
             self._toolbar.addWidget(widget)
         self._toolbar.addStretch(1)
+        self._toolbar.addWidget(self.view_mode_box)
         for widget in (
             self.zoom_out_button,
             self.zoom_in_button,
@@ -147,9 +180,176 @@ class PreviewPane(QWidget):
         self._render_page()
 
     def close_document(self) -> None:
+        self._ocr_processed_pages = {}
+        self._live_processed_cache = {}
         if self._preview is not None:
             self._preview.close()
             self._preview = None
+
+    @property
+    def view_mode(self) -> str:
+        return self._view_mode
+
+    def set_view_mode(self, mode: str) -> None:
+        """Select ``'original'``, ``'processed'``, or ``'compare'``."""
+        if mode not in VIEW_MODES:
+            raise ValueError(f"Unknown preview view mode: {mode!r}")
+        if mode == self._view_mode:
+            return
+        self._view_mode = mode
+        idx = self.view_mode_box.findData(mode)
+        if idx >= 0 and self.view_mode_box.currentIndex() != idx:
+            self.view_mode_box.blockSignals(True)
+            self.view_mode_box.setCurrentIndex(idx)
+            self.view_mode_box.blockSignals(False)
+        if self._preview is not None:
+            self._render_page()
+        self.view_mode_changed.emit(self._view_mode)
+
+    def _on_view_mode_combo_changed(self, _index: int) -> None:
+        chosen = str(self.view_mode_box.currentData() or "original")
+        if chosen in VIEW_MODES and chosen != self._view_mode:
+            self._view_mode = chosen
+            if self._preview is not None:
+                self._render_page()
+            self.view_mode_changed.emit(self._view_mode)
+
+    def set_page_enhancement_enabled(self, enabled: bool) -> None:
+        """Inform the preview pane whether automatic page enhancement is active."""
+        new_val = bool(enabled)
+        if new_val != self._page_enhancement_enabled:
+            self._page_enhancement_enabled = new_val
+            if self._preview is not None and self._view_mode != "original":
+                self._render_page()
+
+    def set_processed_pages(
+        self,
+        pages_map: dict[int, tuple[bytes | None, bool, bool]] | None,
+    ) -> None:
+        """Supply OCR-produced processed page snapshots for exact visual comparison."""
+        self._ocr_processed_pages = dict(pages_map or {})
+        if self._preview is not None and self._view_mode != "original":
+            self._render_page()
+
+    def _resolve_processed_image(
+        self, orig_image: Image.Image
+    ) -> tuple[Image.Image, bool, str]:
+        """Return ``(processed_pil, was_enhanced, detail_note)`` for ``self._page``."""
+        eff_on = resolve_page_enhancement_enabled(self._page_enhancement_enabled)
+        ocr_entry = self._ocr_processed_pages.get(self._page)
+        if ocr_entry is not None:
+            png_bytes, was_enh, ocr_eff_on = ocr_entry
+            if ocr_eff_on == eff_on:
+                if was_enh and png_bytes:
+                    try:
+                        im = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+                        im.load()
+                        return im, True, "בוצע שיפור סלקטיבי ב-OCR"
+                    except Exception:
+                        pass
+                if not eff_on:
+                    return orig_image, False, "שיפור דף אוטומטי: כבוי (ללא שינוי)"
+                return orig_image, False, "הדף נקי — נשמר ללא שינוי פיקסלים"
+
+        if not eff_on:
+            return orig_image, False, "שיפור דף אוטומטי: כבוי (ללא שינוי)"
+
+        cache_key = (self._page, eff_on)
+        cached = self._live_processed_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        # 1. Fast in-process evaluation when worker vision packages are present
+        try:
+            prepared, audit = prepare_page_for_ocr(orig_image, enabled=True)
+            if audit is not None:
+                was_enh = bool(audit.needs_adjustment)
+                note = (
+                    "בוצע שיפור סלקטיבי"
+                    if was_enh
+                    else "הדף נקי — נשמר ללא שינוי פיקסלים"
+                )
+                res = (prepared.convert("RGB"), was_enh, note)
+                self._live_processed_cache[cache_key] = res
+                return res
+        except Exception:
+            pass
+
+        # 2. Packaged Windows fallback via ocr-worker.exe when cv2 lives in worker
+        from ..engine.worker import worker_path
+
+        w_exe = worker_path()
+        if w_exe is not None and w_exe.is_file():
+            try:
+                with tempfile.TemporaryDirectory(prefix="ocr-prev-") as td:
+                    in_png = Path(td) / "in.png"
+                    out_png = Path(td) / "out.png"
+                    orig_image.convert("RGB").save(in_png, format="PNG")
+                    proc = subprocess.run(
+                        [
+                            str(w_exe),
+                            "--enhance-preview",
+                            str(in_png),
+                            "--output-preview",
+                            str(out_png),
+                        ],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=25,
+                        check=False,
+                    )
+                    if proc.returncode == 0 and out_png.is_file():
+                        im = Image.open(out_png).convert("RGB")
+                        im.load()
+                        meta_path = out_png.with_suffix(".json")
+                        was_enh = False
+                        if meta_path.is_file():
+                            meta = json.loads(
+                                meta_path.read_text(encoding="utf-8")
+                            )
+                            was_enh = bool(meta.get("enhanced", False))
+                        note = (
+                            "בוצע שיפור סלקטיבי"
+                            if was_enh
+                            else "הדף נקי — נשמר ללא שינוי פיקסלים"
+                        )
+                        res = (im, was_enh, note)
+                        self._live_processed_cache[cache_key] = res
+                        return res
+            except Exception:
+                pass
+
+        return (
+            orig_image,
+            False,
+            "תצוגת העיבוד המקדים תהיה זמינה לאחר התקנת רכיב הזיהוי",
+        )
+
+    @staticmethod
+    def _compose_side_by_side(
+        original: QPixmap, processed: QPixmap, gap: int = 16
+    ) -> QPixmap:
+        """Compose RTL side-by-side comparison: Right = Original, Left = Processed."""
+        target_h = max(original.height(), processed.height(), 1)
+        if original.height() != target_h and original.height() > 0:
+            original = original.scaledToHeight(
+                target_h, Qt.SmoothTransformation
+            )
+        if processed.height() != target_h and processed.height() > 0:
+            processed = processed.scaledToHeight(
+                target_h, Qt.SmoothTransformation
+            )
+        total_w = original.width() + gap + processed.width()
+        canvas = QPixmap(max(1, total_w), target_h)
+        canvas.fill(QColor(68, 68, 68))
+        painter = QPainter(canvas)
+        try:
+            # Left half: Processed; Right half: Original (natural RTL reading order)
+            painter.drawPixmap(0, 0, processed)
+            painter.drawPixmap(processed.width() + gap, 0, original)
+        finally:
+            painter.end()
+        return canvas
 
     def _page_count(self) -> int:
         return self._preview.page_count if self._preview else 0
@@ -218,17 +418,39 @@ class PreviewPane(QWidget):
         except PreviewError as exc:
             self._show_message(str(exc))
             return
-        qimage = pil_to_qimage(page.image)
-        pixmap = QPixmap.fromImage(qimage)
+        orig_pixmap = QPixmap.fromImage(pil_to_qimage(page.image))
         if self._rotation:
-            pixmap = pixmap.transformed(QTransform().rotate(self._rotation))
+            orig_pixmap = orig_pixmap.transformed(
+                QTransform().rotate(self._rotation)
+            )
+
+        base_status = (
+            f"עמוד {self._page} מתוך {self._preview.page_count} — {self._preview.path.name}"
+        )
+        if self._view_mode == "original":
+            pixmap = orig_pixmap
+            status_text = base_status
+        else:
+            proc_im, _was_enh, note = self._resolve_processed_image(page.image)
+            proc_pixmap = QPixmap.fromImage(pil_to_qimage(proc_im))
+            if self._rotation:
+                proc_pixmap = proc_pixmap.transformed(
+                    QTransform().rotate(self._rotation)
+                )
+            if self._view_mode == "processed":
+                pixmap = proc_pixmap
+                status_text = f"{base_status} | לאחר עיבוד ({note})"
+            else:
+                pixmap = self._compose_side_by_side(orig_pixmap, proc_pixmap)
+                status_text = (
+                    f"{base_status} | השוואה: מימין מקור, משמאל לאחר עיבוד ({note})"
+                )
+
         self.scene.clear()
         self.scene.addPixmap(pixmap)
         self.scene.setSceneRect(self.scene.itemsBoundingRect())
         self._apply_zoom()
-        self.status.setText(
-            f"עמוד {self._page} מתוך {self._preview.page_count} — {self._preview.path.name}"
-        )
+        self.status.setText(status_text)
         self.page_label.setText(f"{self._page} / {self._preview.page_count}")
         self._update_buttons()
 

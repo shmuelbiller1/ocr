@@ -245,6 +245,37 @@ class PhotoCraftVisionAuditTests(unittest.TestCase):
         self.assertLess(rows[0]["delta_cer_pp"], 0.0)
         self.assertGreater(rows[0]["photocraft"]["predicted_lines"], 0)
 
+    def test_chromatic_vertical_margin_rule_removed_without_touching_black_ink(
+        self,
+    ) -> None:
+        import numpy as np
+        from hebrew_workbench.engine.photocraft_audit import (
+            resolve_page_enhancement_enabled,
+        )
+
+        # White notebook page with a narrow pink vertical margin rule at x=36..38
+        im = Image.new("RGB", (420, 320), (250, 250, 250))
+        draw = ImageDraw.Draw(im)
+        draw.rectangle([36, 0, 38, 319], fill=(247, 178, 200))
+        self._draw_strokes(im, (22, 22, 22), rows=(65, 130, 195, 260))
+
+        out, audit = prepare_page_for_ocr(im, enabled=True)
+        assert audit is not None
+        self.assertTrue(audit.needs_adjustment)
+        self.assertTrue(audit.needs_rule_suppression)
+        out_arr = np.asarray(out)
+        orig_arr = np.asarray(im)
+        # Pink margin line away from ink is lifted to neutral white paper (>242)
+        self.assertGreater(float(out_arr[20:45, 36:39].mean()), 242.0)
+        # Black ink strokes stay completely dark and untouched
+        dark_mask = orig_arr.max(axis=2) < 60
+        self.assertTrue(np.array_equal(out_arr[dark_mask], orig_arr[dark_mask]))
+
+        # Explicit enabled=False returns the exact original image untouched
+        off_out, _ = prepare_page_for_ocr(im, enabled=False)
+        self.assertIs(off_out, im)
+        self.assertFalse(resolve_page_enhancement_enabled(False))
+
 
 if __name__ == "__main__":
     unittest.main()

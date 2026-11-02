@@ -27,6 +27,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from hebrew_workbench.benchmark.metrics import (  # noqa: E402
     character_error_rate,
+    levenshtein,
     normalise,
     process_memory_mb,
     word_error_rate,
@@ -278,31 +279,33 @@ def evaluate_cases(
 
         # Apply non-empty top-1 proposals via SuggestionSession to measure
         # unwanted text changes and net CER/WER delta.
+        # Exclude non-editing dictionary warnings (`replacement == original`)
+        # from applied edits while retaining them in warning/false counts above.
         session = SuggestionSession(case.noisy)
-        actionable = [s for s in proposals if s.replacement]
+        actionable = [
+            s for s in proposals if s.replacement and s.replacement != s.original
+        ]
         session.set_suggestions(actionable, case.noisy)
         outcome = session.accept_many(session.pending())
         after_text = outcome[0] if outcome is not None else case.noisy
-        applied_changes = outcome[1] if outcome is not None else []
 
-        for change in applied_changes:
-            # Did this applied change touch a clean region or fail to match reference?
-            # Check local edit effect via character error distance before vs after.
-            pass
-        # Count unwanted changes directly: applied changes that did NOT reduce
-        # edit distance toward reference.
-        cur = case.noisy
+        # Count unwanted changes directly: applied non-identity changes that did
+        # NOT reduce edit distance toward reference.
         s_step = SuggestionSession(case.noisy)
         s_step.set_suggestions(actionable, case.noisy)
         for proposal in list(s_step.pending()):
             prev_text = s_step.current_text
             prev_dist = character_error_rate(normalise(case.reference), normalise(prev_text))
+            prev_raw = levenshtein(list(case.reference), list(prev_text))
             res = s_step.accept(proposal)
             if res is None:
                 continue
             next_text = res[0]
+            if next_text == prev_text:
+                continue
             next_dist = character_error_rate(normalise(case.reference), normalise(next_text))
-            if next_dist >= prev_dist - 1e-9:
+            next_raw = levenshtein(list(case.reference), list(next_text))
+            if next_dist >= prev_dist - 1e-9 and next_raw >= prev_raw:
                 unwanted_changes += 1
 
         norm_ref = normalise(case.reference)
@@ -402,9 +405,20 @@ def evaluate_ocr_report(report_path: Path, corpus_folder: Path) -> list[Benchmar
 
 
 def _build_registry(enable_spelling: bool, enable_grammar: bool) -> SuggestionRegistry:
-    plugins = PluginRegistry()
-    modules = plugins.suggestion_modules()
-    reg = SuggestionRegistry(modules)
+    """Build deterministic benchmark modules isolated from desktop user settings."""
+    from hebrew_workbench.suggestions.grammar import GrammarModule
+    from hebrew_workbench.suggestions.spelling import SpellingModule
+
+    spelling = SpellingModule()
+    # Pass an explicit nonexistent personal-dictionary path inside a deterministic
+    # sentinel location so user desktop preferences/words never alter measurements.
+    spelling.use_bundled_lexicon(
+        personal_path=REPO_ROOT / "build" / "__isolated_empty_personal_dict__.txt"
+    )
+    spelling._personal = set()
+    spelling._personal_path = None
+    grammar = GrammarModule()
+    reg = SuggestionRegistry([spelling, grammar])
     reg.set_enabled(KIND_SPELLING, enable_spelling)
     reg.set_enabled(KIND_GRAMMAR, enable_grammar)
     reg.set_enabled("style", False)

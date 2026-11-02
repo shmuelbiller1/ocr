@@ -30,6 +30,7 @@ Design invariants for plain everyday PCs (CPU-only, low RAM):
 
 from __future__ import annotations
 
+import io
 import os
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -41,6 +42,7 @@ __all__ = [
     "photocraft_audit_enabled",
     "audit_document_page",
     "prepare_page_for_ocr",
+    "encode_preview_png",
     "rescale_box",
 ]
 
@@ -84,11 +86,42 @@ class DocumentAudit:
 
 
 def photocraft_audit_enabled(explicit: bool | None = None) -> bool:
-    """Return whether PhotoCraft document audit & selective adjustment is active."""
+    """Return whether PhotoCraft document audit & selective adjustment is active.
+
+    If ``HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT`` is explicitly set to ``0``/``off``
+    in the process environment, that environment override disables enhancement
+    unless ``explicit`` was passed directly by a caller testing an isolated mode.
+    """
     if explicit is not None:
         return bool(explicit)
     raw = os.environ.get("HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT", "1").strip().lower()
     return raw not in {"0", "false", "no", "off"}
+
+
+def resolve_page_enhancement_enabled(setting: bool | None = None) -> bool:
+    """Combine user UI setting with optional ``HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT`` env var."""
+    if "HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT" in os.environ:
+        env_on = photocraft_audit_enabled(None)
+        if setting is False:
+            return False
+        return env_on
+    if setting is not None:
+        return bool(setting)
+    return True
+
+
+def encode_preview_png(image: Any, max_width: int = 1600) -> bytes | None:
+    """Encode a PIL page image as a compact preview PNG for UI comparison."""
+    if not isinstance(image, Image.Image):
+        return None
+    view = image
+    if view.width > max_width > 0:
+        ratio = max_width / float(view.width)
+        new_h = max(1, int(round(view.height * ratio)))
+        view = view.resize((max_width, new_h), Image.Resampling.BILINEAR)
+    buf = io.BytesIO()
+    view.convert("RGB").save(buf, format="PNG", compress_level=3)
+    return buf.getvalue()
 
 
 def rescale_box(
@@ -338,6 +371,17 @@ def prepare_page_for_ocr(
     luma_unit = np.array([-0.299, -0.587, -0.114], dtype=np.float32)
     luma_unit /= float(np.linalg.norm(luma_unit))
 
+    # Detect narrow full-height chromatic margin rules on clean neutral notebook
+    # paper (e.g. pink/red vertical loose-leaf margin lines that account for <1%
+    # of page pixels so p98_chroma stays <0.045, yet snap line bounding boxes).
+    margin_proxy_cols = np.array([], dtype=np.intp)
+    if (not inverted) and im.mode != "L" and paper_chroma < 0.08:
+        p_bright = np.max(proxy, axis=2) > 0.80 * float(np.max(bg_rgb_arr))
+        col_frac = ((px_chroma > 0.14) & p_bright).mean(axis=0)
+        cand_cols = np.where(col_frac > 0.45)[0]
+        if 1 <= len(cand_cols) <= max(4, pw // 55):
+            margin_proxy_cols = cand_cols
+
     # Ultra-fast clean monochrome exit (~4ms): neutral gray, upright, no severe occlusion!
     # Moderate neutral shadows (shadow_drop <= 0.58) are left to hebocr's native
     # local Gaussian ratio + per-line normalization, which empirically outperforms
@@ -346,6 +390,7 @@ def prepare_page_for_ocr(
         not inverted
         and (im.mode == "L" or p98_chroma < 0.045)
         and max_shadow_drop <= 0.58
+        and margin_proxy_cols.size == 0
     ):
         lc_fast = max(0.0, float(p92_luma - p08_luma))
         snr_fast = round(lc_fast / 0.02, 2)
@@ -369,6 +414,56 @@ def prepare_page_for_ocr(
             scale_factor=1.0,
         )
         return im, audit
+
+    # Surgical fast-path for clean white loose-leaf scans whose ONLY color defect
+    # is a narrow chromatic vertical margin rule: erase only bright chromatic
+    # margin-rule pixels (<0.5% of page) and keep 99.5%+ of the original untouched!
+    if (
+        not inverted
+        and p98_chroma < 0.045
+        and max_shadow_drop <= 0.58
+        and margin_proxy_cols.size > 0
+    ):
+        lc_fast = max(0.0, float(p92_luma - p08_luma))
+        snr_fast = round(lc_fast / 0.02, 2)
+        audit = DocumentAudit(
+            width=w,
+            height=h,
+            bg_rgb=tuple(round(float(x), 4) for x in bg_rgb_arr),
+            paper_chroma=round(paper_chroma, 4),
+            illumination_spread=round(illum_spread, 4),
+            luma_contrast=round(lc_fast, 4),
+            chromatic_contrast=round(lc_fast, 4),
+            snr_luma=snr_fast,
+            snr_chromatic=snr_fast,
+            inverted_polarity=False,
+            needs_chromatic_projection=False,
+            needs_shadow_relight=False,
+            needs_rule_suppression=True,
+            needs_highlighter_suppression=False,
+            active_tile_fraction=round(float(margin_proxy_cols.size) / max(pw, 1), 4),
+            channel_weights=tuple(round(float(x), 4) for x in luma_unit),
+            scale_factor=1.0,
+        )
+        if _audit_only or not photocraft_audit_enabled(enabled):
+            return im, audit
+        full_u8 = np.asarray(rgb_im, dtype=np.uint8).copy()
+        inv_ps = w / float(max(pw, 1))
+        pad_x = max(3, int(round(2.5 * inv_ps)))
+        bg_u8 = np.clip(np.round(bg_rgb_arr * 255.0), 0, 255).astype(np.uint8)
+        bright_thr = int(round(0.78 * float(np.max(bg_rgb_arr)) * 255.0))
+        for pc in margin_proxy_cols:
+            cx = int(round(float(pc) * inv_ps))
+            x0 = max(0, cx - pad_x)
+            x1 = min(w, cx + pad_x + 1)
+            strip = full_u8[:, x0:x1, :]
+            s_max = strip.max(axis=2)
+            s_min = strip.min(axis=2)
+            m_rule = ((s_max.astype(np.int16) - s_min.astype(np.int16)) > 18) & (
+                s_max > bright_thr
+            )
+            strip[m_rule] = bg_u8
+        return Image.fromarray(full_u8), audit
 
     # Detect broad neon/pastel highlighter bands on otherwise low-chroma paper
     px_max = np.max(proxy, axis=2)

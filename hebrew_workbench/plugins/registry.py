@@ -116,7 +116,21 @@ class PluginRegistry:
         """
         options = dict(manifest.options or {})
         options.update(self.settings.options.get(manifest.id, {}))
+        if manifest.kind == KIND_OCR and "page_enhancement" not in options:
+            options["page_enhancement"] = bool(self.settings.page_enhancement)
         return options
+
+    @property
+    def page_enhancement(self) -> bool:
+        """Whether automatic pre-OCR page enhancement is enabled (default On)."""
+        return bool(self.settings.page_enhancement)
+
+    def set_page_enhancement(self, enabled: bool) -> None:
+        """Persist automatic page enhancement setting and update loaded OCR plugins."""
+        self.settings.page_enhancement = bool(enabled)
+        for plugin in self.by_kind(KIND_OCR):
+            self._apply_options(plugin)
+        self.settings.save(self.settings_path)
 
     def _apply_options(self, plugin: Plugin, options: dict | None = None) -> bool:
         """Give the plugin the settings of the manifest and the choices.

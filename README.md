@@ -171,12 +171,12 @@ can be replaced, as the LGPL requires.
 
 ```bash
 pip install -r requirements.txt pyinstaller==6.16.0
-pyinstaller --noconfirm --clean --onedir --windowed --add-data "samples;samples" --name HebrewNotesWorkbench app.py
+pyinstaller --noconfirm --clean --onedir --windowed --add-data "samples;samples" --add-data "hebrew_workbench/suggestions/data;hebrew_workbench/suggestions/data" --name HebrewNotesWorkbench app.py
 
 # the worker of the recognition, with the engine that it needs
 pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
-pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
-pyinstaller --noconfirm --clean --onedir --console --collect-all kraken --collect-all torchvision --name ocr-worker ocr_worker/main.py
+pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" "opencv-python-headless==4.12.0.88"
+python tools/build_worker.py --profile inference --report worker-build.json
 
 python tools/build_release.py --app dist/HebrewNotesWorkbench --worker dist/ocr-worker --download-licences
 ```

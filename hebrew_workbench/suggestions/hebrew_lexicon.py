@@ -34,9 +34,10 @@ BUNDLED_WORD_COUNT = 196_227
 # sof pasuq (\u05c3), and nun hafukha (\u05c6) so hyphenated words never fuse.
 NIKUD_RE = re.compile(r"[\u0591-\u05bd\u05bf\u05c1\u05c2\u05c4\u05c5\u05c7]")
 
-# Contiguous Hebrew tokens including internal/trailing geresh/gershayim/quotes.
+# Contiguous Hebrew tokens including internal acronym quotes ("/״ before [א-ת])
+# and internal/trailing geresh ('/׳), while excluding closing quotation delimiters.
 HEBREW_TOKEN_RE = re.compile(
-    r"[א-ת][\u0591-\u05bd\u05bf\u05c1\u05c2\u05c4\u05c5\u05c7א-ת'׳\"״]*"
+    r"[א-ת](?:[\u0591-\u05bd\u05bf\u05c1\u05c2\u05c4\u05c5\u05c7א-ת'׳]|[\"״](?=[א-ת]))*"
 )
 
 HEBREW_ALPHABET = "אבגדהוזחטיכךלמםנןסעפףצץקרשת"

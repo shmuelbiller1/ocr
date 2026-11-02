@@ -33,7 +33,11 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .photocraft_audit import prepare_page_for_ocr
+from .photocraft_audit import (
+    encode_preview_png,
+    prepare_page_for_ocr,
+    resolve_page_enhancement_enabled,
+)
 
 from .mishkefet_decoding import decoding_mode, load_language_models
 
@@ -113,8 +117,17 @@ def make_engine(options: dict | None = None) -> "MishkefetEngine":
         candidate = models_directory() / artifact.filename
         if candidate.is_file():
             model_path = candidate
-    return MishkefetEngine(model_path, artifact_id=artifact_id,
-                           mode=decoding_mode(settings))
+    page_enh = (
+        bool(settings["page_enhancement"])
+        if "page_enhancement" in settings and settings["page_enhancement"] is not None
+        else None
+    )
+    return MishkefetEngine(
+        model_path,
+        artifact_id=artifact_id,
+        mode=decoding_mode(settings),
+        page_enhancement=page_enh,
+    )
 
 
 class MishkefetEngine:
@@ -134,16 +147,20 @@ class MishkefetEngine:
         artifact_id: str = "mishkefet-v1",
         timeout_seconds: float = 900.0,
         mode: str = "raw",
+        page_enhancement: bool | None = None,
     ) -> None:
         self.model_path = Path(model_path) if model_path else None
         self.artifact_id = artifact_id
         self.timeout_seconds = timeout_seconds
         self.mode = decoding_mode({"decoding_mode": mode})
+        self.page_enhancement = (
+            bool(page_enhancement) if page_enhancement is not None else None
+        )
         self._recognizer = None
         self._page_lock = threading.Lock()
 
     def configure(self, options: dict) -> None:
-        """Apply an explicit decoding profile supplied by plugin settings."""
+        """Apply explicit decoding and page-enhancement profiles."""
         mode = decoding_mode(options)
         # Do not change a live recognizer while a timed-out inference still runs.
         if not self._page_lock.acquire(blocking=False):
@@ -152,6 +169,8 @@ class MishkefetEngine:
             if mode != self.mode:
                 self._recognizer = None
                 self.mode = mode
+            if "page_enhancement" in options and options["page_enhancement"] is not None:
+                self.page_enhancement = bool(options["page_enhancement"])
         finally:
             self._page_lock.release()
 
@@ -322,7 +341,10 @@ class MishkefetEngine:
         from .vendor.hebocr.page.segment import segment_page
 
         recognizer = self._load_recognizer()
-        prepared_image, audit = prepare_page_for_ocr(image)
+        eff_enh = resolve_page_enhancement_enabled(self.page_enhancement)
+        prepared_image, audit = prepare_page_for_ocr(image, enabled=eff_enh)
+        was_enhanced = bool(eff_enh and audit is not None and audit.needs_adjustment)
+        proc_png = encode_preview_png(prepared_image) if was_enhanced else None
         inv_scale = (
             1.0 / audit.scale_factor
             if audit is not None and audit.scale_factor > 0.0
@@ -330,8 +352,16 @@ class MishkefetEngine:
         )
         crops, boxes, _skew = segment_page(prepared_image)
         if not crops:
-            return PageResult(number=number, text="", confidence=None, lines=(),
-                              assisted_text=None if self.mode == "raw" else "")
+            return PageResult(
+                number=number,
+                text="",
+                confidence=None,
+                lines=(),
+                assisted_text=None if self.mode == "raw" else "",
+                enhanced=was_enhanced,
+                enhancement_enabled=eff_enh,
+                processed_image_png=proc_png,
+            )
 
         # Same crops and weights for both readings. The first output is always
         # greedy, even when the user requests an experimental alternative.
@@ -381,6 +411,9 @@ class MishkefetEngine:
             confidence=page_confidence,
             lines=tuple(lines),
             assisted_text=assisted,
+            enhanced=was_enhanced,
+            enhancement_enabled=eff_enh,
+            processed_image_png=proc_png,
         )
 
 

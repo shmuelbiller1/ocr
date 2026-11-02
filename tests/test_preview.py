@@ -187,6 +187,41 @@ class PreviewPaneTests(unittest.TestCase):
             self.assertIn("PDF", pane.status.text())
             pane.close_document()
 
+    def test_pane_switches_between_original_processed_and_side_by_side_compare(
+        self,
+    ) -> None:
+        from PIL import Image, ImageDraw
+
+        from hebrew_workbench.ui.preview_pane import PreviewPane
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "tan_scan.png"
+            im = Image.new("RGB", (300, 200), (235, 214, 180))
+            draw = ImageDraw.Draw(im)
+            draw.line([(20, 90), (280, 90)], fill=(190, 35, 35), width=4)
+            im.save(path)
+
+            pane = PreviewPane()
+            pane.set_document(str(path))
+            self.assertEqual(pane.view_mode, "original")
+            orig_w = pane.scene.sceneRect().width()
+            self.assertGreater(orig_w, 0.0)
+
+            pane.set_view_mode("processed")
+            self.assertEqual(pane.view_mode, "processed")
+            self.assertIn("לאחר עיבוד", pane.status.text())
+
+            pane.set_view_mode("compare")
+            self.assertEqual(pane.view_mode, "compare")
+            comp_w = pane.scene.sceneRect().width()
+            # Side-by-side comparison canvas is 2x width + 16px separator
+            self.assertGreater(comp_w, orig_w * 1.9)
+            self.assertIn("השוואה", pane.status.text())
+
+            pane.set_page_enhancement_enabled(False)
+            self.assertIn("כבוי", pane.status.text())
+            pane.close_document()
+
 
 class MultiFrameImageTests(unittest.TestCase):
     """A file with several frames, like a TIFF with several pages."""

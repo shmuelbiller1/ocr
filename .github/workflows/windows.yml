@@ -470,6 +470,12 @@ jobs:
             --models .cache/models \
             --engines mishkefet-v1 kraken-ppocrv6-small \
             --output photocraft-audit-benchmark.json 2>&1 | tee benchmark-photocraft.log
+          python tools/benchmark_stroke_width.py \
+            --corpus benchmark/modern_cursive \
+            --models .cache/models \
+            --engines mishkefet-v1 kraken-ppocrv6-small \
+            --fetch-public-real-scans \
+            --output stroke-width-benchmark.json 2>&1 | tee benchmark-stroke-width.log
       - name: Check the corpus of the modern school handwriting
         run: |
           set -o pipefail
@@ -602,11 +608,12 @@ jobs:
             ocr-accuracy-cursive.json
             suggestions-benchmark.json
             photocraft-audit-benchmark.json
+            stroke-width-benchmark.json
           if-no-files-found: warn
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark-cursive-manifest.log benchmark-cursive.log ocr-accuracy-cursive.json benchmark-suggestions.log suggestions-benchmark.json benchmark-photocraft.log photocraft-audit-benchmark.json benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/smoke-small.txt build/smoke/smoke-medium.txt build/smoke/smoke-mishkefet-v1.txt build/smoke/smoke-test.json decoding-comparison.log build/decoding-comparison/decoding-comparison.json build/decoding-comparison/decoding-raw.txt build/decoding-comparison/decoding-comparison-raw.txt build/decoding-comparison/decoding-assisted.txt
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark-cursive-manifest.log benchmark-cursive.log ocr-accuracy-cursive.json benchmark-suggestions.log suggestions-benchmark.json benchmark-photocraft.log photocraft-audit-benchmark.json benchmark-stroke-width.log stroke-width-benchmark.json benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/smoke-small.txt build/smoke/smoke-medium.txt build/smoke/smoke-mishkefet-v1.txt build/smoke/smoke-test.json decoding-comparison.log build/decoding-comparison/decoding-comparison.json build/decoding-comparison/decoding-raw.txt build/decoding-comparison/decoding-comparison-raw.txt build/decoding-comparison/decoding-assisted.txt
 
   ocr-worker-windows:
     name: OCR worker (Windows)

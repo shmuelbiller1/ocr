@@ -242,7 +242,7 @@ YOD_VALID_PARTICIPLES_AND_ADJ: frozenset[str] = frozenset(
 FUTURE_3MS_TO_1SG: dict[str, str] = {
     "ילך": "אלך",
     "יכתוב": "אכתוב",
-    "יכתב": "אכתוב",
+    "יכתב": "אכתב",
     "יגיד": "אגיד",
     "יאמר": "אומר",
     "יעשה": "אעשה",
@@ -773,5 +773,22 @@ class GrammarModule(SuggestionModule):
         proposals: list[Suggestion] = []
         for rule in RULES:
             proposals.extend(rule(text))
-        proposals.sort(key=lambda item: (item.start, item.end))
-        return proposals
+        # Suppress redundant double-space proposals whose whitespace span is
+        # already covered by an enclosing punctuation/quote/bracket spacing fix
+        # (e.g. `כתבתי (בדיקה  ).` -> `כתבתי (בדיקה).` in one atomic pass).
+        filtered: list[Suggestion] = []
+        for item in proposals:
+            if (
+                item.replacement == " "
+                and not item.original.strip()
+                and any(
+                    other is not item
+                    and other.start <= item.start
+                    and item.end <= other.end
+                    for other in proposals
+                )
+            ):
+                continue
+            filtered.append(item)
+        filtered.sort(key=lambda item: (item.start, item.end))
+        return filtered

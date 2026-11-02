@@ -329,7 +329,7 @@ def run_neural_ocr_comparison(
                         pred_text = (
                             page_res.assisted_text
                             if mode != "raw"
-                            and getattr(page_res, "assisted_text", None)
+                            and getattr(page_res, "assisted_text", None) is not None
                             else page_res.text
                         )
 
@@ -428,16 +428,53 @@ def main() -> int:
         default=["mishkefet-v1", "kraken-ppocrv6-small"],
     )
     parser.add_argument("--segmentation-only", action="store_true")
+    parser.add_argument("--skip-segmentation", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--in-process", action="store_true")
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
     cv2.setNumThreads(1)
-    seg_rows = run_segmentation_benchmark(args.corpus)
+    seg_rows = (
+        []
+        if args.skip_segmentation
+        else run_segmentation_benchmark(args.corpus)
+    )
     ocr_rows: list[dict[str, Any]] = []
     if not args.segmentation_only and args.models is not None:
-        ocr_rows = run_neural_ocr_comparison(
-            args.corpus, args.models, list(args.engines)
-        )
+        engine_list = list(args.engines)
+        if not args.in_process and len(engine_list) > 1:
+            import subprocess
+            import tempfile
+
+            for eng_id in engine_list:
+                with tempfile.TemporaryDirectory(prefix="pc-bench-iso-") as td:
+                    tmp_out = Path(td) / "eng.json"
+                    cmd = [
+                        sys.executable,
+                        str(Path(__file__).resolve()),
+                        "--corpus",
+                        str(args.corpus),
+                        "--models",
+                        str(args.models),
+                        "--engines",
+                        eng_id,
+                        "--skip-segmentation",
+                        "--in-process",
+                        "--output",
+                        str(tmp_out),
+                    ]
+                    proc = subprocess.run(cmd, check=False)
+                    if proc.returncode != 0 or not tmp_out.is_file():
+                        raise RuntimeError(
+                            f"Isolated PhotoCraft benchmark failed for {eng_id} "
+                            f"(exit code {proc.returncode})"
+                        )
+                    sub = json.loads(tmp_out.read_text(encoding="utf-8"))
+                    ocr_rows.extend(sub.get("neural_ocr_before_vs_after", []))
+        else:
+            ocr_rows = run_neural_ocr_comparison(
+                args.corpus, args.models, engine_list
+            )
 
     payload = {
         "corpus": str(args.corpus),

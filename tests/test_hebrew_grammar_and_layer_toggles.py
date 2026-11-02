@@ -223,6 +223,28 @@ class LayerIndependenceUITests(unittest.TestCase):
         self.window.doc_list.setCurrentRow(0)
         self.assertEqual(self.window.suggestions.pending(), [])
 
+    def test_pr22_tokenization_and_grammar_regressions(self) -> None:
+        from hebrew_workbench.suggestions.grammar import GrammarModule
+        from hebrew_workbench.suggestions.hebrew_lexicon import HEBREW_TOKEN_RE
+
+        # Trailing closing quote before Hebrew words must not be swallowed into token
+        quoted = 'הוא אמר "שלום" לחברו בצה"ל'
+        tokens = [m.group(0) for m in HEBREW_TOKEN_RE.finditer(quoted)]
+        self.assertIn("שלום", tokens)
+        self.assertNotIn('שלום"', tokens)
+        self.assertIn('בצה"ל', tokens)
+
+        grammar = GrammarModule()
+        # "אני יכתב" -> "אכתב" (no redundant yod)
+        s_yikhtov = grammar.check("אני יכתב את המכתב מחר.")
+        self.assertTrue(any(s.replacement == "אכתב" for s in s_yikhtov))
+
+        # "הוא  הוא" -> repeated_word without nested overlapping double_space
+        s_dup = grammar.check("הוא  הוא הגיע בזמן.")
+        self.assertEqual(len(s_dup), 1)
+        self.assertEqual(s_dup[0].original, "הוא  הוא")
+        self.assertEqual(s_dup[0].replacement, "הוא")
+
 
 if __name__ == "__main__":
     unittest.main()

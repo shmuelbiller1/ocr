@@ -77,8 +77,19 @@ def make_worker_engine(options: dict | None = None) -> "WorkerEngine":
     # engine that reads the model is named as well, because the worker
     # can run more than one of them.
     engine = str(settings.get("engine", artifact.engine if artifact else "kraken"))
-    return WorkerEngine(worker, model_path, artifact_id=artifact_id, engine=engine,
-                        mode=settings.get("decoding_mode", "raw"))
+    page_enh = (
+        bool(settings["page_enhancement"])
+        if "page_enhancement" in settings and settings["page_enhancement"] is not None
+        else None
+    )
+    return WorkerEngine(
+        worker,
+        model_path,
+        artifact_id=artifact_id,
+        engine=engine,
+        mode=settings.get("decoding_mode", "raw"),
+        page_enhancement=page_enh,
+    )
 
 
 def _display_name(engine: str, artifact_id: str) -> str:
@@ -111,6 +122,7 @@ class WorkerEngine:
         artifact_id: str = "kraken-ppocrv6-small",
         engine: str = "kraken",
         mode: str = "raw",
+        page_enhancement: bool | None = None,
     ) -> None:
         from .models import MODEL_ARTIFACTS
 
@@ -121,6 +133,9 @@ class WorkerEngine:
         self.mode = decoding_mode({"decoding_mode": mode})
         if engine != "mishkefet" and self.mode != "raw":
             raise ValueError("Assisted decoding requires Mishkefet")
+        self.page_enhancement = (
+            bool(page_enhancement) if page_enhancement is not None else None
+        )
         self.worker = Path(worker)
         self.model_path = Path(model_path)
         self.timeout_seconds = timeout_seconds
@@ -134,12 +149,14 @@ class WorkerEngine:
         self.name = _display_name(engine, artifact_id)
 
     def configure(self, options: dict) -> None:
-        """Apply an explicit decoding profile supplied by plugin settings."""
+        """Apply explicit decoding and page-enhancement profiles."""
         from .mishkefet_decoding import decoding_mode
         mode = decoding_mode(options)
         if self.engine != "mishkefet" and mode != "raw":
             raise ValueError("Assisted decoding requires Mishkefet")
         self.mode = mode
+        if "page_enhancement" in options and options["page_enhancement"] is not None:
+            self.page_enhancement = bool(options["page_enhancement"])
 
     def manifest(self) -> EngineManifest:
         if self.engine == "mishkefet":
@@ -172,16 +189,16 @@ class WorkerEngine:
         with tempfile.TemporaryDirectory(prefix="ocr-job-") as folder:
             job_path = Path(folder) / "job.json"
             result_path = Path(folder) / "result.json"
+            job_payload = {
+                "document": str(document),
+                "model_path": str(self.model_path),
+                "engine": self.engine,
+                "decoding_mode": self.mode,
+            }
+            if self.page_enhancement is not None:
+                job_payload["page_enhancement"] = bool(self.page_enhancement)
             job_path.write_text(
-                json.dumps(
-                    {
-                        "document": str(document),
-                        "model_path": str(self.model_path),
-                        "engine": self.engine,
-                        "decoding_mode": self.mode,
-                    },
-                    ensure_ascii=False,
-                ),
+                json.dumps(job_payload, ensure_ascii=False),
                 encoding="utf-8",
             )
 
@@ -255,6 +272,18 @@ class WorkerEngine:
             if not result_path.is_file():
                 raise EngineFailure("מנוע הזיהוי לא החזיר תוצאה.")
 
+            processed_bytes_by_num: dict[int, bytes] = {}
+            for index, page in enumerate(payload.get("pages", [])):
+                num = int(page.get("number", index + 1))
+                rel_png = page.get("processed_image_file")
+                if isinstance(rel_png, str) and rel_png:
+                    png_path = (Path(folder) / Path(rel_png).name).resolve()
+                    if png_path.is_file():
+                        try:
+                            processed_bytes_by_num[num] = png_path.read_bytes()
+                        except OSError:
+                            pass
+
         if payload.get("error"):
             raise EngineFailure(str(payload["error"]))
 
@@ -264,6 +293,11 @@ class WorkerEngine:
                 text=str(page.get("text", "")),
                 confidence=page.get("confidence"),
                 assisted_text=page.get("assisted_text"),
+                enhanced=bool(page.get("enhanced", False)),
+                enhancement_enabled=bool(page.get("enhancement_enabled", True)),
+                processed_image_png=processed_bytes_by_num.get(
+                    int(page.get("number", index + 1))
+                ),
                 lines=tuple(
                     LineResult(
                         text=str(line.get("text", "")),

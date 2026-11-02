@@ -86,6 +86,9 @@ class MainWindow(QMainWindow):
         # Every document has its own session of proposals, so that the
         # proposals of one document are never offered for another one.
         self._sessions: dict[str, SuggestionSession] = {}
+        self._processed_previews: dict[
+            str, dict[int, tuple[bytes | None, bool, bool]]
+        ] = {}
         self._shown_entry = None
         self._recognizing_entry = None
         self._loading = False
@@ -147,6 +150,8 @@ class MainWindow(QMainWindow):
 
         self.preview = PreviewPane()
         self.preview.setToolTip("תצוגה מקדימה של הדף הנבחר")
+        self.preview.set_page_enhancement_enabled(self.plugins.page_enhancement)
+        self.preview.view_mode_changed.connect(self._on_preview_view_mode_changed)
 
         self.editor = QPlainTextEdit()
         self.editor.setPlaceholderText(
@@ -255,6 +260,24 @@ class MainWindow(QMainWindow):
             lambda checked: self.set_suggestion_layer_enabled("style", checked)
         )
 
+        self.toggle_page_enhancement_action = QAction(
+            "שיפור דף אוטומטי לפני OCR", self
+        )
+        self.toggle_page_enhancement_action.setCheckable(True)
+        self.toggle_page_enhancement_action.setChecked(
+            self.plugins.page_enhancement
+        )
+        self.toggle_page_enhancement_action.toggled.connect(
+            self.set_page_enhancement_enabled
+        )
+
+        self.compare_images_action = QAction(
+            "השוואת תמונה מקורית ומעובדת", self
+        )
+        self.compare_images_action.setCheckable(True)
+        self.compare_images_action.setChecked(False)
+        self.compare_images_action.toggled.connect(self.toggle_image_comparison)
+
         self.cancel_action = QAction("ביטול המשימה", self)
         self.cancel_action.triggered.connect(self.cancel_task)
         self.cancel_action.setEnabled(False)
@@ -291,12 +314,18 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(self.run_ocr_action)
         tools_menu.addAction(self.cancel_action)
         tools_menu.addSeparator()
+        tools_menu.addAction(self.toggle_page_enhancement_action)
+        tools_menu.addAction(self.compare_images_action)
+        tools_menu.addSeparator()
         self.engine_menu = tools_menu.addMenu("מנוע הזיהוי")
         tools_menu.addAction(self.install_engine_action)
         tools_menu.addAction(self.engine_status_action)
 
         settings_menu = self.menuBar().addMenu("הגדרות")
         settings_menu.addAction(self.plugin_settings_action)
+        settings_menu.addSeparator()
+        settings_menu.addAction(self.toggle_page_enhancement_action)
+        settings_menu.addAction(self.compare_images_action)
 
         suggestions_menu = self.menuBar().addMenu("הצעות תיקון")
         suggestions_menu.addAction(self.check_suggestions_action)
@@ -516,6 +545,7 @@ class MainWindow(QMainWindow):
                 if removed is self._shown_entry:
                     self._shown_entry = None
                 self._sessions.pop(str(removed.path), None)
+                self._processed_previews.pop(str(removed.path), None)
         self._sync_document_list()
         if self._shown_entry is not None and self._shown_entry not in self.project:
             self._shown_entry = None
@@ -550,6 +580,7 @@ class MainWindow(QMainWindow):
             return
         self.project.clear()
         self._sessions.clear()
+        self._processed_previews.clear()
         self._sync_document_list()
         self._clear_editor()
         self.statusBar().showMessage("הרשימה נוקתה. הקבצים על הדיסק לא נגעו.", 5000)
@@ -576,6 +607,9 @@ class MainWindow(QMainWindow):
         self._refresh_suggestions(self.suggestions)
         self.doc_path_label.setText(entry.path)
         self.preview.set_document(entry.path)
+        self.preview.set_processed_pages(
+            self._processed_previews.get(str(entry.path))
+        )
         self._show_decoding_comparison(entry)
 
     def _clear_editor(self) -> None:
@@ -592,6 +626,7 @@ class MainWindow(QMainWindow):
         self._refresh_suggestions(self.suggestions)
         self.doc_path_label.setText("לא נבחר מסמך")
         self.preview.set_document(None)
+        self.preview.set_processed_pages(None)
         self._show_decoding_comparison(None)
 
     def _build_decoding_dock(self) -> None:
@@ -825,6 +860,16 @@ class MainWindow(QMainWindow):
             entry.engine_name = result.engine_name
             entry.assisted_transcription = getattr(result, "assisted_text", None)
             entry.decoding_mode = getattr(result, "decoding_mode", "raw")
+            pages = getattr(result, "pages", ()) or ()
+            if pages:
+                self._processed_previews[str(entry.path)] = {
+                    int(p.number): (
+                        getattr(p, "processed_image_png", None),
+                        bool(getattr(p, "enhanced", False)),
+                        bool(getattr(p, "enhancement_enabled", True)),
+                    )
+                    for p in pages
+                }
             # The text of the document is new, and the corrections that
             # were made on the old text do not belong to it any more.
             # Their places are of no use, and a correction that is
@@ -848,6 +893,9 @@ class MainWindow(QMainWindow):
             # the document is new.
             self.suggestions = self._session_for(entry)
             self._refresh_suggestions(self.suggestions)
+            self.preview.set_processed_pages(
+                self._processed_previews.get(str(entry.path))
+            )
             self._show_decoding_comparison(entry)
         self.statusBar().showMessage(
             f"הזיהוי בוצע באמצעות {result.engine_name} ב-{result.duration_seconds:.1f} שניות. "
@@ -1081,11 +1129,46 @@ class MainWindow(QMainWindow):
         """The user changed the plugins: look at them again."""
         self.refresh_engines()
         self._refresh_suggestion_modules()
+        self._sync_page_enhancement_ui()
         # The proposals that are shown were made by the modules that
         # were before, and they are not good any more: the user has to
         # check the text again.  This happens when the plugins really
         # change, and not when the screen is only shown.
         self._clear_the_proposals()
+
+    def _sync_page_enhancement_ui(self) -> None:
+        """Keep page-enhancement menu checkmark and preview pane synchronized."""
+        enabled = bool(self.plugins.page_enhancement)
+        if hasattr(self, "toggle_page_enhancement_action"):
+            self.toggle_page_enhancement_action.blockSignals(True)
+            self.toggle_page_enhancement_action.setChecked(enabled)
+            self.toggle_page_enhancement_action.blockSignals(False)
+        if hasattr(self, "preview"):
+            self.preview.set_page_enhancement_enabled(enabled)
+
+    def set_page_enhancement_enabled(self, enabled: bool) -> None:
+        """Switch automatic pre-OCR page enhancement On or Off from UI."""
+        new_state = bool(enabled)
+        if new_state != self.plugins.page_enhancement:
+            self.plugins.set_page_enhancement(new_state)
+            self.refresh_engines()
+        self._sync_page_enhancement_ui()
+        state_label = "מופעל" if new_state else "כבוי (שימוש בתמונה המקורית)"
+        self.statusBar().showMessage(
+            f"שיפור דף אוטומטי לפני OCR: {state_label}", 5000
+        )
+
+    def toggle_image_comparison(self, compare: bool) -> None:
+        """Switch preview between original image and side-by-side comparison."""
+        target = "compare" if compare else "original"
+        if self.preview.view_mode != target:
+            self.preview.set_view_mode(target)
+
+    def _on_preview_view_mode_changed(self, mode: str) -> None:
+        if hasattr(self, "compare_images_action"):
+            self.compare_images_action.blockSignals(True)
+            self.compare_images_action.setChecked(mode == "compare")
+            self.compare_images_action.blockSignals(False)
 
     def _refresh_suggestion_modules(self) -> None:
         """The modules of proposals come from the plugins as well."""
