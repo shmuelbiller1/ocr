@@ -161,6 +161,11 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
         f"| Character error rate | **{percent(summary.get('cer', 0.0))}** |",
         f"| Word error rate | **{percent(summary.get('wer', 0.0))}** |",
         f"| Seconds per page | {summary.get('seconds_per_page', '?')} |",
+        *(
+            [f"| Peak RSS (MB) | {summary['peak_rss_mb']} |"]
+            if summary.get("peak_rss_mb") is not None
+            else []
+        ),
         f"| Pages measured | {first.get('pages', 0)} |",
         f"| Pages seen | {first.get('pages_seen', 0)} |",
         f"| Characters of the ground truth | {summary.get('characters_reference', '?')} |",
@@ -237,28 +242,57 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
                 "Every engine was measured on the **same** pages.",
                 "",
             ]
+        rows_source = compared or engines
+        has_rss = any(
+            (e.get("summary") or {}).get("peak_rss_mb") is not None
+            for e in rows_source
+        )
         lines += [
             "The rate of the"
             " errors is what decides which engine is the better one; the time"
             " that a teacher needs to correct the text is the other half of the"
             " decision, and it is measured with the people of the school.",
             "",
-            "| Engine | Character error rate | Word error rate | Seconds per page | Pages |",
-            "| --- | --- | --- | --- | --- |",
         ]
-        for engine in compared or engines:
+        if has_rss:
+            lines += [
+                "| Engine | Character error rate | Word error rate | Seconds per page | Peak RSS (MB) | Pages |",
+                "| --- | --- | --- | --- | --- | --- |",
+            ]
+        else:
+            lines += [
+                "| Engine | Character error rate | Word error rate | Seconds per page | Pages |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+        for engine in rows_source:
             engine_summary = engine.get("summary", {})
-            lines.append(
-                "| {name} | {cer} | {wer} | {seconds} | {pages} |".format(
-                    name=engine.get("model") or engine.get("engine", "the engine"),
-                    cer=percent(engine_summary.get("cer", 0.0)),
-                    wer=percent(engine_summary.get("wer", 0.0)),
-                    seconds=engine_summary.get("seconds_per_page", "?"),
-                    pages=engine_summary.get(
-                        "pages_measured", engine.get("pages", 0)
-                    ),
+            if has_rss:
+                rss = engine_summary.get("peak_rss_mb")
+                rss_str = f"{rss:.1f}" if isinstance(rss, (int, float)) else "?"
+                lines.append(
+                    "| {name} | {cer} | {wer} | {seconds} | {rss} | {pages} |".format(
+                        name=engine.get("model") or engine.get("engine", "the engine"),
+                        cer=percent(engine_summary.get("cer", 0.0)),
+                        wer=percent(engine_summary.get("wer", 0.0)),
+                        seconds=engine_summary.get("seconds_per_page", "?"),
+                        rss=rss_str,
+                        pages=engine_summary.get(
+                            "pages_measured", engine.get("pages", 0)
+                        ),
+                    )
                 )
-            )
+            else:
+                lines.append(
+                    "| {name} | {cer} | {wer} | {seconds} | {pages} |".format(
+                        name=engine.get("model") or engine.get("engine", "the engine"),
+                        cer=percent(engine_summary.get("cer", 0.0)),
+                        wer=percent(engine_summary.get("wer", 0.0)),
+                        seconds=engine_summary.get("seconds_per_page", "?"),
+                        pages=engine_summary.get(
+                            "pages_measured", engine.get("pages", 0)
+                        ),
+                    )
+                )
         lines.append("")
 
         broken = [
@@ -339,6 +373,14 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
             " scholarly style is part of it.",
             "",
         ]
+    elif target == "modern_cursive":
+        lines += [
+            "These pages are verified 20th-century modern Hebrew cursive"
+            " manuscripts (`PDM-1.0`).  They measure modern cursive handwriting"
+            " in isolated per-engine processes while `benchmark/modern_school`"
+            " awaits consented contemporary school notebook pages.",
+            "",
+        ]
     else:
         lines += [
             "These pages are the *diagnostic* corpus of the old handwriting."
@@ -351,11 +393,12 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
     # corpus are two different files, and they are uploaded as two
     # different artefacts.  The section says which one it is, so that
     # the numbers can be looked at in the place they come from.
-    artefact = (
-        "ocr-accuracy-modern-report"
-        if target == "modern"
-        else "ocr-accuracy-report"
-    )
+    if target == "modern":
+        artefact = "ocr-accuracy-modern-report"
+    elif target == "modern_cursive":
+        artefact = "modern-cursive-and-suggestions-benchmarks"
+    else:
+        artefact = "ocr-accuracy-report"
     lines += [
         "The numbers were produced by `tools/benchmark_ocr.py` in the"
         " `ocr-engine` job of the build, and the report they come from is"

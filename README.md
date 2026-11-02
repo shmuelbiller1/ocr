@@ -29,9 +29,11 @@ the engine, but they are not what the program is made for.
 > 55.7% (medium model) over the 4 pages whose
 > ground truth is complete, so the result of a recognition is a **starting
 > point that has to be read by a person**, and the program says so after
-> every recognition.  The second engine reads those old pages with 73.0%
-> - the segmenter that came with it cuts the lines of the old cursive in
-> two, and it was written for the modern cursive and not for these pages;
+> every recognition.  The second engine reads those old pages with 62.3%
+> (and reads the 6 verified 20th-century modern Hebrew cursive pages in
+> `benchmark/modern_cursive` with 38.2% CER vs Kraken's 80.5%–81.6%)
+> - the segmenter that came with it cuts some lines of the old 1500–1800 cursive in
+> two, and it was written for the modern cursive and not for those pages;
 > the whole explanation is in `docs/OCR_ACCURACY.md`.  The numbers and
 > what they mean are in
 > `docs/OCR_ACCURACY.md`; the table below says what is real and what is
@@ -61,7 +63,8 @@ the engine, but they are not what the program is made for.
 | Import scanned documents | **Works** | Files and folders; PDF, PNG, JPEG, BMP, TIFF, WebP; original files are opened read-only |
 | Document list management | **Works** | Add, remove, clear; the files on disk are never touched |
 | Editable transcription pane | **Works** | Per-document text, undo/redo, kept separately for every document |
-| Page preview | **Works** | PDF and images, zoom, rotate, first/previous/next/last page, fit to window |
+| Page preview | **Works** | PDF and images, zoom, rotate, first/previous/next/last page, fit to window, plus **Original / Processed / Side-by-side** comparison view |
+| Automatic page enhancement | **Works; user-toggleable** | Selective CPU color/grid/highlighter/dark-paper cleanup (`Settings > Plugins and engines` or `View > Automatic page enhancement: On / Off`, default On); original file is never modified |
 | Keep the work (project file) | **Works** | `File > Save project` writes a `.hwproj` file; `File > Open project` loads it again |
 | Export `.txt` | **Works** | UTF-8 with BOM so Windows editors show Hebrew correctly |
 | Export `.docx` | **Works** | Word document with right-to-left paragraphs |
@@ -234,9 +237,11 @@ Accuracy improvement on your pages remains unverified.
 
 ### Is the whole project final?
 
-**Not yet.** All Models includes all supported OCR models, not every planned
-correction feature. Spelling still needs a user word list, grammar is limited
-to punctuation/spacing, and לשון הספר is an unavailable placeholder. See the
+**Not yet.** All Models includes all supported OCR models, and all editions now
+bundle the CC0-1.0 offline Hebrew spelling lexicon (196,227 words + rabbinic/Mishnaic
+morphology) and deterministic Hebrew grammar/punctuation rules, while לשון הספר
+remains an unavailable placeholder, in-document text search is unimplemented, and
+`benchmark/modern_school` awaits consented classroom pages. See the
 [full inventory and completion gates](docs/FINAL_READINESS.md). The audit also
 found a Qt 6 printing/PDF defect in v0.4.0; the source patch and stronger
 packaged self-tests must ship in a subsequent release, not be assumed present

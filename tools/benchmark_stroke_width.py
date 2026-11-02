@@ -322,6 +322,7 @@ def _run_mishkefet_experiments(
     engine,
     corpus_pages: list[tuple[str, Image.Image, str]],
     real_scans: list[tuple[str, str, Image.Image]],
+    ci_fast: bool = False,
 ) -> dict[str, object]:
     from hebrew_workbench.engine.vendor.hebocr.data.transforms import (
         inference_stroke_variant,
@@ -339,7 +340,12 @@ def _run_mishkefet_experiments(
         (True, "with_photocraft"),
         (False, "without_photocraft"),
     ):
-        for reg_idx, (regime, reg_desc) in enumerate(REGIME_SPECS):
+        regimes_for_pass = (
+            REGIME_SPECS[:4]
+            if (ci_fast and not pc_enabled)
+            else REGIME_SPECS
+        )
+        for reg_idx, (regime, reg_desc) in enumerate(regimes_for_pass):
             segmented_pages: list[tuple[str, str, list[Image.Image], float]] = []
             for p_idx, (page_id, orig_im, ref_text) in enumerate(corpus_pages):
                 reg_im = _synthesize_regime(orig_im, regime, seed=100 * reg_idx + p_idx)
@@ -410,7 +416,8 @@ def _run_mishkefet_experiments(
 
     # Experiment B: Page-level stroke variant BEFORE line segmentation
     seg_results: dict[str, object] = {}
-    for reg_idx, regime in enumerate(SEGMENTATION_REGIMES):
+    seg_regimes = SEGMENTATION_REGIMES[:2] if ci_fast else SEGMENTATION_REGIMES
+    for reg_idx, regime in enumerate(seg_regimes):
         base_pages = [
             (
                 pid,
@@ -574,6 +581,7 @@ def _run_kraken_experiments(
     engine,
     corpus_pages: list[tuple[str, Image.Image, str]],
     real_scans: list[tuple[str, str, Image.Image]],
+    ci_fast: bool = False,
 ) -> dict[str, object]:
     import kraken.lib.ctc_decoder
     from kraken.configs import RecognitionInferenceConfig, SegmentationInferenceConfig
@@ -606,7 +614,11 @@ def _run_kraken_experiments(
         (True, "with_photocraft"),
         (False, "without_photocraft"),
     ):
-        for reg_idx, (regime, reg_desc) in enumerate(REGIME_SPECS):
+        if ci_fast:
+            regimes_for_pass = REGIME_SPECS[:3] if pc_enabled else REGIME_SPECS[:1]
+        else:
+            regimes_for_pass = REGIME_SPECS
+        for reg_idx, (regime, reg_desc) in enumerate(regimes_for_pass):
             segmented_pages = []
             for p_idx, (page_id, orig_im, ref_text) in enumerate(corpus_pages):
                 reg_im = _synthesize_regime(orig_im, regime, seed=100 * reg_idx + p_idx)
@@ -672,7 +684,12 @@ def _run_kraken_experiments(
     # Experiment B: Page-level stroke variant BEFORE Kraken blla segmentation
     # Evaluate on verified_native_300dpi and pen_fine_nib to keep CPU time bounded
     seg_results: dict[str, object] = {}
-    for reg_idx, regime in enumerate(("verified_native_300dpi", "pen_fine_nib")):
+    kraken_seg_regimes = (
+        ("verified_native_300dpi",)
+        if ci_fast
+        else ("verified_native_300dpi", "pen_fine_nib")
+    )
+    for reg_idx, regime in enumerate(kraken_seg_regimes):
         base_pages = [
             (
                 pid,
@@ -832,6 +849,7 @@ def _run_child_engine(
     models_folder: Path,
     extra_scans: list[str],
     fetch_public: bool,
+    ci_fast: bool = False,
 ) -> dict[str, object]:
     cmd = [
         sys.executable,
@@ -848,6 +866,8 @@ def _run_child_engine(
         cmd.extend(["--extra-scan", s])
     if fetch_public:
         cmd.append("--fetch-public-real-scans")
+    if ci_fast:
+        cmd.append("--ci-fast")
 
     with tempfile.NamedTemporaryFile(
         prefix=f"sw-bench-{engine_id}-", suffix=".json", delete=False
@@ -893,6 +913,11 @@ def main(argv: list[str] | None = None) -> int:
         help="temporarily fetch 3 public HeOCR/hash archival scans into a temp dir for non-GT diagnostics",
     )
     parser.add_argument(
+        "--ci-fast",
+        action="store_true",
+        help="run representative regime subset on Kraken/unenhanced passes for fast CI turnaround",
+    )
+    parser.add_argument(
         "--in-process",
         action="store_true",
         help="run inside current process (used internally by isolated child-process runner)",
@@ -933,9 +958,13 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit(f"Engine {installed_ids[0]} unavailable")
             eng = engines_with_labels[0][0]
             if getattr(eng, "artifact_id", "") == "mishkefet-v1":
-                res = _run_mishkefet_experiments(eng, corpus_pages, real_scans)
+                res = _run_mishkefet_experiments(
+                    eng, corpus_pages, real_scans, ci_fast=args.ci_fast
+                )
             else:
-                res = _run_kraken_experiments(eng, corpus_pages, real_scans)
+                res = _run_kraken_experiments(
+                    eng, corpus_pages, real_scans, ci_fast=args.ci_fast
+                )
         Path(args.single_engine_output).write_text(
             json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8"
         )
@@ -979,11 +1008,11 @@ def main(argv: list[str] | None = None) -> int:
                 eid = getattr(eng, "artifact_id", label)
                 if eid == "mishkefet-v1":
                     report["engines"][eid] = _run_mishkefet_experiments(  # type: ignore[index]
-                        eng, corpus_pages, real_scans
+                        eng, corpus_pages, real_scans, ci_fast=args.ci_fast
                     )
                 else:
                     report["engines"][eid] = _run_kraken_experiments(  # type: ignore[index]
-                        eng, corpus_pages, real_scans
+                        eng, corpus_pages, real_scans, ci_fast=args.ci_fast
                     )
     else:
         for eid in installed_ids:
@@ -993,6 +1022,7 @@ def main(argv: list[str] | None = None) -> int:
                 models_folder,
                 args.extra_scan,
                 args.fetch_public_real_scans,
+                ci_fast=args.ci_fast,
             )
 
     text = json.dumps(report, ensure_ascii=False, indent=2)

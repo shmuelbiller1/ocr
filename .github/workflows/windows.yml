@@ -475,6 +475,7 @@ jobs:
             --models .cache/models \
             --engines mishkefet-v1 kraken-ppocrv6-small \
             --fetch-public-real-scans \
+            --ci-fast \
             --output stroke-width-benchmark.json 2>&1 | tee benchmark-stroke-width.log
       - name: Check the corpus of the modern school handwriting
         run: |

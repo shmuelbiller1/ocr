@@ -90,6 +90,7 @@ higher than the number of the leaderboard.
 | Corpus | What it is | Licence | Use |
 | --- | --- | --- | --- |
 | `benchmark/modern_school/` | The pages of the school, with a transcript that somebody else checked. | — | **The corpus of the program. It has no page in it yet.** |
+| `benchmark/modern_cursive/` | 6 public-domain 20th-century modern Hebrew cursive manuscript pages (Rachel Bluwstein, N. H. Imber, H. N. Bialik) with independently verified transcripts via Wikisource / `HeOCR/hash`. | PDM-1.0 (metadata CC0-1.0) | **Measured on every build in isolated per-engine processes** (`Mishkefet-v1`: `38.2%` CER / `1,430 MB` RSS vs Kraken `80.5%–81.6%` CER / `2,632–2,648 MB` RSS). |
 | Pinkas | 30 pages of early modern (1500–1800) community records, with a ground truth for every line. | CC-BY-4.0 | A diagnostic of the old handwriting. Not the material of the program. |
 | `ivrit-ai/hebrew-handwriting-ocr-benchmark` | The public benchmark of Hebrew handwriting. | ivrit.ai licence, gated | The benchmark of the leaderboard. The program does not download it. |
 | `cyttic/diffusionpen-hebrew-handwriting` | 116,000 synthetic Hebrew lines in 491 hands. | CC-BY-4.0 | A possible third diagnostic, of *modern-style* writing. It is generated, not written by a person, and it is not in the program yet. |

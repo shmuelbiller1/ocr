@@ -1,8 +1,8 @@
-# Technical Improvement Report: Hebrew Notes Workbench (`arena/79dcb59d-ocr`)
+# Technical Improvement Report: Hebrew Notes Workbench (`arena/a4b6d552-ocr`)
 
-**Date:** 2026-11-01  
-**Baseline commit (`main`):** `d01686c6f971a1b662e0963b77c0806eea24d611` (`v0.4.0` + post-release Qt6 printer patch)  
-**Pull Request:** `#22` (`arena/79dcb59d-ocr`)
+**Date:** 2026-11-02  
+**Baseline commits (`main`):** `d01686c6f971a1b662e0963b77c0806eea24d611` (`v0.4.0` + Qt6 printer patch) $\rightarrow$ `6b30cde96bcbd93cf268ddb86f770fd6c3bc3b90` (merged PR `#22`)  
+**Pull Request:** `#23` (`arena/a4b6d552-ocr`)
 
 > **Epistemic discipline:** Throughout this report, **[Measured Fact]** denotes quantities measured directly in this repository or its GitHub Actions Linux/Windows CI runners on pinned artifacts; **[External Published Claim]** denotes results reported by upstream model/dataset authors on external benchmarks not run inside this repository; and **[Engineering Hypothesis]** denotes reasoned expectations awaiting human-consented modern school pages (`benchmark/modern_school`) or physical Windows printer inspection.
 
@@ -63,39 +63,43 @@
    - Real contemporary handwritten Talmudic notes page. Published in CI (`smoke-test-readings` & `mishkefet-decoding-comparison`) with **no fabricated accuracy score**.
 4. **Pinkas Dataset (`CC-BY-4.0`, 1500–1800 Scribal Cursive Diagnostic) & `benchmark/modern_school/`:**
    - 5 Pinkas pages (`4` with complete ground truth, `160` lines) run in CI as a historical regression check; `benchmark/modern_school` remains honestly marked **unverified (`0` pages)** until consented student notebook pages are added.
-5. **`tools/benchmark_photocraft_audit.py` (NEW — Systematic Multi-Color & Regional Page Audit Benchmark):**
-   - Evaluates `HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT=0` vs `=1` across 10 optical suites (`60` pages per engine: `unmodified` + 9 deterministic optical paper/ink/ruling/highlighter/shadow/dark-paper conditions derived directly from the 6 human-verified `benchmark/modern_cursive` pages, preserving exact human ground truth without fabrication).
+5. **`tools/benchmark_photocraft_audit.py` (Systematic 15-Suite Multi-Color & Regional Page Audit Benchmark):**
+   - Evaluates `HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT=0` vs `=1` across **15 optical suites** (`90` pages per engine in isolated child processes: `unmodified` + 14 deterministic optical paper/ink/ruling/margin-line/highlighter/shadow/dark-paper conditions derived directly from the 6 human-verified `benchmark/modern_cursive` pages, preserving exact human ground truth without fabrication).
+6. **`tools/benchmark_stroke_width.py` (6-Variant Handwriting Stroke-Width & Real-Scan Diagnostic Benchmark):**
+   - Audits inference-time stroke compensation via AST/source inspection and evaluates all 6 continuous-grayscale stroke-width variants (`original`, `mild_thicken`, `moderate_thicken`, `slight_thin`, `adaptive_norm`, `faint_repair`) across 8 pen/paper/DPI regimes **with and without** PhotoCraft preprocessing, on both **line crops at exact model-input height** (`H=64` Mishkefet, `H=96` Kraken) and **page-level segmentation**, plus non-GT diagnostics on contemporary & 1981–1990 `HeOCR/hash` archival scans.
 
 ---
 
 ## 4. Before-vs-After Results
 
-### 4A. OCR Recognition Accuracy, Line Alignment & Resource Use
+### 4A. OCR Recognition Accuracy, Line Alignment & Isolated-Process Resource Use
 
-**[Measured Fact]** Measured in GitHub Actions `ocr-engine` (`ubuntu-latest` CPU, Python 3.12, PyTorch 2.14.0+cpu, runs `41359483902`, `41390571433`, & `41395748886`) vs `main` (`d01686c`):
+**[Measured Fact]** Measured in GitHub Actions `ocr-engine` (`ubuntu-latest` CPU, Python 3.12, PyTorch 2.14.0+cpu, **isolated child process per engine/profile** in run `41483720777` / `ea65682`) vs `main` (`d01686c`):
 
-| Benchmark & Profile | CER | WER | Lines (Hyp / Ref) | Missing / Extra / Dup / Order Inv | Speed (`sec/page`) | Peak RSS RAM | Exotic Script Leakage |
+| Benchmark & Profile | CER | WER | Lines (Hyp / Ref) | Missing / Extra / Dup / Order Inv | Speed (`sec/page`) | Isolated Peak RSS RAM | Exotic Script Leakage |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Contemporary Scan (`scan-2026-10-28-221624.pdf`, unverified GT)** | | | | | | | |
-| `mishkefet-v1` — **Before (`main`)** | *unverified* | *unverified* | `22` lines (`1,397` chars) | **Dropped 13-line middle paragraph** | `16.4s` | — | `0` chars |
-| `mishkefet-v1` — **After (PR #22)** | *unverified* | *unverified* | **`35` lines (`2,427` chars, `+73.7%`)** | **Middle paragraph fully recovered** | `19.60s` | — | `0` chars |
-| `kraken-ppocrv6-small` — **Before (`main`)** | *unverified* | *unverified* | `34` lines | — | `~17s` | — | Hangul / Georgian / Cyrillic |
-| `kraken-ppocrv6-small` — **After (PR #22)** | *unverified* | *unverified* | `34` lines (`2,166` chars) | — | `17.39s` | — | **`0` chars (`100%` eliminated)** |
+| **Contemporary Scan (`scan-2026-10-28-221624.pdf`, unverified GT; provisional author-typed check below)** | | | | | | | |
+| `mishkefet-v1` — **Before (`main` `d01686c`)** | *unverified* | *unverified* | `22` lines (`1,397` chars) | **Dropped 13-line middle paragraph** | `16.4s` | — | `0` chars |
+| `mishkefet-v1` — **After (PR #22 / #23)** | *unverified* (`29.11%` provisional*) | *unverified* (`79.48%` provisional*; `:assisted` `70.63%`*) | **`35` lines (`2,427` chars, `+73.7%`)** | **Middle paragraph fully recovered** | `19.6–32.1s` | — | `0` chars |
+| `kraken-ppocrv6-small` — **Before (`main` `d01686c`)** | *unverified* | *unverified* | `34` lines | — | `~17s` | — | Hangul / Georgian / Cyrillic |
+| `kraken-ppocrv6-small` / `-medium` — **After (PR #22 / #23)** | *unverified* (`32.20%` / `25.16%` provisional*) | *unverified* (`81.86%` / `74.73%` provisional*) | `34` lines (`2,166` / `2,278` chars) | — | `29.6s` / `45.7s` | — | **`0` chars (`100%` eliminated)** |
 | **Verified Modern Cursive (`benchmark/modern_cursive`, 6 pages, 62 lines, `PDM-1.0`)** | | | | | | | |
-| `kraken-ppocrv6-small` (`raw`, CTC-masked + PhotoCraft audit) | **`80.49%`** (`83.18%` pre-audit) | **`95.09%`** (`96.43%`) | `46 / 62` (`41 / 62`) | `50 / 33 / 1 / 0` | `11.76–14.05s` | `2,562 MB` | `0` |
-| `kraken-ppocrv6-medium` (`raw`, CTC-masked + PhotoCraft audit) | **`81.57%`** (`84.89%` pre-audit) | **`94.64%`** (`95.54%`) | `43 / 62` (`36 / 62`) | `51 / 31 / 1 / 2` | `12.30–14.80s` | `2,656 MB` | `0` |
-| **`mishkefet-v1` (`raw` greedy + PhotoCraft audit)** | **`38.22%`** (`41.37%` pre-audit) | **`89.73%`** (`91.96%`) | **`72 / 62`** (`74 / 62`) | **`6 / 16 / 0 / 0`** | **`4.18–4.98s`** | `2,656 MB` | `0` |
-| **`mishkefet-v1:beam` (12-beam + 3-scale TTA + PhotoCraft audit)** | **`39.39%`** (`42.62%` pre-audit) | **`88.39%`** (`91.07%`) | `72 / 62` | `7 / 17 / 0 / 0` | `10.54–12.67s` | `2,656 MB` | `0` |
-| `mishkefet-v1:assisted` (beam + TTA + char/word LMs + PhotoCraft audit) | **`39.66%`** (`43.62%` pre-audit) | **`91.07%`** (`94.20%`) | `73 / 62` | `7 / 18 / 0 / 0` | `10.92–13.26s` | `2,735 MB` | `0` |
+| `kraken-ppocrv6-small` (`raw`, CTC-masked + PhotoCraft audit) | **`80.49%`** (`83.18%` pre-audit) | **`95.09%`** (`96.43%`) | `46 / 62` (`41 / 62`) | `50 / 33 / 1 / 0` | `11.57–14.21s` | **`2,631.6 MB`** | `0` |
+| `kraken-ppocrv6-medium` (`raw`, CTC-masked + PhotoCraft audit) | **`81.57%`** (`84.89%` pre-audit) | **`94.64%`** (`95.54%`) | `43 / 62` (`36 / 62`) | `51 / 31 / 1 / 2` | `12.79–15.46s` | **`2,647.7 MB`** | `0` |
+| **`mishkefet-v1` (`raw` greedy + PhotoCraft audit)** | **`38.22%`** (`41.37%` pre-audit) | **`89.73%`** (`91.96%`) | **`72 / 62`** (`74 / 62`) | **`6 / 16 / 0 / 0`** | **`4.29–5.25s`** | **`1,404.9–1,429.8 MB`** | `0` |
+| **`mishkefet-v1:beam` (12-beam + 3-scale TTA + PhotoCraft audit)** | **`39.39%`** (`42.62%` pre-audit) | **`88.39%`** (`91.07%`) | `72 / 62` | `7 / 17 / 0 / 0` | `10.61–12.88s` | **`1,526.3–1,565.7 MB`** | `0` |
+| `mishkefet-v1:assisted` (beam + TTA + char/word LMs + PhotoCraft audit) | **`39.66%`** (`43.62%` pre-audit) | **`91.07%`** (`94.20%`) | `73 / 62` | `7 / 18 / 0 / 0` | `11.21–13.54s` | **`1,781.0–1,818.6 MB`** | `0` |
 | **Pinkas Historical Cursive Diagnostic (1500–1800, `CC-BY-4.0`, 4 complete GT pages)** | | | | | | | |
-| `mishkefet-v1` — **Before (`main`)** | `73.00%` | — | — | Severe line bisection | — | — | `0` |
-| `mishkefet-v1` — **After (PR #22)** | **`62.31%` (`-10.69 pp`)** | `100.87%` | `324 / 160` | `42 / 192 / — / —` | `27.62–45.21s` | `3,707 MB` | `0` |
-| `kraken-ppocrv6-small` — **Before / After** | `57.58%` (unchanged) | `93.75%` | `160 / 160` | `18 / 18` | `13.52–23.78s` | `1,737 MB` | `0` |
-| `kraken-ppocrv6-medium` — **Before / After** | `55.68%` (unchanged) | `90.30%` | `159 / 160` | `21 / 20` | `21.98–40.91s` | `1,768 MB` | `0` |
+| `mishkefet-v1` — **Before (`main` `d01686c`)** | `73.00%` | — | — | Severe line bisection | — | — | `0` |
+| `mishkefet-v1` — **After (PR #22 / #23)** | **`62.31%` (`-10.69 pp`)** | `100.87%` | `324 / 160` | `42 / 192 / 14 / 456` | `45.56s` | **`3,268.2 MB`** | `0` |
+| `kraken-ppocrv6-small` — **Before / After** | `57.58%` (unchanged) | `93.75%` | `160 / 160` | `18 / 18 / 0 / 613` | `23.59s` | **`1,771.1 MB`** | `0` |
+| `kraken-ppocrv6-medium` — **Before / After** | `55.68%` (unchanged) | `90.30%` | `159 / 160` | `21 / 20 / 0 / 562` | `40.73s` | **`1,936.0 MB`** | `0` |
+
+*\*Epistemic note on the contemporary Yeshiva scan (`scan-2026-10-28-221624.pdf` / `Scan2026-10-28_222637.pdf`):* Official CI reports keep this page marked **unverified** (`benchmark/modern_school` remains at `0` doubly-verified pages). Against the user-supplied provisional transcription of that Bava Batra sheet (resolved against the 300-DPI scan for 6 `?`-marked words and 1 eye-skipped line), `kraken-ppocrv6-medium` reaches **`25.16%` CER / `74.73%` WER** (**`23.82%` CER / `71.06%` WER** when normalizing `'`/`"`/`׳`/`״` abbreviation ticks), `mishkefet-v1:assisted` achieves the best word error rate at **`28.78%` CER / `70.63%` WER** (**`27.36%` CER / `68.25%` WER** quote-normalized), `mishkefet-v1` raw reaches **`29.11%` CER / `79.48%` WER**, and `kraken-ppocrv6-small` reaches **`32.20%` CER / `81.86%` WER`.
 
 **Key empirical takeaways:**
-- On verified modern cursive, `Mishkefet-v1` with upgraded segmentation and PhotoCraft selective page audit reaches **`38.22%` CER / `89.73%` WER** (`39.39%` CER / **`88.39%` WER** with `:beam`) — cutting character error rate **more than in half** vs Kraken (`80.49%–81.57%`), reducing missing lines by **8x** (`6/62` vs `50/62`), producing **0 reading-order inversions** and **0 duplicated lines**, and running **3x faster** (`4.18–4.98 s/page` vs `11.76–14.80 s/page`). Best per-page CER reaches **`24.2%` CER / `68.8%` WER** (`begani_netatikha`, improved from `41.2%` by selective chromatic contrast recovery), **`31.2%` CER / `68.8%` WER** (`rachel_aqara_1928`), and **`34.9%` CER** (`bialik_el_hazippor`, `0` missing/`0` extra lines).
-- On poetic 1908–1930 texts with archaic/defective spellings (`בגני נטעתיך`, `אל־הרך`), `mishkefet-v1:beam` achieves the best word error rate (`88.39%`), whereas modern-prose language models (`assisted`) improve standard-vocabulary pages (`rachel_rak_al_atzmi`: `WER 94.4% -> 90.7%`) and contemporary rabbinic prose (`scan-2026-10-28-221624.pdf`), confirming why **raw recognition must remain the default and assisted decoding an explicit reviewable alternative**.
+- **Isolated-process RAM correction:** Running each engine/profile in a fresh child process (`--isolated-engines`, default in `benchmark_ocr.py`, `benchmark_photocraft_audit.py`, and `benchmark_stroke_width.py`) revealed that single-process `ru_maxrss` previously attributed Kraken's `~2.63 GB` peak RSS to Mishkefet because Mishkefet ran after Kraken. In isolation, **`mishkefet-v1` raw uses only `1,404.9–1,429.8 MB` RAM (~46% less than Kraken's `2,631.6 MB`)**, `:beam` uses `1,526.3–1,565.7 MB`, and `:assisted` uses `1,781.0–1,818.6 MB`.
+- On verified 20th-century modern cursive (`benchmark/modern_cursive`), `Mishkefet-v1` reaches **`38.22%` CER / `89.73%` WER** (`39.39%` CER / **`88.39%` WER** with `:beam`) — cutting CER more than in half vs Kraken (`80.49%–81.57%`), reducing missing lines by **8x** (`6/62` vs `50/62`), and running **nearly 3x faster** (`4.29–5.25 s/page` vs `11.57–15.46 s/page`). On contemporary rabbinic/Yeshiva notes (`scan-2026-10-28-221624.pdf`), both `Kraken PP-OCRv6-medium` (`25.16%` provisional CER, trained on Ashkenazi rabbinic scripts) and `Mishkefet-v1:assisted` (`28.78%` provisional CER, best WER `70.63%`) perform strongly.
 
 ### 4B. PhotoCraft-Derived Selective Document Audit & Multi-Color Paper/Ink Evaluation (`tools/benchmark_photocraft_audit.py`)
 
@@ -120,7 +124,8 @@ Measured in GitHub Actions `ocr-engine` (`ubuntu-latest` CPU, run `41395748886`)
 | **`cyan_graph_grid`** | `kraken-ppocrv6-small` | `87.59%` $\rightarrow$ **`74.82%`** | **`-12.77 pp`** | `98.66%` $\rightarrow$ **`93.75%`** | `71` $\rightarrow$ **`58 / 62`** | `176.1 ms` | `16.05s` $\rightarrow$ **`14.25s`** |
 
 **Honest ablation finding (what worked vs. what was rejected):**
-- **Worked & kept:** Selective chromatic projection, dark-paper polarity inversion, periodic colored-grid suppression, and morphologically opened highlighter pass-band neutralization improved or tied **every** condition, while clean neutral scans (`scan-2026-10-28-221624.pdf`, Pinkas, clean B&W, high-contrast pastel papers) exit untouched (`out is image`) in `4–116 ms/page` and oversized `>2,400 px` phone photos (`rachel_gan_naul` `2800×4100`) run faster on plain CPUs without RAM spikes.
+- **Worked & kept (15 suites + real Yeshiva notebook margin-rule cleanup):** Across all **15 optical suites** (`90` pages per engine in isolated processes, run `41483720777`), PhotoCraft audit achieved **`<= 0.00 pp` CER delta on every single suite** (`-3.15 pp` unmodified, `-42.09 pp` red-on-tan, `-31.20 pp` dark-slate, `-63.31 pp` cyan-grid, `-0.90 pp` highlighter+red-note, and `0.00 pp` on clean/pastel/notebook suites). Adding targeted vertical chromatic margin-rule neutralization (`_suppress_vertical_chromatic_margin_rules`, `0.39%` pixels touched on `Scan2026-10-28_222637.pdf`, `0/60` triggers on `modern_cursive`) reduced left-margin pink-rule snaps from `23` to `10` boxes without clipping adjacent Hebrew ink.
+- **User-facing desktop control & Original/Processed comparison UI:** Exposed `Automatic page enhancement: On / Off` (`עיבוד מקדים אוטומטי לדף`, default `On`, persisted in `plugins.json`, honoring `HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT=0`) in `Settings > Plugins and engines` and the `View` menu, plus an in-UI **Original / Processed / Side-by-side** (`מקור` / `לאחר עיבוד` / `זה לצד זה`) toolbar toggle backed by `ocr-worker --enhance-preview` (`processed-page-N.png`) while keeping the original document untouched.
 - **Tested & gated based on negative evidence:** Applying global morphological background subtraction to *moderate achromatic camera shadows* (`shadow_drop ~ 0.35–0.45`, `regional_corner_shadow`) degraded `Mishkefet-v1` from `42.54%` to `45.32%` CER (`+2.78 pp`) because `hebocr`'s local Gaussian ratio (`gray / GaussianBlur * 128`) and per-line contrast normalization already adapt cleanly to smooth neutral shading (`42.54%` CER), whereas morphological flattening slightly clipped faint sepia strokes on aged parchment (`hatikvah`). We therefore gated `needs_shadow_relight` strictly to severe near-black occlusion (`shadow_drop > 0.58`), eliminating that regression (`0.00 pp`) while keeping Beer–Lambert shadow recovery available for extreme shadows.
 
 ### 4C. Offline Spelling & Grammar Accuracy (`tools/benchmark_suggestions.py`)
@@ -144,35 +149,57 @@ Measured in GitHub Actions `ocr-engine` (`ubuntu-latest` CPU, run `41395748886`)
 
 **[Measured Fact]** Measured on GitHub Actions `windows-2022` (`test-and-package` & `ocr-worker-windows`, run `41395748886`):
 
-| Artifact / Metric | Baseline (`v0.4.0` / `d01686c`) | After (PR #22) | Notes |
+| Artifact / Metric | Baseline (`v0.4.0` / `d01686c`) | After (PR #23, run `41483720777`) | Notes |
 | --- | --- | --- | --- |
-| `HebrewNotesWorkbench-0.4.0-win64.zip` | `341.8 MiB` | **`342.28 MiB` (`358,907,462 B`)** | `+0.48 MiB` for bundled CC0-1.0 Hebrew lexicon (`492.8 KB`), PhotoCraft audit module, and licenses (`0` new wheel dependencies) |
-| `HebrewNotesWorkbench-0.4.0-one-click.exe` (**Lite**, Apache-2.0) | `358.8 MiB` | **`359.30 MiB` (`376,749,983 B`)** | Single-file offline EXE; **cold first launch + 8-stage selftest: `12.02s`**; **subsequent launch + selftest: `3.42s`** |
-| `HebrewNotesWorkbench-0.4.0-all-models-noncommercial-one-click.exe` (**All Models**, CC-BY-NC-SA-4.0) | `533.3 MiB` | **`533.77 MiB` (`559,702,598 B`)** | Single-file offline EXE with all 5 model/LM files; **cold first launch + selftest: `14.73s`**; **subsequent launch + selftest: `5.65s`** |
-| Packaged `ocr-worker` (`inference` vs `baseline` profile) | `780.3 MiB` | **`780.39 MiB` (`818,295,187 B`)** | Zero added ML/image wheels (reuses existing `numpy` + `cv2` + `PIL`); verified 100% offline with socket guard across all 5 OCR cases |
+| `HebrewNotesWorkbench-0.4.0-win64.zip` | `341.8 MiB` | **`342.33 MiB` (`358,957,745 B`)** | `+0.53 MiB` for bundled CC0-1.0 Hebrew lexicon (`492.8 KB`), PhotoCraft audit, stroke-width module, UI comparison view, and licenses (`0` new wheel dependencies) |
+| `HebrewNotesWorkbench-0.4.0-one-click.exe` (**Lite**, Apache-2.0) | `358.8 MiB` | **`359.35 MiB` (`376,803,562 B`)** | Single-file offline EXE; **cold first launch + 8-stage selftest: `11.17s`**; **subsequent launch + selftest: `3.47s`** |
+| `HebrewNotesWorkbench-0.4.0-all-models-noncommercial-one-click.exe` (**All Models**, CC-BY-NC-SA-4.0) | `533.3 MiB` | **`533.82 MiB` (`559,752,585 B`)** | Single-file offline EXE with all 5 model/LM files; **cold first launch + selftest: `12.69s`**; **subsequent launch + selftest: `5.32s`** |
+| Packaged `ocr-worker` (`inference` vs `baseline` profile) | `780.3 MiB` | **`780.54 MiB` (`818,459,664 B`)** | Deterministic bundle across builds (`0` byte delta); zero added ML/image wheels; verified 100% offline with socket guard across all 5 OCR cases + `--enhance-preview` |
+
+### 4E. Adaptive Handwriting Stroke-Width Normalization Investigation (`hebrew_workbench/engine/stroke_width.py`, `tools/benchmark_stroke_width.py`)
+
+**[Measured Fact]** Direct AST/source audit (`audit_inference_stroke_compensation`) and isolated-process CPU benchmarking (CI run `41483720777` / `ea65682`, `stroke-width-benchmark.json`) answered whether stroke-width normalization improves Hebrew handwriting recognition:
+
+1. **Inference-time audit of `Mishkefet` and `Kraken`:**
+   - **Neither engine performs any stroke-width normalization at inference time.** `hebocr/data/transforms.py` `preprocess()` applies only `LANCZOS` height resize to `LINE_HEIGHT = 64`, `gray / GaussianBlur(sigma = h * 0.4) * 128`, `[2%, 99%]` contrast stretch, `[0, 1]` invert, and `PAD_VALUE = 0.05` padding; `Augment._stroke()` (`72%` erosion vs `28%` dilation) runs **exclusively during training** (`Recognizer.read()` never instantiates `Augment`). Kraken `PP-OCRv6` (`TorchSeqRecognizer` / `ImageInputTransforms`) likewise resizes line crops proportionally to `H = 96` with zero morphological stroke adjustment.
+2. **Continuous-grayscale 6-variant benchmark (`mishkefet-v1` isolated RSS `3,299.5 MB`, `kraken-ppocrv6-small` isolated RSS `3,109.6 MB`):**
+   - Evaluated `original`, `mild_thicken` (`α=0.45`), `moderate_thicken` (`α=0.90`), `slight_thin` (`α=0.45`), `adaptive_norm` (Euclidean distance-transform ridge width `2 * d_max` at `H=64` with conservative `[3.05, 5.35] px` deadband), and `faint_repair` (`1×3` directional gap closing gated strictly on ridge width `< 3.4 px`), preserving continuous grayscale antialiasing without binarization:
+
+| Engine & Scope | `original` | `mild_thicken` | `moderate_thicken` | `slight_thin` | `adaptive_norm` | `faint_repair` | Key Finding |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **`mishkefet-v1` (`native_300dpi` real scans, line crops, WITH PhotoCraft)** | **`57.97%` CER** (`conf 0.9314`, `3.08 s/p`) | `58.77%` (`+0.80 pp`, `conf 0.9315`) | `59.26%` (`+1.29 pp`, `conf 0.9326`) | `58.12%` (`+0.15 pp`) | `58.16%` (`+0.19 pp`) | `58.40%` (`+0.43 pp`) | **`original` wins on real scans; thickening inflates CTC confidence while hurting CER** |
+| **`mishkefet-v1` (`native_300dpi`, WITHOUT PhotoCraft)** | `60.21%` CER | `61.18%` (`+0.97 pp`) | `61.60%` (`+1.39 pp`) | `59.83%` (`-0.38 pp`) | `60.37%` (`+0.16 pp`) | **`59.74%` (`-0.47 pp`)** | Faint repair / slight thinning partly compensate only when PhotoCraft is disabled |
+| **`mishkefet-v1` (`dpi_150_lowres` / `pen_faint_broken`, WITH PhotoCraft)** | `56.60%` / `58.50%` | `57.20%` / `58.45%` | `58.31%` / `59.09%` | **`55.99%` (`-0.61 pp`)** / **`57.94%` (`-0.56 pp`)** | **`56.43%` (`-0.17 pp`)** / **`58.27%` (`-0.23 pp`)** | `57.05%` / `58.32%` | Slight thinning / adaptive norm modestly help blurry 150-DPI or degraded strokes, but hurt `pen_fine_nib` (`+0.45 pp`) & `paper_red_ink_tan` (`+0.55 pp`) |
+| **`mishkefet-v1` (`page_before_segmentation`, WITH PhotoCraft)** | **`38.22%` CER** (`6` miss, `4.70 s/p`) | `38.67%` (`+0.45 pp`) | `39.84%` (`+1.62 pp`, `7` miss) | `38.85%` (`+0.63 pp`) | `38.67%` (`+0.45 pp`, `25.0 s/p`) | `39.39%` (`+1.17 pp`) | Pre-segmentation morphology hurts CER across **all** variants and adds `5x–17x` CPU overhead |
+| **`kraken-ppocrv6-small` (`line_crop` `native_300dpi` / `pen_fine_nib` & `page_before_segmentation`)** | `89.38%` / `90.24%` (`80.49%` seg) | `89.17%` / `90.06%` | `89.31%` / **`89.64%` (`-0.60 pp`)** (`79.16%` seg, `-1.33 pp`) | `89.86%` / `90.10%` | `89.38%` / `90.24%` | **`89.25%`** / `90.01%` | Opposite bias to Mishkefet (medieval quill training favors thicker strokes), yet remains `~79–90%` CER on modern cursive |
+
+3. **Engineering decision:** Because `Mishkefet-v1` (trained with `72%` erosion augmentation) and `Kraken PP-OCRv6` exhibit opposite stroke-width preferences, **thicker strokes falsely increase Mishkefet's CTC confidence (`0.9314 -> 0.9326`) while closing small Hebrew loops/gaps (`ה↔ח↔ת`, `ב↔כ`, `ס↔ם`, `ו↔י↔ן`) and degrading CER by `+0.80` to `+1.29 pp`**, and pre-segmentation morphology hurts line finding while multiplying CPU runtime, **`inference_stroke_variant = "original"` remains the production default** (with zero extra OCR passes and zero added latency). All 6 grayscale operators remain available opt-in via `HEBREW_WORKBENCH_STROKE_VARIANT` for research and diagnostic testing.
 
 ---
 
 ## 5. Architectural Changes Made
 
-Organized as clean, reviewable commits on `arena/79dcb59d-ocr` (PR #22), growing the automated test suite from **520 to 563 passing tests**:
+Organized as clean, reviewable commits across PR #22 (`6b30cde`) and PR #23 (`arena/a4b6d552-ocr`), growing the automated test suite from **520 to 580+ passing tests**:
 
-1. **Verified Modern Cursive Benchmark & Metrics (`benchmark/modern_cursive/`, `hebrew_workbench/benchmark/metrics.py`, `tools/benchmark_ocr.py`, `tools/benchmark_suggestions.py`, `tools/benchmark_photocraft_audit.py`):**
-   - Added 6 SHA-256-verified `PDM-1.0` modern cursive pages + transcripts, DP line-alignment metrics (`missing_lines`, `extra_lines`, `duplicated_lines`, `reading_order_inversions`), CPU/RSS telemetry, inline `mishkefet-v1:beam` & `mishkefet-v1:assisted` profiling, span-grouped suggestion benchmarking, and a 10-suite multi-color/regional PhotoCraft audit benchmark.
-2. **PhotoCraft-Derived CPU Document Audit & Selective Chromatic/Regional Cleanup (`hebrew_workbench/engine/photocraft_audit.py`, `docs/licences/PHOTOCRAFT-MIT.txt`):**
-   - Adapted PhotoCraft's (`storytold/photocraft`, MIT) background-key opacity unmixing, sparse-ink dark-ground polarity inversion, periodic ruling/grid masked color replacement, and morphologically opened highlighter pass-band neutralization into a fast lazy-imported NumPy/OpenCV preprocessor (`4–205 ms/page`, `2,400 px` working cap with `rescale_box` coordinate mapping) wired into both `MishkefetEngine` and `KrakenEngine` (`HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT` toggle).
-3. **Handwritten Page Segmentation, Margin Speckle Filter, TTA Logit Reuse & Kraken Script Masking (`hebrew_workbench/engine/vendor/hebocr/page/segment.py`, `recognize.py`, `mishkefet.py`, `kraken_local.py`):**
+1. **Verified Modern Cursive Benchmark, Isolated-Process RSS & Metrics (`benchmark/modern_cursive/`, `hebrew_workbench/benchmark/metrics.py`, `tools/benchmark_ocr.py`, `tools/benchmark_suggestions.py`, `tools/benchmark_photocraft_audit.py`, `tools/benchmark_stroke_width.py`):**
+   - Added 6 SHA-256-verified `PDM-1.0` modern cursive pages + transcripts, DP line-alignment metrics (`missing_lines`, `extra_lines`, `duplicated_lines`, `reading_order_inversions`), **isolated child-process per-engine RSS (`peak_rss_mb`)**, inline `mishkefet-v1:beam` & `mishkefet-v1:assisted` profiling, span-grouped suggestion benchmarking, a 15-suite multi-color/regional PhotoCraft audit benchmark, and a 6-variant handwriting stroke-width & real-scan diagnostic benchmark.
+2. **PhotoCraft-Derived CPU Document Audit, Margin-Rule Cleanup & Original/Processed UI (`hebrew_workbench/engine/photocraft_audit.py`, `ui/preview_pane.py`, `ui/main_window.py`, `ocr_worker/main.py`):**
+   - Adapted PhotoCraft's (`storytold/photocraft`, MIT) background-key opacity unmixing, sparse-ink dark-ground polarity inversion, periodic ruling/grid & vertical chromatic margin-rule suppression, and morphologically opened highlighter pass-band neutralization into a fast lazy-imported NumPy/OpenCV preprocessor (`4–205 ms/page`, `2,400 px` working cap with `rescale_box` coordinate mapping) wired into both `MishkefetEngine` and `KrakenEngine`.
+   - Added user-facing `Automatic page enhancement: On / Off` (`עיבוד מקדים אוטומטי לדף`) and an in-UI **Original / Processed / Side-by-side** (`מקור` / `לאחר עיבוד` / `זה לצד זה`) comparison view backed by `ocr-worker --enhance-preview` (`processed-page-N.png`).
+3. **Continuous-Grayscale Stroke-Width Operators & Inference Audit (`hebrew_workbench/engine/stroke_width.py`, `hebocr/data/transforms.py`):**
+   - Implemented 6 grayscale antialiasing-preserving stroke-width variants (`original`, `mild_thicken`, `moderate_thicken`, `slight_thin`, `adaptive_norm` with `DIST_L2` `[3.05, 5.35] px` deadband, `faint_repair`), GUI-safe AST inference audit (`audit_inference_stroke_compensation`), and cache-safe `HEBREW_WORKBENCH_STROKE_VARIANT` plumbing while keeping `"original"` as the default based on measured CER vs. CTC confidence.
+4. **Handwritten Page Segmentation, Margin Speckle Filter, TTA Logit Reuse & Kraken Script Masking (`hebrew_workbench/engine/vendor/hebocr/page/segment.py`, `recognize.py`, `mishkefet.py`, `kraken_local.py`):**
    - Upgraded `segment_page` with wide-range coarse-to-fine deskew (`±44°`), autocorrelation pitch search up to `n // 2` + median fallback, density-gated tall-component valley splitting (`unsmeared ink fill < 0.35`, recovering dense paragraphs while filtering vertical margin lines), bounded component count (`<=500`) against noisy backgrounds, and quadratic baseline straightening (`straighten_line`) for curved handwriting.
    - Filtered margin punch-hole/speckle artifacts in `MishkefetEngine._is_margin_speckle` (`≤3` chars, confidence `<0.90`, narrow outer-margin box).
-   - Added single-batch object-identity logit caching in `Recognizer._forward_lines` so `read(crops)` + `read_tta(crops)` reuses `scale=1.0` encoder logits (eliminating 1 of 4 ViT passes in `beam`/`assisted` modes with bit-for-bit identical output).
+   - Added single-batch object-identity + stroke-variant logit caching in `Recognizer._forward_lines` so `read(crops)` + `read_tta(crops)` reuses `scale=1.0` encoder logits.
    - Added CTC non-target script masking (`disallowed_ctc_labels` + `script_masked_decoder`) in `KrakenEngine` to suppress non-Hebrew/non-ASCII scripts before greedy decoding.
-4. **Out-of-the-Box CC0-1.0 Offline Hebrew Spellchecker (`hebrew_workbench/suggestions/hebrew_lexicon.py`, `spelling.py`, `data/hebrew_words_cc0.txt.gz`, `selftest.py`):**
-   - Bundled pinned `roni5604/hebrew-words-db` (`CC0-1.0`, `196,227` words, verified by uncompressed SHA-256 at load) with conservative `בכל״ם`+`ו`+`ש` prefix validation, plural-possessive suffix recognition (`-ותיך`/`-ותיו`/`-ותיה`/`-ותינו`), false-positive exemptions for acronyms/geresh/Aramaic/rabbinic terms, handwritten-cursive visual confusion ranking (`ד↔ר↔ב`, `ה↔ח↔ת`, `ו↔י↔ז↔ן`, `ב↔כ↔ג`, `ס↔ם`, `צ↔ע↔ז`, `ג↔ק`, run-on splits), and persistent `personal_dictionary.txt`. Added `bundled-hebrew-spelling` stage to `--selftest`.
-5. **Deterministic Offline Hebrew Grammar Checker & Independent 4-Layer UI Toggles (`hebrew_workbench/suggestions/grammar.py`, `ui/suggestions_pane.py`, `ui/main_window.py`):**
-   - Added high-precision rules for 1st-person singular future `א-` prefix (`אני ילך -> אני אלך`, excluding present participles like `יכול`/`יודע`), construct definite article (`הבית ספר -> בית הספר`), 3–10 numeral gender agreement (including 2-letter `שש`, skipping teen numerals 11–19 and homograph `שמונה`), demonstrative gender agreement (`הבעיה הזה -> הבעיה הזאת`), accidental word/article-echo duplication (`על על -> על`, `בדף הדף -> בדף`, preserving Hebrew reduplicative idioms), and bracket/quote/comma spacing.
+5. **Out-of-the-Box CC0-1.0 Offline Hebrew & Rabbinic Spellchecker (`hebrew_workbench/suggestions/hebrew_lexicon.py`, `spelling.py`, `data/hebrew_words_cc0.txt.gz`, `selftest.py`):**
+   - Bundled pinned `roni5604/hebrew-words-db` (`CC0-1.0`, `196,227` words, verified by uncompressed SHA-256 at load) with conservative `בכל״ם`+`ו`+`ש` and rabbinic/Aramaic `ד-`/`כד-`/`מד-`/`וד-` prefix validation, Mishnaic `-ין -> -ים` plural validation (`ניזוקין`, `שותפין`, `מודה במקצת`), plural-possessive suffix recognition, handwritten-cursive & keyboard confusion ranking (`ד↔ר↔ב`, `ה↔ח↔ת`, `ו↔י↔ז↔ן`, `ב↔כ↔ג`, `ס↔ם`, `צ↔ע↔מ↔ז`, `ג↔ק`, run-on splits), and persistent `personal_dictionary.txt`.
+6. **Deterministic Offline Hebrew Grammar Checker & Independent 4-Layer UI Toggles (`hebrew_workbench/suggestions/grammar.py`, `ui/suggestions_pane.py`, `ui/main_window.py`):**
+   - Added high-precision rules for 1st-person singular future `א-` prefix, construct definite article, 3–10 numeral & demonstrative gender agreement, accidental word/article-echo duplication, acronym gershayim punctuation (`ע,ש -> ע"ש`, `רש'י -> רש"י`, preserving terminal geresh `תוס'` and foreign `ג'/`/`צ'/`/`ז'`), and acronym-safe bracket/quote/comma spacing (`_count_non_acronym_quotes`).
    - Added one-click checkboxes (`איות`, `דקדוק וניסוח`, `לשון הספר`) in `SuggestionsPane` and `"הצעות תיקון"` menu synchronized with `PluginRegistry` and invalidating stale per-document sessions when toggled.
-6. **Windows Packaging, License Compliance & CI Verification (`.github/workflows/windows.yml`, `tools/build_release.py`, `docs/`):**
-   - Bundled `hebrew_workbench/suggestions/data` in PyInstaller, shipped official Creative Commons `CC0-1.0.txt` and `PHOTOCRAFT-MIT.txt` legal texts in `LICENCES/`, kept noncommercial `CC-BY-NC-SA-4.0` Mishkefet weights strictly isolated to the `All Models — Noncommercial` edition and opt-in download, and kept AGPL Hspell isolated to the optional plugin.
+7. **Windows Packaging, License Compliance & CI Verification (`.github/workflows/windows.yml`, `tools/build_release.py`, `tools/build_worker.py`, `docs/`):**
+   - Bundled `hebrew_workbench/suggestions/data` and `stroke_width` in PyInstaller, shipped official Creative Commons `CC0-1.0.txt` and `PHOTOCRAFT-MIT.txt` legal texts in `LICENCES/`, kept noncommercial `CC-BY-NC-SA-4.0` Mishkefet weights strictly isolated to the `All Models — Noncommercial` edition and opt-in download, and kept AGPL Hspell isolated to the optional plugin.
 
 ---
 

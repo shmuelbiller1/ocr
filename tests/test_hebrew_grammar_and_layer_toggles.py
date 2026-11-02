@@ -87,6 +87,22 @@ class HebrewGrammarRulesTests(unittest.TestCase):
         self.assertIn("( ", originals)
         self.assertIn(" )", originals)
 
+    def test_abbreviation_punctuation_and_acronym_safe_quote_spacing(self) -> None:
+        comma_acro = self.grammar.check("וכך כתב ע,ש וגם ס,ל בפירוש.")
+        self.assertEqual(
+            [(p.original, p.replacement) for p in comma_acro],
+            [("ע,ש", 'ע"ש'), ("ס,ל", 'ס"ל')],
+        )
+        single_acro = self.grammar.check("דעת רש'י ותוס' בנפק'מ בג'ז וצ'ק.")
+        self.assertEqual(
+            [(p.original, p.replacement) for p in single_acro],
+            [("רש'י", 'רש"י'), ("בנפק'מ", 'בנפק"מ')],
+        )
+        # Odd number of internal acronym gershayim before quoted speech must NOT
+        # invert quote parity and misflag opening '"הואיל' as missing a space.
+        rabbinic_quote = 'דעת רש"י בגמרא "הואיל והוחזק" נכונה.'
+        self.assertEqual(self.grammar.check(rabbinic_quote), [])
+
 
 def _qt_available() -> bool:
     try:

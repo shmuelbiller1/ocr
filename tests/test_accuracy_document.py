@@ -586,6 +586,44 @@ class SelectedAndMeasuredTests(unittest.TestCase):
         self.assertIn("The build chose 5 of them", text)
         self.assertIn("The rate above is of the 3 pages that were measured", text)
 
+    def test_modern_cursive_and_isolated_peak_rss_render_accurately(self) -> None:
+        report = {
+            "corpus": {
+                "name": "20th-Century Modern Hebrew Cursive Benchmark (HeOCR/hash)",
+                "target": "modern_cursive",
+                "pages": 6,
+                "pages_measured": 6,
+                "verified": True,
+            },
+            "pages_read": 6,
+            "measured_corpus_pages": 6,
+            "engines": [
+                {
+                    "engine": "Mishkefet-v1 (CC-BY-NC-SA-4.0)",
+                    "model": "mishkefet-v1",
+                    "pages": 6,
+                    "pages_seen": 6,
+                    "summary": {
+                        "cer": 0.3822,
+                        "wer": 0.8973,
+                        "seconds_per_page": 5.25,
+                        "peak_rss_mb": 1429.8,
+                        "characters_reference": 1112,
+                        "words_reference": 224,
+                        "pages_measured": 6,
+                        "measured": True,
+                    },
+                    "failures": [],
+                }
+            ],
+        }
+        text = writer.build_section(report)
+        self.assertIn("Peak RSS (MB)", text)
+        self.assertIn("1429.8", text)
+        self.assertIn("20th-century modern Hebrew cursive manuscripts", text)
+        self.assertIn("modern-cursive-and-suggestions-benchmarks", text)
+        self.assertNotIn("pages of the school", text)
+
 
 if __name__ == "__main__":
     unittest.main()

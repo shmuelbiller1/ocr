@@ -16,8 +16,8 @@ that is all.
 | `kraken-medium-worker` | subprocess OCR | Medium model; included in All Models, optional in Lite/ZIP |
 | `mishkefet` | in-process OCR | MIT adapter code; source environments with its ML dependencies |
 | `mishkefet-worker` | subprocess OCR | Mishkefet weights included in All Models only; noncommercial |
-| `spelling-hebrew` | spelling | Implemented, but requires a user-supplied word list |
-| `grammar-hebrew` | grammar | Four punctuation/spacing rules, not full Hebrew grammar |
+| `spelling-hebrew` | spelling | Works offline out-of-the-box (bundled CC0-1.0 196,227-word lexicon + Mishnaic/rabbinic morphology + OCR-confusion ranking + personal dictionary; optional custom word list override) |
+| `grammar-hebrew` | grammar | Works offline out-of-the-box (deterministic Hebrew morphosyntax, acronym gershayim, accidental duplication, and punctuation/quote/bracket spacing rules) |
 | `style-leshon-ha-sefer` | style | Placeholder; disabled and unavailable; no rules or proposals |
 
 There are **eight built-in plugin entries**, not eight distinct OCR models.

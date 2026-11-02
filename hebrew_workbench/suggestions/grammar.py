@@ -75,6 +75,14 @@ def space_after_comma(text: str) -> list[Suggestion]:
     """A comma or semicolon is written with a space after it."""
     proposals: list[Suggestion] = []
     for match in re.finditer(r"([,;])(?=[^\s\d\"״'׳)\]])", text):
+        # Skip single comma inside a 2-5 letter Hebrew acronym (e.g. ע,ש -> ע"ש),
+        # handled by abbreviation_punctuation; keep list sequences like א,ב,ג.
+        if (
+            match.group(1) == ","
+            and re.search(r'(?:^|[\s(\["״])[א-ת]{1,4}$', text[: match.start()])
+            and re.match(r'^[א-ת](?:$|[\s.:;!?)\]"״])', text[match.end() :])
+        ):
+            continue
         proposals.append(
             _proposal(
                 text,
@@ -82,6 +90,46 @@ def space_after_comma(text: str) -> list[Suggestion]:
                 match.end(),
                 match.group(1) + " ",
                 "חסר רווח אחרי הפסיק",
+            )
+        )
+    return proposals
+
+
+def abbreviation_punctuation(text: str) -> list[Suggestion]:
+    """Propose standard gershayim (\") inside Hebrew acronyms typed with ',' or \"'\"."""
+    proposals: list[Suggestion] = []
+    # 1. Keyboard slip: comma before the final letter of a Hebrew acronym (ע,ש -> ע"ש, ס,ל -> ס"ל)
+    for match in re.finditer(
+        r'(?:^|(?<=[\s(\["״]))([א-ת]{1,4}),([א-ת])(?=$|[\s.:;!?)\]"״])', text
+    ):
+        left, right = match.group(1), match.group(2)
+        proposals.append(
+            _proposal(
+                text,
+                match.start(),
+                match.end(),
+                f'{left}"{right}',
+                'ראשי תיבות מסומנים בגרשיים (") ולא בפסיק',
+                kind="punctuation",
+            )
+        )
+
+    # 2. Internal single geresh before final acronym letter (רש'י -> רש"י, נפק'מ -> נפק"מ),
+    # excluding consonant-geresh loanwords after ג/ז/צ/ד/ת/ח (צ'ק, ג'ז, תאצ'ר).
+    for match in re.finditer(
+        r'(?:^|(?<=[\s(\["״]))([א-ת]{1,4})[\'׳]([א-ת])(?=$|[\s.,:;!?)\]"״])', text
+    ):
+        left, right = match.group(1), match.group(2)
+        if left[-1] in "גזצדתח":
+            continue
+        proposals.append(
+            _proposal(
+                text,
+                match.start(),
+                match.end(),
+                f'{left}"{right}',
+                'בראשי תיבות בתוך המילה נהוג לסמן גרשיים (") ולא גרש בודד',
+                kind="punctuation",
             )
         )
     return proposals
@@ -113,15 +161,39 @@ def double_space(text: str) -> list[Suggestion]:
     return proposals
 
 
+def _count_non_acronym_quotes(
+    text: str, quote: str, start: int = 0, end: int | None = None
+) -> int:
+    """Count quotation marks excluding internal Hebrew acronym gershayim (e.g. רש\"י)."""
+    stop = len(text) if end is None else min(len(text), end)
+    count = 0
+    idx = text.find(quote, start, stop)
+    while idx != -1:
+        is_acronym = (
+            idx > 0
+            and idx + 1 < len(text)
+            and "א" <= text[idx - 1] <= "ת"
+            and "א" <= text[idx + 1] <= "ת"
+        )
+        if not is_acronym:
+            count += 1
+        idx = text.find(quote, idx + 1, stop)
+    return count
+
+
 def quote_and_bracket_spacing(text: str) -> list[Suggestion]:
     """Check spaces inside paired quotes and parentheses/brackets."""
     proposals: list[Suggestion] = []
 
-    # Space before closing quote
+    # Space before closing quote (ignore opening quotes immediately preceding a word)
     for match in re.finditer(r" +([\"״»])", text):
         quote = match.group(1)
-        if quote != "»" and text.count(quote, 0, match.start(1)) % 2 == 0:
-            continue
+        q_end = match.end(1)
+        if quote != "»":
+            if q_end < len(text) and text[q_end].isalnum():
+                continue
+            if _count_non_acronym_quotes(text, quote, 0, match.start(1)) % 2 == 0:
+                continue
         proposals.append(
             _proposal(
                 text,
@@ -137,9 +209,9 @@ def quote_and_bracket_spacing(text: str) -> list[Suggestion]:
         quote = match.group(1)
         q_pos = match.start(1)
         if quote != "«":
-            if text.count(quote, 0, q_pos) % 2 != 0:
+            if _count_non_acronym_quotes(text, quote, 0, q_pos) % 2 != 0:
                 continue
-            if text.count(quote, q_pos + 1) < 1:
+            if _count_non_acronym_quotes(text, quote, q_pos + 1) < 1:
                 continue
         proposals.append(
             _proposal(
@@ -747,6 +819,7 @@ def accidental_duplication(text: str) -> list[Suggestion]:
 RULES = (
     space_before_comma,
     space_after_comma,
+    abbreviation_punctuation,
     space_before_end_punctuation,
     double_space,
     quote_and_bracket_spacing,
