@@ -165,17 +165,25 @@ class PhotoCraftVisionAuditTests(unittest.TestCase):
         self.assertLess(float(np.percentile(enh_gray, 1)), 90.0)
 
     def test_regional_highlighter_and_red_annotation_adjusts_selectively(self) -> None:
+        import numpy as np
+
         im = Image.new("RGB", (520, 420), (250, 250, 248))
         draw = ImageDraw.Draw(im)
         # Yellow highlighter band over row 2
         draw.rectangle([40, 125, 480, 165], fill=(250, 242, 82))
         self._draw_strokes(im, (32, 32, 38), rows=(65, 145))
         # Red low-luma-contrast annotation only in bottom rows
-        self._draw_strokes(im, (232, 130, 125), rows=(310, 365))
+        self._draw_strokes(im, (232, 82, 78), rows=(310, 365))
 
-        audit = audit_document_page(im)
+        out, audit = prepare_page_for_ocr(im)
+        assert audit is not None
         self.assertTrue(audit.needs_adjustment)
         self.assertTrue(audit.needs_highlighter_suppression)
+        enh = np.asarray(out.convert("L"), dtype=np.float32)
+        # Yellow highlighter background away from ink is lifted near white (>235)
+        self.assertGreater(float(np.percentile(enh[126:164, 40:480], 85)), 235.0)
+        # Red-pen strokes at bottom stay dark (<120) rather than being washed out
+        self.assertLess(float(np.percentile(enh[295:385, :], 2)), 120.0)
 
     def test_benchmark_neural_ocr_comparison_harness(self) -> None:
         from types import SimpleNamespace

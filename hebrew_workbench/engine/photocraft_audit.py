@@ -619,20 +619,43 @@ def prepare_page_for_ocr(
     w_grid /= np.maximum(np.linalg.norm(w_grid, axis=2, keepdims=True), 1e-5)
     w_field = cv2.resize(w_grid, (ww, wh), interpolation=cv2.INTER_LINEAR)
 
-    proj = np.sum((rgb - key_full) * w_field, axis=2)
+    diff = rgb - key_full
+    if any_shadow and not inverted:
+        # PhotoCraft `relight.rs` multiplicative Beer-Lambert illumination gain
+        # so strokes inside a dark camera shadow match unshadowed stroke contrast.
+        key_luma = (
+            0.299 * key_full[:, :, 0]
+            + 0.587 * key_full[:, :, 1]
+            + 0.114 * key_full[:, :, 2]
+        )
+        ref_l = max(float(np.percentile(key_luma, 85)), 0.35)
+        diff = diff * (ref_l / np.maximum(key_luma, 0.20))[:, :, None]
 
-    # Selective Stage C: Neon/pastel highlighter pass-band neutralization
+    proj = np.sum(diff * w_field, axis=2)
+
+    # Selective Stage C: Broad neon/pastel highlighter pass-band neutralization
+    # + multi-hue pen preservation (black + red/blue/green pens on the same page)
     if has_hl:
         rgb_chroma = np.max(rgb, axis=2) - np.min(rgb, axis=2)
         rgb_max = np.max(rgb, axis=2)
-        hl_px = cv2.GaussianBlur(
-            ((rgb_chroma > paper_chroma + 0.18) & (rgb_max > 0.65)).astype(
-                np.float32
-            ),
-            (0, 0),
-            sigmaX=1.2,
+        bk_w = cv2.getStructuringElement(
+            cv2.MORPH_RECT, (max(10, min(wh, ww) // 28),) * 2
         )
-        passband_ink = np.clip(float(np.max(bg_rgb_arr)) - rgb_max, 0.0, 1.0)
+        hl_open = cv2.morphologyEx(
+            ((rgb_chroma > paper_chroma + 0.22) & (rgb_max > 0.70)).astype(
+                np.uint8
+            )
+            * 255,
+            cv2.MORPH_OPEN,
+            bk_w,
+        )
+        hl_dil = cv2.dilate(hl_open, np.ones((5, 5), np.uint8))
+        hl_px = cv2.GaussianBlur(
+            hl_dil.astype(np.float32) * (1.0 / 255.0), (0, 0), sigmaX=2.0
+        )
+        # Preserve multi-color pen ink (absorbs >=2 RGB channels) outside highlighter wash
+        proj = np.maximum(proj, np.median(-diff, axis=2))
+        passband_ink = np.clip(float(np.max(key_full[0, 0])) - rgb_max, 0.0, 1.0)
         proj = proj * (1.0 - hl_px) + passband_ink * hl_px
 
     # Linear noise-safe tone remap onto clean paper ground (252)
@@ -645,7 +668,8 @@ def prepare_page_for_ocr(
     enhanced_gray = 252.0 - norm_ink * 232.0
 
     # Selective Stage D: Feather regional blend mask so clean sectors remain untouched
-    if active_frac < 0.999 and not inverted:
+    # (when `any_shadow` is active, smooth `key_full` relight avoids tile-step boundaries)
+    if active_frac < 0.999 and not inverted and not any_shadow:
         act = cv2.dilate(
             (tile_mode > 0).astype(np.float32), np.ones((2, 2), np.uint8)
         )
