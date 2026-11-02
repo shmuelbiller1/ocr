@@ -46,8 +46,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import cv2  # noqa: E402
-import numpy as np  # noqa: E402
+try:
+    import cv2  # type: ignore[import-not-found]
+    import numpy as np  # type: ignore[import-not-found]
+except Exception:  # pragma: no cover - GUI-only env without worker libs
+    cv2 = None  # type: ignore[assignment]
+    np = None  # type: ignore[assignment]
 from PIL import Image  # noqa: E402
 
 from hebrew_workbench.benchmark.corpus import load_corpus  # noqa: E402
@@ -112,19 +116,19 @@ SEGMENTATION_REGIMES: tuple[str, ...] = (
 # non-GT runtime validation only — never stored in repository.
 PUBLIC_REAL_SCANS: tuple[tuple[str, str, str], ...] = (
     (
-        "wosner_1981_cream_responsa",
+        "wosner_1981_cream_responsa.pdf",
         "Rabbi Shmuel HaLevi Wosner handwritten responsum (1981, cream paper)",
-        "https://api.github.com/repos/HeOCR/hash/contents/images/nli_003835852_00001.jpg",
+        "https://api.github.com/repos/HeOCR/hash/contents/data/scans/commons__wosner_halachic_ruling_1981/commons__wosner_halachic_ruling_1981__p0001.pdf",
     ),
     (
-        "wosner_1990_fine_ballpoint",
+        "wosner_1986_halakhah_letter.jpg",
+        "Rabbi Shmuel HaLevi Wosner handwritten letter (1986, fine ballpoint)",
+        "https://api.github.com/repos/HeOCR/hash/contents/data/scans/commons__wosner_letter_halakhah_yomit_1986/commons__wosner_letter_halakhah_yomit_1986__p0001.jpg",
+    ),
+    (
+        "wosner_1990_fine_ballpoint.pdf",
         "Rabbi Shmuel HaLevi Wosner letterhead letter (1990, fine ballpoint)",
-        "https://api.github.com/repos/HeOCR/hash/contents/images/nli_003835867_00001.jpg",
-    ),
-    (
-        "senesh_1941_yellowed_diary",
-        "Hannah Senesh handwritten diary page (1941, yellowed paper + tape)",
-        "https://api.github.com/repos/HeOCR/hash/contents/images/nli_004056603_00001.jpg",
+        "https://api.github.com/repos/HeOCR/hash/contents/data/scans/commons__wosner_support_letter_1990/commons__wosner_support_letter_1990__p0001.pdf",
     ),
 )
 
@@ -362,12 +366,18 @@ def _run_mishkefet_experiments(
                         if not crops:
                             preds.append(("", [], [], med_sw))
                             continue
-                        recs = recognizer.recognize_batch(crops)
-                        lines = [r.text.strip() for r in recs if r.text.strip()]
+                        raw_texts, raw_confs = recognizer.read(
+                            crops, return_confidence=True
+                        )
+                        lines = [
+                            (txt or "").strip()
+                            for txt in raw_texts
+                            if (txt or "").strip()
+                        ]
                         confs = [
-                            float(r.confidence)
-                            for r in recs
-                            if r.text.strip() and r.confidence is not None
+                            float(c)
+                            for txt, c in zip(raw_texts, raw_confs)
+                            if (txt or "").strip() and c is not None
                         ]
                         preds.append(("\n".join(lines), lines, confs, med_sw))
                 wall_ms = (time.perf_counter() - t0) * 1000.0
@@ -430,12 +440,18 @@ def _run_mishkefet_experiments(
                 if not crops:
                     preds.append(("", [], [], 0.0))
                     continue
-                recs = recognizer.recognize_batch(crops)
-                lines = [r.text.strip() for r in recs if r.text.strip()]
+                raw_texts, raw_confs = recognizer.read(
+                    crops, return_confidence=True
+                )
+                lines = [
+                    (txt or "").strip()
+                    for txt in raw_texts
+                    if (txt or "").strip()
+                ]
                 confs = [
-                    float(r.confidence)
-                    for r in recs
-                    if r.text.strip() and r.confidence is not None
+                    float(c)
+                    for txt, c in zip(raw_texts, raw_confs)
+                    if (txt or "").strip() and c is not None
                 ]
                 preds.append(("\n".join(lines), lines, confs, 0.0))
             wall_ms = (time.perf_counter() - t0) * 1000.0
@@ -463,23 +479,41 @@ def _run_mishkefet_experiments(
 
         t_raw = time.perf_counter()
         raw_crops, _, _ = segment_page(scan_im)
-        raw_recs = recognizer.recognize_batch(raw_crops) if raw_crops else []
+        raw_texts, _ = (
+            recognizer.read(raw_crops, return_confidence=True)
+            if raw_crops
+            else ([], [])
+        )
         raw_ms = (time.perf_counter() - t_raw) * 1000.0
-        raw_text = "\n".join(r.text.strip() for r in raw_recs if r.text.strip())
+        raw_nonempty = [(t or "").strip() for t in raw_texts if (t or "").strip()]
+        raw_text = "\n".join(raw_nonempty)
 
         t_enh = time.perf_counter()
-        enh_recs = recognizer.recognize_batch(enh_crops) if enh_crops else []
+        enh_texts, enh_raw_confs = (
+            recognizer.read(enh_crops, return_confidence=True)
+            if enh_crops
+            else ([], [])
+        )
         enh_ms = (time.perf_counter() - t_enh) * 1000.0
-        enh_text = "\n".join(r.text.strip() for r in enh_recs if r.text.strip())
-        enh_confs = [float(r.confidence) for r in enh_recs if r.text.strip()]
+        enh_nonempty = [(t or "").strip() for t in enh_texts if (t or "").strip()]
+        enh_text = "\n".join(enh_nonempty)
+        enh_confs = [
+            float(c)
+            for t, c in zip(enh_texts, enh_raw_confs)
+            if (t or "").strip() and c is not None
+        ]
 
         with inference_stroke_variant("adaptive_norm"):
-            adapt_recs = recognizer.recognize_batch(enh_crops) if enh_crops else []
-        adapt_text = "\n".join(r.text.strip() for r in adapt_recs if r.text.strip())
+            adapt_texts = recognizer.read(enh_crops) if enh_crops else []
+        adapt_text = "\n".join(
+            (t or "").strip() for t in adapt_texts if (t or "").strip()
+        )
 
         with inference_stroke_variant("mild_thicken"):
-            mild_recs = recognizer.recognize_batch(enh_crops) if enh_crops else []
-        mild_text = "\n".join(r.text.strip() for r in mild_recs if r.text.strip())
+            mild_texts = recognizer.read(enh_crops) if enh_crops else []
+        mild_text = "\n".join(
+            (t or "").strip() for t in mild_texts if (t or "").strip()
+        )
 
         sw_vals = [
             measure_stroke_width(c, normalize_height=64).median_sw_px
@@ -501,9 +535,7 @@ def _run_mishkefet_experiments(
                 "without_photocraft": {
                     "segmented_lines": len(raw_boxes),
                     "left_margin_snapped_boxes_x_le_220": raw_margin_snaps,
-                    "nonempty_recognized_lines": len(
-                        [r for r in raw_recs if r.text.strip()]
-                    ),
+                    "nonempty_recognized_lines": len(raw_nonempty),
                     "char_count": len(raw_text),
                     "wall_ms": round(raw_ms, 1),
                 },
@@ -511,9 +543,7 @@ def _run_mishkefet_experiments(
                     "segmented_lines": len(enh_boxes),
                     "skew_deg": round(float(enh_skew), 2),
                     "left_margin_snapped_boxes_x_le_220": enh_margin_snaps,
-                    "nonempty_recognized_lines": len(
-                        [r for r in enh_recs if r.text.strip()]
-                    ),
+                    "nonempty_recognized_lines": len(enh_nonempty),
                     "char_count": len(enh_text),
                     "mean_confidence": round(float(np.mean(enh_confs)), 4)
                     if enh_confs
@@ -773,9 +803,9 @@ def _load_real_scans(
                 )
                 with urllib.request.urlopen(req, timeout=15) as resp:
                     data = resp.read()
-                dst = temp_dir / f"{scan_id}.jpg"
+                dst = temp_dir / scan_id
                 dst.write_bytes(data)
-                candidates.append((scan_id, desc, dst))
+                candidates.append((Path(scan_id).stem, desc, dst))
             except Exception as exc:
                 print(
                     f"[WARN] Could not fetch optional real scan {scan_id}: {exc}",

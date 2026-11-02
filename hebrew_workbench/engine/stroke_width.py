@@ -100,19 +100,43 @@ class StrokeMeasurement:
 def audit_inference_stroke_compensation() -> dict[str, object]:
     """Inspect vendored Mishkefet (hebocr) and Kraken transforms at source level.
 
-    Verifies directly from code — rather than assuming — whether training-time
-    stroke-width augmentation (``Augment._stroke``) or any morphological stroke
-    normalisation runs during inference.
+    Uses ``ast`` on ``vendor/hebocr/data/transforms.py`` so this audit succeeds
+    even in GUI-only environments where ``cv2``/``numpy`` live inside the
+    separate ``ocr-worker`` process.
     """
-    from .vendor.hebocr.data import transforms as heb_transforms
+    import ast
+    from pathlib import Path
 
-    preprocess_src = inspect.getsource(heb_transforms.preprocess)
-    augment_cls = getattr(heb_transforms, "Augment", None)
-    stroke_src = (
-        inspect.getsource(augment_cls._stroke)
-        if augment_cls is not None and hasattr(augment_cls, "_stroke")
-        else ""
+    transforms_path = (
+        Path(__file__).resolve().parent
+        / "vendor"
+        / "hebocr"
+        / "data"
+        / "transforms.py"
     )
+    src = transforms_path.read_text(encoding="utf-8")
+    tree = ast.parse(src, filename=str(transforms_path))
+
+    line_height_px = 64
+    preprocess_src = ""
+    stroke_src = ""
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if (
+                    isinstance(target, ast.Name)
+                    and target.id == "LINE_HEIGHT"
+                    and isinstance(node.value, ast.Constant)
+                    and isinstance(node.value.value, int)
+                ):
+                    line_height_px = int(node.value.value)
+        elif isinstance(node, ast.FunctionDef) and node.name == "preprocess":
+            preprocess_src = ast.get_source_segment(src, node) or ""
+        elif isinstance(node, ast.ClassDef) and node.name == "Augment":
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef) and item.name == "_stroke":
+                    stroke_src = ast.get_source_segment(src, item) or "present"
+
     mishkefet_calls_stroke_at_inference = (
         "self._stroke(" in preprocess_src or "Augment(" in preprocess_src
     )
@@ -147,7 +171,7 @@ def audit_inference_stroke_compensation() -> dict[str, object]:
 
     return {
         "mishkefet": {
-            "line_height_px": int(getattr(heb_transforms, "LINE_HEIGHT", 64)),
+            "line_height_px": line_height_px,
             "inference_calls_stroke_augment": mishkefet_calls_stroke_at_inference,
             "inference_calls_morph_stroke_norm": mishkefet_calls_morph_at_inference,
             "training_only_stroke_augment_present": bool(stroke_src),
