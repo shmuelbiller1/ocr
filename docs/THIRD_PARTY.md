@@ -48,13 +48,17 @@ page are shipped with the program under
 
 | Component | Version | License | Source | Notes |
 | --- | --- | --- | --- | --- |
-| heb-ocr (`hebocr`) | 0.1.0 + project patches | MIT, Copyright (c) 2026 Itay Inbar | github.com/itayinbarr/heb-ocr (with segmentation algorithms adapted from MIT-licensed `barakplasma/mishkefet-app`) | Line recognition, wide-range deskew, quadratic curved-baseline straightening, density-gated line splitting, and single-pass TTA logit reuse; licence in `docs/licences/HEB-OCR-MIT.txt` |
+| heb-ocr (`hebocr`) | 0.1.0 + project patches | MIT, Copyright (c) 2026 Itay Inbar | github.com/itayinbarr/heb-ocr (with segmentation algorithms adapted from MIT-licensed `itayinbarr/mishkefet-app`) | Line recognition, wide-range deskew, quadratic curved-baseline straightening, density-gated line splitting, and single-pass TTA logit reuse; licence in `docs/licences/HEB-OCR-MIT.txt` |
+| mishkefet-app CTC-head adapter (`writer_adaptation.py`, adapted algorithm) | 2026 (`main`) | MIT, Copyright (c) 2026 Itay Inbar | github.com/itayinbarr/mishkefet-app (`tools/model/adapter.py`, `spec/adapter.md`) | Offline CPU per-student linear CTC-head adaptation (`W`, `b` with L2 regularisation toward `(W0, b0)` and deterministic FNV-1a held-out accuracy gate) on frozen `Mishkefet-v1` features, trained strictly on user-confirmed diplomatic lines; licence in `docs/licences/HEB-OCR-MIT.txt` |
 | PhotoCraft (`photocraft_audit.py`, adapted algorithms) | 2026 (`main`) | MIT (dual-licensed MIT OR Apache-2.0), Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors | github.com/storytold/photocraft (`crates/algo/src/{scancrop,color_to_alpha,relight,tone}.rs`, `crates/compose/src/adjust/color.rs`) | Clean-room Python/NumPy/OpenCV adaptation of lightweight CPU document audit, coarse-grid illumination key, color-selective ruling/highlighter suppression, and chromatic channel projection; licence in `docs/licences/PHOTOCRAFT-MIT.txt` |
 
-The training and fine-tuning scripts of `heb-ocr` were **not** copied: the
-program never trains anything, and raw recognition text is never silently
-overwritten by a language model.  The checkpoint file is loaded after pinned
-SHA-256 verification; a file that does not match is deleted and never used.
+Base model checkpoints are never modified in place and are loaded only after
+pinned SHA-256 verification (a file that does not match is deleted and never
+used).  Personal student CTC heads (`~405 KB` `float32` `.npz` arrays loaded
+with `allow_pickle=False`) are stored separately in the local learning folder
+and trained **only** on lines explicitly confirmed by the user in the
+side-by-side diplomatic verification dialog; raw recognition text is never
+silently overwritten by a language model.
 
 `PySide6-Essentials` is used instead of the full `PySide6` package on
 purpose: the Essentials package contains only modules that are available

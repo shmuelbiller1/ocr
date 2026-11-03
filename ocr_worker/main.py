@@ -45,6 +45,8 @@ def _engine_of(job: dict):
             artifact_id="mishkefet-v1",
             mode=job.get("decoding_mode", "raw"),
             page_enhancement=page_enh,
+            writer_id=str(job.get("writer_id") or ""),
+            learning_dir=job.get("learning_dir"),
         )
     if name == "kraken":
         from hebrew_workbench.engine.kraken_local import KrakenEngine
@@ -114,10 +116,41 @@ def _run_enhance_preview(input_path: Path, output_path: Path, enabled: bool) -> 
     return 0
 
 
+def _run_train_writer(job_path: Path, result_path: Path) -> int:
+    """Adapt a student's Mishkefet CTC head inside the standalone worker."""
+    try:
+        job = json.loads(job_path.read_text(encoding="utf-8"))
+        if job.get("offline_check") is True:
+            _install_offline_guard([])
+        from hebrew_workbench.engine.writer_adaptation import (
+            train_writer_profile_in_process,
+        )
+
+        report = train_writer_profile_in_process(
+            writer_id=str(job["writer_id"]),
+            model_path=Path(job["model_path"]),
+            store_root=job.get("learning_dir"),
+        )
+        payload = report.to_dict()
+    except Exception as exc:
+        message = str(exc) or type(exc).__name__
+        print(message, file=sys.stderr)
+        payload = {"error": message, "traceback": traceback.format_exc()}
+
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result_path.write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+    return 0 if "error" not in payload else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Hebrew Notes Workbench OCR worker")
     parser.add_argument("--job", help="path of the job description")
     parser.add_argument("--result", help="path of the result file")
+    parser.add_argument(
+        "--train-writer", help="path of a student CTC-head adaptation job JSON"
+    )
     parser.add_argument("--enhance-preview", help="input image for processed preview")
     parser.add_argument("--output-preview", help="output PNG for processed preview")
     parser.add_argument(
@@ -133,6 +166,8 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.output_preview),
             enabled=not args.disable_enhancement,
         )
+    if args.train_writer and args.result:
+        return _run_train_writer(Path(args.train_writer), Path(args.result))
     if not args.job or not args.result:
         parser.error("--job and --result are required unless --enhance-preview is used")
 

@@ -9,9 +9,15 @@ It was written on 2026-10-28 and it says what was checked and when.
 The search/benchmark observations below remain a dated research record.
 Distribution now depends on edition: Lite bundles Kraken small; All Models —
 Noncommercial bundles Kraken small/medium, Mishkefet and both optional language
-models. The regular ZIP uses explicit downloads. All bundled assets retain
-their own licences, attribution and pinned integrity checks; no cloud OCR is
-introduced. See [RELEASE_NOTES.md](RELEASE_NOTES.md) for download choices.
+models (and defaults to Mishkefet automatically when no active engine was
+previously chosen, because Mishkefet scores 61.78% vs Kraken small's 19.51% on
+the verified modern cursive corpus). The regular ZIP uses explicit downloads.
+In addition, users can verify lines side-by-side *as written* (before grammar
+edits) to adapt a lightweight offline CPU CTC head per student/writer while
+accumulating a shared verified school corpus and vocabulary across ~50 students.
+All bundled assets retain their own licences, attribution and pinned integrity
+checks; no cloud OCR is introduced. See [RELEASE_NOTES.md](RELEASE_NOTES.md)
+for download choices.
 
 ## What the program needs
 

@@ -118,7 +118,19 @@ class PluginRegistry:
         options.update(self.settings.options.get(manifest.id, {}))
         if manifest.kind == KIND_OCR:
             options["page_enhancement"] = bool(self.settings.page_enhancement)
+            options["writer_id"] = str(self.settings.active_writer_id or "")
         return options
+
+    @property
+    def active_writer_id(self) -> str:
+        return str(self.settings.active_writer_id or "")
+
+    def set_active_writer_id(self, writer_id: str) -> None:
+        clean = str(writer_id or "").strip()
+        self.settings.active_writer_id = clean
+        for plugin in self.by_kind(KIND_OCR):
+            self._apply_options(plugin, self._options_of(plugin.manifest))
+        self.save()
 
     @property
     def page_enhancement(self) -> bool:
@@ -211,6 +223,13 @@ class PluginRegistry:
             for plugin in candidates:
                 if plugin.id == wanted and self._can_be_used(plugin):
                     return plugin
+        if kind == KIND_OCR:
+            # Prefer Mishkefet-v1 automatically when installed and no explicit
+            # choice was made yet; falls back cleanly to Kraken on Lite installs.
+            for preferred_id in ("mishkefet-worker", "mishkefet"):
+                for plugin in candidates:
+                    if plugin.id == preferred_id and self._can_be_used(plugin):
+                        return plugin
         for plugin in candidates:
             if self._can_be_used(plugin):
                 return plugin

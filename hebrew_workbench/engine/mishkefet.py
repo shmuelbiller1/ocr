@@ -127,6 +127,8 @@ def make_engine(options: dict | None = None) -> "MishkefetEngine":
         artifact_id=artifact_id,
         mode=decoding_mode(settings),
         page_enhancement=page_enh,
+        writer_id=str(settings.get("writer_id") or ""),
+        learning_dir=settings.get("learning_dir"),
     )
 
 
@@ -148,6 +150,8 @@ class MishkefetEngine:
         timeout_seconds: float = 900.0,
         mode: str = "raw",
         page_enhancement: bool | None = None,
+        writer_id: str = "",
+        learning_dir: str | Path | None = None,
     ) -> None:
         self.model_path = Path(model_path) if model_path else None
         self.artifact_id = artifact_id
@@ -156,11 +160,13 @@ class MishkefetEngine:
         self.page_enhancement = (
             bool(page_enhancement) if page_enhancement is not None else None
         )
+        self.writer_id = str(writer_id or "").strip()
+        self.learning_dir = Path(learning_dir) if learning_dir else None
         self._recognizer = None
         self._page_lock = threading.Lock()
 
     def configure(self, options: dict) -> None:
-        """Apply explicit decoding and page-enhancement profiles."""
+        """Apply explicit decoding, page-enhancement, and student-writer profiles."""
         mode = decoding_mode(options)
         # Do not change a live recognizer while a timed-out inference still runs.
         if not self._page_lock.acquire(blocking=False):
@@ -171,6 +177,14 @@ class MishkefetEngine:
                 self.mode = mode
             if "page_enhancement" in options and options["page_enhancement"] is not None:
                 self.page_enhancement = bool(options["page_enhancement"])
+            if "writer_id" in options and options["writer_id"] is not None:
+                self.writer_id = str(options["writer_id"] or "").strip()
+            if "learning_dir" in options and options["learning_dir"] is not None:
+                self.learning_dir = (
+                    Path(options["learning_dir"])
+                    if options["learning_dir"]
+                    else None
+                )
         finally:
             self._page_lock.release()
 
@@ -247,30 +261,64 @@ class MishkefetEngine:
         )
 
     def _load_recognizer(self):
-        if self._recognizer is not None:
-            return self._recognizer
-        if self.model_path is None:
-            raise EngineUnavailable("קובץ המודל של Mishkefet אינו מותקן.")
-        # The file is checked before the library that reads it is even
-        # loaded, so that a file that was replaced after the download
-        # never reaches the code that runs what is inside the file.
-        self._verify_checkpoint()
-        from .vendor.hebocr.recognize import Recognizer
+        if self._recognizer is None:
+            if self.model_path is None:
+                raise EngineUnavailable("קובץ המודל של Mishkefet אינו מותקן.")
+            # The file is checked before the library that reads it is even
+            # loaded, so that a file that was replaced after the download
+            # never reaches the code that runs what is inside the file.
+            self._verify_checkpoint()
+            from .vendor.hebocr.recognize import Recognizer
 
-        try:
-            options = {}
-            if self.mode != "raw":
-                options = {"beam_width": 12, "tta": 3}
-                if self.mode == "assisted":
-                    char_lm, word_lm = load_language_models(self.model_path.parent)
-                    options.update(lm=char_lm, lm_weight=0.4,
-                                   word_lm=word_lm, word_weight=0.2)
-            self._recognizer = Recognizer(str(self.model_path), device="cpu", **options)
-        except Exception as exc:
-            raise EngineFailure(
-                f"לא ניתן לטעון את מודל Mishkefet: {exc}"
-            ) from exc
+            try:
+                options = {}
+                if self.mode != "raw":
+                    options = {"beam_width": 12, "tta": 3}
+                    if self.mode == "assisted":
+                        char_lm, word_lm = load_language_models(
+                            self.model_path.parent, learning_dir=self.learning_dir
+                        )
+                        options.update(
+                            lm=char_lm,
+                            lm_weight=0.4,
+                            word_lm=word_lm,
+                            word_weight=0.2,
+                        )
+                self._recognizer = Recognizer(
+                    str(self.model_path), device="cpu", **options
+                )
+            except Exception as exc:
+                raise EngineFailure(
+                    f"לא ניתן לטעון את מודל Mishkefet: {exc}"
+                ) from exc
+        self._sync_writer_head(self._recognizer)
         return self._recognizer
+
+    def _sync_writer_head(self, recognizer) -> None:
+        """Apply the active student's adapted CTC head or reset to the base head."""
+        if not self.writer_id:
+            recognizer.reset_writer_head()
+            return
+        try:
+            from .models import MODEL_ARTIFACTS
+            from .writer_adaptation import load_writer_head_npz
+            from ..training.store import SchoolLearningStore
+
+            art = MODEL_ARTIFACTS.get(self.artifact_id)
+            expected_sha = art.sha256 if art is not None else None
+            store = SchoolLearningStore(self.learning_dir)
+            head_path = store.active_head_path(
+                self.writer_id, model_sha256=expected_sha
+            )
+            if head_path is None:
+                recognizer.reset_writer_head()
+                return
+            stat = head_path.stat()
+            head_key = f"{head_path}:{stat.st_mtime_ns}:{stat.st_size}"
+            W, b = load_writer_head_npz(head_path)
+            recognizer.apply_writer_head_arrays(W, b, head_key=head_key)
+        except Exception:
+            recognizer.reset_writer_head()
 
     def _verify_checkpoint(self) -> None:
         """Check the checkpoint against the digest that the project pinned.

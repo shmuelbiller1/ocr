@@ -258,9 +258,21 @@ class SpellingModule(SuggestionModule):
     def _check_bundled(self, text: str) -> list[Suggestion]:
         assert self._lexicon is not None
         lexicon = self._lexicon
-        # Refresh personal dictionary in case another window/session added words
+        # Refresh personal dictionary & shared 50-student school vocabulary
         if self._personal_path is not None and self._personal_path.is_file():
             self._personal |= _load_personal_words(self._personal_path)
+        school_words: set[str] = set()
+        try:
+            from ..training.store import SchoolLearningStore
+
+            school_words = {
+                strip_nikud(w)
+                for w in SchoolLearningStore().load_shared_vocab_counts()
+                if strip_nikud(w)
+            }
+        except Exception:
+            school_words = set()
+        known_extra = self._personal | school_words
 
         tokens = list(HEBREW_TOKEN_RE.finditer(text))
         # Collect already-valid words in the current document to boost contextually
@@ -269,7 +281,7 @@ class SpellingModule(SuggestionModule):
         for m in tokens:
             tok = m.group(0)
             cleaned = strip_nikud(tok)
-            if len(cleaned) >= 3 and lexicon.is_known(tok, self._personal):
+            if len(cleaned) >= 3 and lexicon.is_known(tok, known_extra):
                 doc_known.add(cleaned)
 
         proposals: list[Suggestion] = []
@@ -286,7 +298,7 @@ class SpellingModule(SuggestionModule):
             if trimmed and '"' not in trimmed and "״" not in trimmed:
                 end -= len(word) - len(trimmed)
                 word = trimmed
-            if lexicon.is_known(word, self._personal):
+            if lexicon.is_known(word, known_extra):
                 continue
 
             cleaned = strip_nikud(word)
@@ -294,7 +306,7 @@ class SpellingModule(SuggestionModule):
             if candidates is None:
                 candidates = lexicon.suggest(
                     word,
-                    extra_words=self._personal,
+                    extra_words=known_extra,
                     document_words=doc_known,
                     limit=4,
                 )

@@ -63,8 +63,12 @@ def _load_data(folder: Path, identifier: str) -> dict:
     return result
 
 
-def load_language_models(folder: Path):
-    """Restore the author's scoring objects without executable pickle loading."""
+def load_language_models(folder: Path, learning_dir: Path | None = None):
+    """Restore the author's scoring objects without executable pickle loading.
+
+    Also augments the in-memory word prior with human-verified words collected
+    across the school's shared corpus (without modifying the pinned ``.pkl``).
+    """
     from .vendor.hebocr.lm import CharNGramLM
     from .vendor.hebocr.wordlm import WordUnigramLM
 
@@ -77,4 +81,20 @@ def load_language_models(folder: Path):
                            prefix_discount=word_data["prefix_discount"])
     word_lm.counts = Counter(word_data["counts"])
     word_lm.total = word_data["total"]
+    try:
+        from ..training.store import SchoolLearningStore
+
+        store = SchoolLearningStore(learning_dir)
+        school_counts = store.load_shared_vocab_counts()
+        if school_counts:
+            # Give each verified school word meaningful unigram support
+            boost_unit = max(5, int(word_lm.total // 250_000) or 5)
+            added_total = 0
+            for word, freq in school_counts.items():
+                inc = boost_unit * max(1, int(freq))
+                word_lm.counts[word] += inc
+                added_total += inc
+            word_lm.total += added_total
+    except Exception:
+        pass
     return char_lm, word_lm
