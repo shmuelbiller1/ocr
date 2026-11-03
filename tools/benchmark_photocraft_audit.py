@@ -52,7 +52,10 @@ from hebrew_workbench.benchmark.metrics import (  # noqa: E402
 )
 from hebrew_workbench.engine.photocraft_audit import prepare_page_for_ocr  # noqa: E402
 from hebrew_workbench.engine.vendor.hebocr.page.segment import segment_page  # noqa: E402
-from tools.benchmark_ocr import resolve_engines  # noqa: E402
+from tools.benchmark_ocr import (  # noqa: E402
+    _filter_installed_engine_ids,
+    resolve_engines,
+)
 
 ALL_SUITES: tuple[str, ...] = (
     "unmodified",
@@ -329,7 +332,7 @@ def run_neural_ocr_comparison(
                         pred_text = (
                             page_res.assisted_text
                             if mode != "raw"
-                            and getattr(page_res, "assisted_text", None)
+                            and getattr(page_res, "assisted_text", None) is not None
                             else page_res.text
                         )
 
@@ -428,19 +431,77 @@ def main() -> int:
         default=["mishkefet-v1", "kraken-ppocrv6-small"],
     )
     parser.add_argument("--segmentation-only", action="store_true")
+    parser.add_argument(
+        "--skip-neural-ocr",
+        action="store_true",
+        help="run deterministic segmentation/SNR audit only (skip multi-suite neural OCR passes)",
+    )
+    parser.add_argument("--skip-segmentation", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--in-process", action="store_true")
+    parser.add_argument("--child-timeout", type=int, default=3600)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
     cv2.setNumThreads(1)
-    seg_rows = run_segmentation_benchmark(args.corpus)
+    seg_rows = (
+        []
+        if args.skip_segmentation
+        else run_segmentation_benchmark(args.corpus)
+    )
     ocr_rows: list[dict[str, Any]] = []
-    if not args.segmentation_only and args.models is not None:
-        ocr_rows = run_neural_ocr_comparison(
-            args.corpus, args.models, list(args.engines)
+    warnings: list[str] = []
+    skip_neural = bool(args.segmentation_only or args.skip_neural_ocr)
+    if not skip_neural and args.models is not None:
+        engine_list, warnings = _filter_installed_engine_ids(
+            list(args.engines), args.models
         )
+        for w in warnings:
+            print(f"[WARN] {w}", flush=True)
+        if not engine_list:
+            print(
+                f"[WARN] No requested OCR models ({args.engines}) installed in {args.models}; "
+                "skipping neural OCR suites.",
+                flush=True,
+            )
+        elif not args.in_process and engine_list:
+            import subprocess
+            import tempfile
+
+            for eng_id in engine_list:
+                with tempfile.TemporaryDirectory(prefix="pc-bench-iso-") as td:
+                    tmp_out = Path(td) / "eng.json"
+                    cmd = [
+                        sys.executable,
+                        str(Path(__file__).resolve()),
+                        "--corpus",
+                        str(args.corpus),
+                        "--models",
+                        str(args.models),
+                        "--engines",
+                        eng_id,
+                        "--skip-segmentation",
+                        "--in-process",
+                        "--output",
+                        str(tmp_out),
+                    ]
+                    proc = subprocess.run(
+                        cmd, check=False, timeout=args.child_timeout
+                    )
+                    if proc.returncode != 0 or not tmp_out.is_file():
+                        raise RuntimeError(
+                            f"Isolated PhotoCraft benchmark failed for {eng_id} "
+                            f"(exit code {proc.returncode})"
+                        )
+                    sub = json.loads(tmp_out.read_text(encoding="utf-8"))
+                    ocr_rows.extend(sub.get("neural_ocr_before_vs_after", []))
+        else:
+            ocr_rows = run_neural_ocr_comparison(
+                args.corpus, args.models, engine_list
+            )
 
     payload = {
         "corpus": str(args.corpus),
+        "warnings": warnings,
         "segmentation_and_snr": seg_rows,
         "neural_ocr_before_vs_after": ocr_rows,
     }

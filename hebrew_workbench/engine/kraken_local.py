@@ -16,7 +16,11 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .photocraft_audit import prepare_page_for_ocr
+from .photocraft_audit import (
+    encode_preview_png,
+    prepare_page_for_ocr,
+    resolve_page_enhancement_enabled,
+)
 
 from .base import (
     EngineCancelled,
@@ -117,10 +121,16 @@ def make_engine(options: dict | None = None) -> "KrakenEngine":
         candidate = models_directory() / artifact.filename
         if candidate.is_file():
             model_path = candidate
+    page_enh = (
+        bool(settings["page_enhancement"])
+        if "page_enhancement" in settings and settings["page_enhancement"] is not None
+        else None
+    )
     return KrakenEngine(
         model_path,
         artifact_id=artifact_id,
         restrict_script=restrict_script,
+        page_enhancement=page_enh,
     )
 
 
@@ -141,14 +151,25 @@ class KrakenEngine:
         artifact_id: str = "kraken-ppocrv6-small",
         timeout_seconds: float = 900.0,
         restrict_script: bool = True,
+        page_enhancement: bool | None = None,
     ) -> None:
         self.model_path = Path(model_path) if model_path else None
         self.artifact_id = artifact_id
         self.timeout_seconds = timeout_seconds
         self.restrict_script = bool(restrict_script)
+        self.page_enhancement = (
+            bool(page_enhancement) if page_enhancement is not None else None
+        )
         self._segmentation_model = None
         self._recognition_model = None
         self._disallowed_labels: list[int] = []
+
+    def configure(self, options: dict) -> None:
+        """Apply runtime plugin options such as automatic page enhancement."""
+        if "restrict_script" in options and options["restrict_script"] is not None:
+            self.restrict_script = bool(options["restrict_script"])
+        if "page_enhancement" in options and options["page_enhancement"] is not None:
+            self.page_enhancement = bool(options["page_enhancement"])
 
     # -- availability ------------------------------------------------------
     def manifest(self) -> EngineManifest:
@@ -292,7 +313,10 @@ class KrakenEngine:
             decoder=decoder,
         )
 
-        prepared_image, audit = prepare_page_for_ocr(image)
+        eff_enh = resolve_page_enhancement_enabled(self.page_enhancement)
+        prepared_image, audit = prepare_page_for_ocr(image, enabled=eff_enh)
+        was_enhanced = bool(eff_enh and audit is not None and audit.needs_adjustment)
+        proc_png = encode_preview_png(prepared_image) if was_enhanced else None
         inv_scale = (
             1.0 / audit.scale_factor
             if audit is not None and audit.scale_factor > 0.0
@@ -344,6 +368,9 @@ class KrakenEngine:
             text=page_text,
             confidence=page_confidence,
             lines=tuple(lines),
+            enhanced=was_enhanced,
+            enhancement_enabled=eff_enh,
+            processed_image_png=proc_png,
         )
 
 

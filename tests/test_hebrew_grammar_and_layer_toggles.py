@@ -87,6 +87,74 @@ class HebrewGrammarRulesTests(unittest.TestCase):
         self.assertIn("( ", originals)
         self.assertIn(" )", originals)
 
+    def test_abbreviation_punctuation_and_acronym_safe_quote_spacing(self) -> None:
+        comma_acro = self.grammar.check("וכך כתב ע,ש וגם ס,ל בפירוש.")
+        self.assertEqual(
+            [(p.original, p.replacement) for p in comma_acro],
+            [("ע,ש", 'ע"ש'), ("ס,ל", 'ס"ל')],
+        )
+        single_acro = self.grammar.check("דעת רש'י ותוס' בנפק'מ בג'ז וצ'ק.")
+        self.assertEqual(
+            [(p.original, p.replacement) for p in single_acro],
+            [("רש'י", 'רש"י'), ("בנפק'מ", 'בנפק"מ')],
+        )
+        # Odd number of internal acronym gershayim before quoted speech must NOT
+        # invert quote parity and misflag opening '"הואיל' as missing a space.
+        rabbinic_quote = 'דעת רש"י בגמרא "הואיל והוחזק" נכונה.'
+        self.assertEqual(self.grammar.check(rabbinic_quote), [])
+
+    def test_comma_separated_lists_preserved_while_genuine_comma_acronyms_flagged(self) -> None:
+        # 2-item and 3-item Hebrew letter lists must receive space_after_comma, NOT gershayim
+        list_letters = self.grammar.check("נבדוק אפשרויות א,ב וכן א,ב,ג בטבלה.")
+        self.assertEqual(
+            [(p.original, p.replacement) for p in list_letters],
+            [(",", ", "), (",", ", "), (",", ", ")],
+        )
+        # Short Hebrew word lists ("אם,לא", "כן,לא") must receive space_after_comma, NOT gershayim
+        list_words = self.grammar.check("יש לסמן אם,לא או כן,לא בטופס.")
+        self.assertEqual(
+            [(p.original, p.replacement) for p in list_words],
+            [(",", ", "), (",", ", ")],
+        )
+        # Explicit list header before letter pair ("סעיפים ע,ש" / "סעיפים: ע,ש") stays a comma list
+        header_list = self.grammar.check("ראו סעיפים ע,ש וגם סעיפים: ע,ש בנספח.")
+        self.assertEqual(
+            [(p.original, p.replacement) for p in header_list],
+            [(",", ", "), (",", ", ")],
+        )
+        # Genuine keyboard-slip rabbinic acronyms (including proclitic-attached and clause-comma) get gershayim
+        genuine_acro = self.grammar.check("וכך כתב ע,ש, וגם ס,ל ונפק,מ בפירוש.")
+        self.assertEqual(
+            [(p.original, p.replacement) for p in genuine_acro],
+            [("ע,ש", 'ע"ש'), ("ס,ל", 'ס"ל'), ("ונפק,מ", 'ונפק"מ')],
+        )
+        # Unspaced 3-item comma list ("ע,ש,ל") remains a comma list, not an acronym
+        three_list = self.grammar.check("נבדוק אותיות ע,ש,ל בטבלה.")
+        self.assertEqual(
+            [(p.original, p.replacement) for p in three_list],
+            [(",", ", "), (",", ", ")],
+        )
+
+    def test_pr22_tokenization_and_grammar_regressions(self) -> None:
+        from hebrew_workbench.suggestions.hebrew_lexicon import HEBREW_TOKEN_RE
+
+        # Trailing closing quote before Hebrew words must not be swallowed into token
+        quoted = 'הוא אמר "שלום" לחברו בצה"ל'
+        tokens = [m.group(0) for m in HEBREW_TOKEN_RE.finditer(quoted)]
+        self.assertIn("שלום", tokens)
+        self.assertNotIn('שלום"', tokens)
+        self.assertIn('בצה"ל', tokens)
+
+        # "אני יכתב" -> "אכתב" (no redundant yod)
+        s_yikhtov = self.grammar.check("אני יכתב את המכתב מחר.")
+        self.assertTrue(any(s.replacement == "אכתב" for s in s_yikhtov))
+
+        # "הוא  הוא" -> repeated_word without nested overlapping double_space
+        s_dup = self.grammar.check("הוא  הוא הגיע בזמן.")
+        self.assertEqual(len(s_dup), 1)
+        self.assertEqual(s_dup[0].original, "הוא  הוא")
+        self.assertEqual(s_dup[0].replacement, "הוא")
+
 
 def _qt_available() -> bool:
     try:

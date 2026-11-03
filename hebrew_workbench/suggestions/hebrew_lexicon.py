@@ -34,9 +34,10 @@ BUNDLED_WORD_COUNT = 196_227
 # sof pasuq (\u05c3), and nun hafukha (\u05c6) so hyphenated words never fuse.
 NIKUD_RE = re.compile(r"[\u0591-\u05bd\u05bf\u05c1\u05c2\u05c4\u05c5\u05c7]")
 
-# Contiguous Hebrew tokens including internal/trailing geresh/gershayim/quotes.
+# Contiguous Hebrew tokens including internal acronym quotes ("/״ before [א-ת])
+# and internal/trailing geresh ('/׳), while excluding closing quotation delimiters.
 HEBREW_TOKEN_RE = re.compile(
-    r"[א-ת][\u0591-\u05bd\u05bf\u05c1\u05c2\u05c4\u05c5\u05c7א-ת'׳\"״]*"
+    r"[א-ת](?:[\u0591-\u05bd\u05bf\u05c1\u05c2\u05c4\u05c5\u05c7א-ת'׳]|[\"״](?=[א-ת]))*"
 )
 
 HEBREW_ALPHABET = "אבגדהוזחטיכךלמםנןסעפףצץקרשת"
@@ -44,7 +45,7 @@ HEBREW_ALPHABET = "אבגדהוזחטיכךלמםנןסעפףצץקרשת"
 FINAL_OF_MEDIAL = {"כ": "ך", "מ": "ם", "נ": "ן", "פ": "ף", "צ": "ץ"}
 MEDIAL_OF_FINAL = {v: k for k, v in FINAL_OF_MEDIAL.items()}
 
-# Productive modern Hebrew proclitic prefix combinations (BKL"M + Vav + Shin/Kaf).
+# Productive modern & rabbinic/Aramaic Hebrew proclitic prefixes (BKL"M + Vav + Shin/Dalet).
 VALID_PREFIXES: tuple[str, ...] = (
     "ב",
     "ה",
@@ -53,18 +54,27 @@ VALID_PREFIXES: tuple[str, ...] = (
     "ל",
     "מ",
     "ש",
+    "ד",
     "וב",
     "וה",
     "וכ",
     "ול",
     "ומ",
     "וש",
+    "וד",
     "שב",
     "שה",
     "שכ",
     "של",
     "שמ",
     "כש",
+    "כד",
+    "מד",
+    "דב",
+    "דה",
+    "דכ",
+    "דל",
+    "דמ",
     "בה",
     "כה",
     "לה",
@@ -75,6 +85,11 @@ VALID_PREFIXES: tuple[str, ...] = (
     "ומה",
     "ושה",
     "וכש",
+    "ודב",
+    "ודה",
+    "ודכ",
+    "ודל",
+    "ודמ",
     "שבה",
     "שכה",
     "שלה",
@@ -109,7 +124,7 @@ PRIMARY_OCR_CONFUSIONS: dict[str, tuple[tuple[str, float], ...]] = {
     "ף": (("פ", 0.24), ("ך", 0.45)),
     "פ": (("ף", 0.24), ("ב", 0.46), ("כ", 0.46)),
     "ץ": (("צ", 0.24), ("ע", 0.46)),
-    "צ": (("ע", 0.38), ("ץ", 0.24), ("ז", 0.42)),
+    "צ": (("ע", 0.38), ("ץ", 0.24), ("מ", 0.36), ("ז", 0.42)),
     "ע": (("צ", 0.38), ("ש", 0.48), ("א", 0.48)),
     "ל": (("כ", 0.44), ("ק", 0.48)),
     "ק": (("ג", 0.42), ("ה", 0.46), ("כ", 0.48), ("ר", 0.48)),
@@ -183,6 +198,50 @@ SUPPLEMENT_WORDS: frozenset[str] = frozenset(
         "שפיר",
         "הלכתא",
         "בעלמא",
+        "שמיא",
+        "בסייעתא",
+        "סייעתא",
+        "איתא",
+        "ליתא",
+        "נקטינן",
+        "איריא",
+        "רשותא",
+        "לרשותא",
+        "לרשותיה",
+        "פריך",
+        "מיגו",
+        "איבעי",
+        "קשיא",
+        "קשיה",
+        "פנינהו",
+        "יחלוקו",
+        "חלוקו",
+        "מהני",
+        "אזיל",
+        "לטעמיה",
+        "אתי",
+        "לאו",
+        "מיניה",
+        "גבי",
+        "נמי",
+        "הוי",
+        "חד",
+        "ברי",
+        "קונטרס",
+        "קנטרס",
+        "בנין",
+        "חבירו",
+        "עשאה",
+        "חטפוהו",
+        "לקחתיה",
+        "תופסן",
+        "אחזין",
+        "אוחזין",
+        "מחלקותן",
+        "נתברר",
+        "מרא",
+        "אמרינן",
+        "ניזקין",
         # Ketiv chaser / unpointed vocalized forms
         "לעתים",
         "אמתי",
@@ -359,8 +418,10 @@ class HebrewLexicon:
             stem = cleaned.rstrip("'׳")
             if stem and all("א" <= c <= "ת" for c in stem):
                 return True
-        # Loanwords with consonant geresh (ג'ירפה, צ'יפס, ז'אנר)
+        # Loanwords with consonant geresh (ג'ירפה, צ'יפס, ז'אנר) and internal-' acronyms (רש'י, ס'ל)
         if "'" in cleaned or "׳" in cleaned:
+            if re.fullmatch(r"[א-ת]{1,4}['׳][א-ת]", cleaned):
+                return True
             degeresh = cleaned.replace("'", "").replace("׳", "")
             if degeresh and self._is_known_pure(degeresh, extra_words):
                 return True
@@ -419,6 +480,10 @@ class HebrewLexicon:
     ) -> bool:
         if stem in self.words or stem in extra_words:
             return True
+        # Mishnaic & rabbinic masculine plural (-ין equivalent to Modern -ים, e.g. שותפין, חולקין)
+        if stem.endswith("ין") and len(stem) >= 4:
+            if (stem[:-2] + "ים") in self.words:
+                return True
         for suf in self._PLURAL_POSSESSIVE_SUFFIXES:
             if stem.endswith(suf) and len(stem) >= len(suf) + 3:
                 plural_base = stem[: -len(suf)] + "ות"

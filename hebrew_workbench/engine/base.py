@@ -82,6 +82,11 @@ class PageResult:
     confidence: float | None = None
     lines: tuple[LineResult, ...] = ()
     assisted_text: str | None = None
+    enhanced: bool = field(default=False, compare=False)
+    enhancement_enabled: bool = field(default=True, compare=False)
+    processed_image_png: bytes | None = field(
+        default=None, repr=False, compare=False
+    )
 
 
 @dataclass(frozen=True)

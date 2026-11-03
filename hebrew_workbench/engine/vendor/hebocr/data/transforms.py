@@ -11,11 +11,29 @@ manufactures the hard ones.
 time only.
 """
 
+from contextlib import contextmanager
+import threading
 import cv2
 import numpy as np
 from PIL import Image
 
 LINE_HEIGHT = 64
+_STROKE_TLS = threading.local()
+
+
+def current_inference_stroke_variant() -> str:
+    return getattr(_STROKE_TLS, "variant", "original")
+
+
+@contextmanager
+def inference_stroke_variant(variant: str):
+    """Temporarily apply a stroke-width variant at H=64 inside preprocess()."""
+    prev = getattr(_STROKE_TLS, "variant", "original")
+    _STROKE_TLS.variant = str(variant or "original")
+    try:
+        yield
+    finally:
+        _STROKE_TLS.variant = prev
 
 # The benchmark's longest line needs ~2433 px once scaled to a 64 px height
 # (111 characters, aspect ratio 38:1). A tighter cap silently truncates the
@@ -83,6 +101,12 @@ def preprocess(image, height: int = LINE_HEIGHT, max_width: int = MAX_WIDTH) -> 
     new_w = max(MIN_WIDTH, min(new_w, max_width))
     interp = cv2.INTER_AREA if scale < 1 else cv2.INTER_LINEAR
     gray = cv2.resize(gray, (new_w, height), interpolation=interp)
+
+    active_variant = getattr(_STROKE_TLS, "variant", "original")
+    if active_variant != "original":
+        from ....stroke_width import apply_stroke_variant_array
+
+        gray, _ = apply_stroke_variant_array(gray, active_variant)  # type: ignore[arg-type]
 
     arr = 1.0 - gray.astype(np.float32) / 255.0  # invert: ink -> high
     return arr[None, :, :]

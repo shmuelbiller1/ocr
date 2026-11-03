@@ -6,8 +6,8 @@ user accepting it**.
 
 | Module | What it proposes | State |
 | --- | --- | --- |
-| `spelling` (איות) | Offline Hebrew spelling proposals using the bundled CC0-1.0 lexicon (196,227 words), conservative prefix/proclitic stripping, OCR visual-confusion candidate ranking (ד/ר, ה/ח/ת, ו/י/ז, ב/כ, ס/ם, ן/ו, ע/צ), persistent personal dictionary, and optional custom word list override | works out-of-the-box offline |
-| `grammar` (דקדוק וניסוח) | High-precision deterministic offline Hebrew grammar and punctuation rules: 1st-person singular future `א-` prefix (`אני ילך -> אני אלך`), construct definite article (`הבית ספר -> בית הספר`), 3–10 numeral gender agreement, demonstrative gender agreement (`הבעיה הזה -> הבעיה הזאת`), accidental word/article duplication (`על על -> על`, `בדף הדף -> בדף`), and comma/quote/bracket/sentence spacing | works out-of-the-box offline |
+| `spelling` (איות) | Offline Hebrew spelling proposals using the bundled CC0-1.0 lexicon (196,227 words), conservative Hebrew & rabbinic/Aramaic (`ד-`/`כד-`/`מד-`) prefix stripping, Mishnaic `-ין` plural validation, OCR visual-confusion candidate ranking (ד/ר, ה/ח/ת, ו/י/ז, ב/כ, ס/ם, ן/ו, צ/ע/מ), persistent personal dictionary, and optional custom word list override | works out-of-the-box offline |
+| `grammar` (דקדוק וניסוח) | High-precision deterministic offline Hebrew grammar and punctuation rules: 1st-person singular future `א-` prefix (`אני ילך -> אני אלך`), construct definite article (`הבית ספר -> בית הספר`), 3–10 numeral gender agreement, demonstrative gender agreement (`הבעיה הזה -> הבעיה הזאת`), accidental word/article duplication (`על על -> על`, `בדף הדף -> בדף`), acronym gershayim (`ע,ש -> ע"ש`, `רש'י -> רש"י`), and comma/quote/bracket/sentence spacing | works out-of-the-box offline |
 | `style` (לשון הספר) | The rules of the guide of the Israel Academy | **not implemented** - the module is a frame, and it says so |
 
 Each of the post-OCR layers (`איות`, `דקדוק וניסוח`, `לשון הספר`) has its own independent one-click checkbox at the top of the **הצעות תיקון** pane and in the **הצעות תיקון** menu, persisted across sessions.

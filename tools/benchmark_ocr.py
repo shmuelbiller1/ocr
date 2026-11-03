@@ -178,7 +178,8 @@ def measure(engine, page: Page, name: str = "") -> dict | None:
     )
     recognised_text = (
         recognised.assisted_text
-        if mode != "raw" and getattr(recognised, "assisted_text", None)
+        if mode != "raw"
+        and getattr(recognised, "assisted_text", None) is not None
         else recognised.text
     )
 
@@ -706,6 +707,104 @@ def resolve_engines(
     return engines, warnings
 
 
+_DEFAULT_RESOLVE_ENGINES = resolve_engines
+
+
+def _filter_installed_engine_ids(
+    model_ids: list[str],
+    models_folder: Path,
+) -> tuple[list[str], list[str]]:
+    """Validate requested model identifiers without importing torch/kraken."""
+    from hebrew_workbench.engine.models import MODEL_ARTIFACTS
+
+    valid: list[str] = []
+    warnings: list[str] = []
+    for identifier in model_ids:
+        base_id, _, _inline_mode = identifier.partition(":")
+        artifact = MODEL_ARTIFACTS.get(base_id)
+        if artifact is None:
+            warnings.append(f"the model {identifier} is not known to the program")
+            continue
+        model_path = models_folder / artifact.filename
+        if not model_path.is_file():
+            warnings.append(
+                f"the model {base_id} is not installed ({model_path}), "
+                "it was not measured"
+            )
+            continue
+        valid.append(identifier)
+    return valid, warnings
+
+
+def _run_isolated_engine_subprocess(
+    identifier: str,
+    args: argparse.Namespace,
+    dataset_root: Path | None = None,
+    pages_count: int = 1,
+) -> dict:
+    """Measure one engine in a fresh child process for accurate standalone RAM."""
+    import subprocess
+    import tempfile
+
+    per_page_timeout = max(30, int(getattr(args, "timeout", 300) or 300))
+    child_timeout = max(300, per_page_timeout * max(1, pages_count) + 300)
+
+    def _failed_entry(reason: str) -> dict:
+        return {
+            "engine": identifier,
+            "model": identifier,
+            "pages": 0,
+            "pages_seen": pages_count,
+            "summary": summarise([]),
+            "results": [],
+            "failures": [{"page": "<process>", "error": reason}],
+        }
+
+    with tempfile.TemporaryDirectory(prefix="ocr-bench-iso-") as tmp_dir:
+        single_out = Path(tmp_dir) / "single-engine.json"
+        cmd = [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "--engines",
+            identifier,
+            "--in-process",
+            "--single-engine-output",
+            str(single_out),
+            "--timeout",
+            str(args.timeout),
+            "--decoding-mode",
+            str(args.decoding_mode),
+        ]
+        if args.corpus:
+            cmd.extend(["--corpus", str(args.corpus)])
+        elif args.pinkas:
+            cmd.append("--pinkas")
+            if dataset_root is not None:
+                cmd.extend(["--dataset", str(dataset_root)])
+            else:
+                cmd.extend(["--cache", str(args.cache)])
+            cmd.extend(["--pages", str(args.pages)])
+        if args.models:
+            cmd.extend(["--models", str(args.models)])
+        try:
+            proc = subprocess.run(cmd, check=False, timeout=child_timeout)
+        except subprocess.TimeoutExpired:
+            msg = (
+                f"Isolated benchmark child process timed out after "
+                f"{child_timeout}s for {identifier}"
+            )
+            print(f"warning: {msg}", file=sys.stderr, flush=True)
+            return _failed_entry(msg)
+        if proc.returncode != 0 or not single_out.is_file():
+            msg = (
+                f"Isolated benchmark child process failed for {identifier} "
+                f"(exit code {proc.returncode})"
+            )
+            print(f"warning: {msg}", file=sys.stderr, flush=True)
+            return _failed_entry(msg)
+        return json.loads(single_out.read_text(encoding="utf-8"))
+
+
 def main(argv: list[str] | None = None) -> int:
     # The console of Windows cannot write Hebrew in the code page
     # of the system, and the program would stop in the middle of a
@@ -746,6 +845,15 @@ def main(argv: list[str] | None = None) -> int:
         choices=("raw", "beam", "assisted"),
         default="raw",
         help="Mishkefet decoding profile (default: raw optical greedy)",
+    )
+    parser.add_argument(
+        "--in-process",
+        action="store_true",
+        help="run engines in the current process instead of isolated child processes",
+    )
+    parser.add_argument(
+        "--single-engine-output",
+        help=argparse.SUPPRESS,
     )
     args = parser.parse_args(argv)
 
@@ -849,7 +957,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.model:
         model_ids = []
 
+    use_isolated = (
+        not args.in_process
+        and not args.model
+        and resolve_engines is _DEFAULT_RESOLVE_ENGINES
+    )
+
     engines = []
+    valid_ids: list[str] = []
+    models_folder = Path(args.models) if args.models else models_directory()
     if args.model:
         engines.append(
             (
@@ -857,8 +973,18 @@ def main(argv: list[str] | None = None) -> int:
                 str(args.model),
             )
         )
+    elif use_isolated:
+        valid_ids, warnings = _filter_installed_engine_ids(
+            model_ids, models_folder
+        )
+        for warning in warnings:
+            print(f"warning: {warning}", file=sys.stderr)
+        if not valid_ids:
+            raise SystemExit(
+                "no engine to measure: give --engines with the models that are "
+                "installed, or --model with the path of a model file"
+            )
     else:
-        models_folder = Path(args.models) if args.models else models_directory()
         engines, warnings = resolve_engines(
             model_ids,
             models_folder,
@@ -867,11 +993,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         for warning in warnings:
             print(f"warning: {warning}", file=sys.stderr)
-    if not engines:
-        raise SystemExit(
-            "no engine to measure: give --engines with the models that are "
-            "installed, or --model with the path of a model file"
-        )
+        if not engines:
+            raise SystemExit(
+                "no engine to measure: give --engines with the models that are "
+                "installed, or --model with the path of a model file"
+            )
 
     # -- the measurement ----------------------------------------------------
     what_is_measured = (
@@ -884,6 +1010,9 @@ def main(argv: list[str] | None = None) -> int:
         "measurement": {
             "what_is_measured": what_is_measured,
             "decoding_mode": args.decoding_mode,
+            "memory_measurement": (
+                "isolated_process_per_engine" if use_isolated else "in_process"
+            ),
             "no_corrections": (
                 "the proposals of the spelling, of the grammar and of the "
                 "scholarly style are not part of the measurement"
@@ -902,11 +1031,31 @@ def main(argv: list[str] | None = None) -> int:
     # The folder of the corpus: the pages are named by their path in
     # it, so that two pages with the same name are two pages.
     folder = Path(args.corpus) if args.corpus else None
-    for engine, label in engines:
-        print(f"=== the engine {label} ===", flush=True)
-        report["engines"].append(
-            run_engine(engine, pages, label=label, corpus_folder=folder)
+    pinkas_ds_root = dataset_root if not args.corpus else None
+    if use_isolated:
+        for identifier in valid_ids:
+            print(f"=== the engine {identifier} (isolated process) ===", flush=True)
+            report["engines"].append(
+                _run_isolated_engine_subprocess(
+                    identifier,
+                    args,
+                    dataset_root=pinkas_ds_root,
+                    pages_count=len(pages),
+                )
+            )
+    else:
+        for engine, label in engines:
+            print(f"=== the engine {label} ===", flush=True)
+            report["engines"].append(
+                run_engine(engine, pages, label=label, corpus_folder=folder)
+            )
+
+    if args.single_engine_output and report["engines"]:
+        Path(args.single_engine_output).write_text(
+            json.dumps(report["engines"][0], ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
+        return 0
 
     # The engines are compared on the pages that every engine measured.
     report["comparison"] = compare_on_the_same_pages(report["engines"])

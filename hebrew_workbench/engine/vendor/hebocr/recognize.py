@@ -6,7 +6,11 @@ import torch
 from PIL import Image
 
 from .charset import Charset
-from .data.transforms import LINE_HEIGHT, preprocess
+from .data.transforms import (
+    LINE_HEIGHT,
+    current_inference_stroke_variant,
+    preprocess,
+)
 from .decode import beam_decode, greedy_confidence, greedy_decode
 from .models.htr_vt import build_model
 
@@ -98,12 +102,15 @@ class Recognizer:
         resized TTA views) so a raw greedy pass followed immediately by
         `read_tta` (scale=1.0 + beam) skips a duplicate ViT+CNN forward pass.
         """
+        active_sv = current_inference_stroke_variant()
         if (
             self._last_logit_cache is not None
+            and len(self._last_logit_cache) == 3
+            and self._last_logit_cache[1] == active_sv
             and len(self._last_logit_cache[0]) == len(images)
             and all(a is b for a, b in zip(self._last_logit_cache[0], images))
         ):
-            return self._last_logit_cache[1]
+            return self._last_logit_cache[2]
 
         order = sorted(range(len(images)), key=lambda i: images[i].width / max(images[i].height, 1))
         per_line: dict[int, tuple[torch.Tensor, torch.Tensor]] = {}
@@ -129,7 +136,7 @@ class Recognizer:
                 )
 
         ordered = [per_line[i] for i in range(len(images))]
-        self._last_logit_cache = (tuple(images), ordered)
+        self._last_logit_cache = (tuple(images), active_sv, ordered)
         return ordered
 
     @torch.no_grad()

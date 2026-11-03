@@ -245,6 +245,74 @@ class PhotoCraftVisionAuditTests(unittest.TestCase):
         self.assertLess(rows[0]["delta_cer_pp"], 0.0)
         self.assertGreater(rows[0]["photocraft"]["predicted_lines"], 0)
 
+    def test_chromatic_vertical_margin_rule_removed_without_touching_black_ink(
+        self,
+    ) -> None:
+        import numpy as np
+        from hebrew_workbench.engine.photocraft_audit import (
+            resolve_page_enhancement_enabled,
+        )
+
+        # White notebook page with a narrow pink vertical margin rule at x=36..38
+        im = Image.new("RGB", (420, 320), (250, 250, 250))
+        draw = ImageDraw.Draw(im)
+        draw.rectangle([36, 0, 38, 319], fill=(247, 178, 200))
+        self._draw_strokes(im, (22, 22, 22), rows=(65, 130, 195, 260))
+
+        out, audit = prepare_page_for_ocr(im, enabled=True)
+        assert audit is not None
+        self.assertTrue(audit.needs_adjustment)
+        self.assertTrue(audit.needs_rule_suppression)
+        out_arr = np.asarray(out)
+        orig_arr = np.asarray(im)
+        # Pink margin line away from ink is lifted to neutral white paper (>242)
+        self.assertGreater(float(out_arr[20:45, 36:39].mean()), 242.0)
+        # Black ink strokes stay completely dark and untouched
+        dark_mask = orig_arr.max(axis=2) < 60
+        self.assertTrue(np.array_equal(out_arr[dark_mask], orig_arr[dark_mask]))
+
+        # Explicit enabled=False returns the exact original image untouched
+        off_out, _ = prepare_page_for_ocr(im, enabled=False)
+        self.assertIs(off_out, im)
+        self.assertFalse(resolve_page_enhancement_enabled(False))
+
+    def test_margin_rule_suppression_preserves_crossing_colored_and_dark_handwriting(
+        self,
+    ) -> None:
+        import numpy as np
+
+        # White lined/margin scan with a pink-red vertical margin rule at x=44..47
+        im = Image.new("RGB", (460, 360), (250, 250, 250))
+        draw = ImageDraw.Draw(im)
+        draw.rectangle([44, 0, 47, 359], fill=(244, 174, 196))
+        self._draw_strokes(im, (24, 24, 24), rows=(60, 130, 200, 270))
+
+        # Draw four handwriting strokes crossing directly over the margin rule:
+        # 1) Blue ballpoint ink crossing horizontally at y=92..95
+        draw.rectangle([20, 92, 110, 95], fill=(32, 62, 185))
+        # 2) Black pen ink crossing horizontally at y=162..165
+        draw.rectangle([18, 162, 115, 165], fill=(20, 20, 20))
+        # 3) Dark burgundy-red ink crossing horizontally at y=232..235
+        draw.rectangle([20, 232, 110, 235], fill=(155, 28, 42))
+        # 4) Soft pastel-pink annotation stroke crossing horizontally at y=305..308
+        draw.rectangle([20, 305, 110, 308], fill=(238, 168, 192))
+
+        orig_arr = np.asarray(im)
+        out, audit = prepare_page_for_ocr(im, enabled=True)
+        assert audit is not None
+        self.assertTrue(audit.needs_rule_suppression)
+        out_arr = np.asarray(out)
+
+        # Uncrossed margin-rule segments (e.g. y=10..35) are suppressed to paper white
+        self.assertGreater(float(out_arr[10:35, 44:48].mean()), 242.0)
+
+        # Every crossing handwriting stroke inside x=44..47 is 100% preserved
+        for y0, y1 in ((92, 96), (162, 166), (232, 236), (305, 309)):
+            self.assertTrue(
+                np.array_equal(out_arr[y0:y1, 44:48], orig_arr[y0:y1, 44:48]),
+                f"Crossing handwriting at rows {y0}..{y1} was altered!",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

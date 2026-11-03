@@ -30,6 +30,7 @@ Design invariants for plain everyday PCs (CPU-only, low RAM):
 
 from __future__ import annotations
 
+import io
 import os
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -41,6 +42,7 @@ __all__ = [
     "photocraft_audit_enabled",
     "audit_document_page",
     "prepare_page_for_ocr",
+    "encode_preview_png",
     "rescale_box",
 ]
 
@@ -84,11 +86,42 @@ class DocumentAudit:
 
 
 def photocraft_audit_enabled(explicit: bool | None = None) -> bool:
-    """Return whether PhotoCraft document audit & selective adjustment is active."""
+    """Return whether PhotoCraft document audit & selective adjustment is active.
+
+    If ``HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT`` is explicitly set to ``0``/``off``
+    in the process environment, that environment override disables enhancement
+    unless ``explicit`` was passed directly by a caller testing an isolated mode.
+    """
     if explicit is not None:
         return bool(explicit)
     raw = os.environ.get("HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT", "1").strip().lower()
     return raw not in {"0", "false", "no", "off"}
+
+
+def resolve_page_enhancement_enabled(setting: bool | None = None) -> bool:
+    """Combine user UI setting with optional ``HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT`` env var."""
+    if "HEBREW_WORKBENCH_PHOTOCRAFT_AUDIT" in os.environ:
+        env_on = photocraft_audit_enabled(None)
+        if setting is False:
+            return False
+        return env_on
+    if setting is not None:
+        return bool(setting)
+    return True
+
+
+def encode_preview_png(image: Any, max_width: int = 1600) -> bytes | None:
+    """Encode a PIL page image as a compact preview PNG for UI comparison."""
+    if not isinstance(image, Image.Image):
+        return None
+    view = image
+    if view.width > max_width > 0:
+        ratio = max_width / float(view.width)
+        new_h = max(1, int(round(view.height * ratio)))
+        view = view.resize((max_width, new_h), Image.Resampling.BILINEAR)
+    buf = io.BytesIO()
+    view.convert("RGB").save(buf, format="PNG", compress_level=3)
+    return buf.getvalue()
 
 
 def rescale_box(
@@ -338,6 +371,17 @@ def prepare_page_for_ocr(
     luma_unit = np.array([-0.299, -0.587, -0.114], dtype=np.float32)
     luma_unit /= float(np.linalg.norm(luma_unit))
 
+    # Detect narrow full-height chromatic margin rules on clean neutral notebook
+    # paper (e.g. pink/red vertical loose-leaf margin lines that account for <1%
+    # of page pixels so p98_chroma stays <0.045, yet snap line bounding boxes).
+    margin_proxy_cols = np.array([], dtype=np.intp)
+    if (not inverted) and im.mode != "L" and paper_chroma < 0.08:
+        p_bright = np.max(proxy, axis=2) > 0.80 * float(np.max(bg_rgb_arr))
+        col_frac = ((px_chroma > 0.14) & p_bright).mean(axis=0)
+        cand_cols = np.where(col_frac > 0.45)[0]
+        if 1 <= len(cand_cols) <= max(4, pw // 55):
+            margin_proxy_cols = cand_cols
+
     # Ultra-fast clean monochrome exit (~4ms): neutral gray, upright, no severe occlusion!
     # Moderate neutral shadows (shadow_drop <= 0.58) are left to hebocr's native
     # local Gaussian ratio + per-line normalization, which empirically outperforms
@@ -346,6 +390,7 @@ def prepare_page_for_ocr(
         not inverted
         and (im.mode == "L" or p98_chroma < 0.045)
         and max_shadow_drop <= 0.58
+        and margin_proxy_cols.size == 0
     ):
         lc_fast = max(0.0, float(p92_luma - p08_luma))
         snr_fast = round(lc_fast / 0.02, 2)
@@ -369,6 +414,138 @@ def prepare_page_for_ocr(
             scale_factor=1.0,
         )
         return im, audit
+
+    # Surgical fast-path for clean white loose-leaf scans whose ONLY color defect
+    # is a narrow chromatic vertical margin rule: erase only bright chromatic
+    # margin-rule pixels (<0.5% of page) and keep 99.5%+ of the original untouched!
+    if (
+        not inverted
+        and p98_chroma < 0.045
+        and max_shadow_drop <= 0.58
+        and margin_proxy_cols.size > 0
+    ):
+        lc_fast = max(0.0, float(p92_luma - p08_luma))
+        snr_fast = round(lc_fast / 0.02, 2)
+        audit = DocumentAudit(
+            width=w,
+            height=h,
+            bg_rgb=tuple(round(float(x), 4) for x in bg_rgb_arr),
+            paper_chroma=round(paper_chroma, 4),
+            illumination_spread=round(illum_spread, 4),
+            luma_contrast=round(lc_fast, 4),
+            chromatic_contrast=round(lc_fast, 4),
+            snr_luma=snr_fast,
+            snr_chromatic=snr_fast,
+            inverted_polarity=False,
+            needs_chromatic_projection=False,
+            needs_shadow_relight=False,
+            needs_rule_suppression=True,
+            needs_highlighter_suppression=False,
+            active_tile_fraction=round(float(margin_proxy_cols.size) / max(pw, 1), 4),
+            channel_weights=tuple(round(float(x), 4) for x in luma_unit),
+            scale_factor=1.0,
+        )
+        if _audit_only or not photocraft_audit_enabled(enabled):
+            return im, audit
+        full_u8 = np.asarray(rgb_im, dtype=np.uint8).copy()
+        inv_ps = w / float(max(pw, 1))
+        pad_x = max(3, int(round(2.5 * inv_ps)))
+        flank_w = max(4, int(round(4.0 * inv_ps)))
+        bg_f = np.clip(bg_rgb_arr * 255.0, 0.0, 255.0).astype(np.float32)
+        bg_u8 = np.round(bg_f).astype(np.uint8)
+        bright_thr = 0.78 * float(np.max(bg_f))
+
+        # Group contiguous proxy columns so each physical margin rule is handled once
+        col_groups: list[tuple[int, int]] = []
+        for pc in margin_proxy_cols:
+            pc_i = int(pc)
+            if col_groups and pc_i <= col_groups[-1][1] + 1:
+                col_groups[-1] = (col_groups[-1][0], pc_i)
+            else:
+                col_groups.append((pc_i, pc_i))
+
+        for pc0, pc1 in col_groups:
+            x0 = max(0, int(round(float(pc0) * inv_ps)) - pad_x)
+            x1 = min(w, int(round(float(pc1) * inv_ps)) + pad_x + 1)
+            strip = full_u8[:, x0:x1, :]
+            strip_f = strip.astype(np.float32)
+            s_max = strip_f.max(axis=2)
+            s_min = strip_f.min(axis=2)
+            s_chroma = s_max - s_min
+
+            # Estimate the printed rule's own RGB signature from bright chromatic
+            # pixels in this column strip (sparse crossing ink is <10% of rows, so
+            # the median isolates the true margin-rule color, e.g. pastel pink).
+            cand_seed = (s_chroma > 18.0) & (s_max > bright_thr)
+            if int(cand_seed.sum()) < max(16, h // 12):
+                continue
+            seed_rgb = strip_f[cand_seed]
+            # Filter seed to the upper-luminance half so dark blue/red ink cannot skew median
+            seed_luma = (
+                0.299 * seed_rgb[:, 0]
+                + 0.587 * seed_rgb[:, 1]
+                + 0.114 * seed_rgb[:, 2]
+            )
+            bright_seed = seed_rgb[seed_luma >= np.percentile(seed_luma, 35)]
+            if bright_seed.shape[0] < 8:
+                continue
+            rule_rgb = np.median(bright_seed, axis=0)
+            rule_delta = rule_rgb - bg_f
+            rule_delta_norm = float(np.linalg.norm(rule_delta))
+            if rule_delta_norm < 12.0:
+                continue
+            rule_dir = rule_delta / rule_delta_norm
+            rule_luma = float(
+                0.299 * rule_rgb[0] + 0.587 * rule_rgb[1] + 0.114 * rule_rgb[2]
+            )
+
+            # 1. Color & luminance match strictly to THIS margin rule's hue/lightness
+            # (preserves blue/green/black/purple/dark-red handwriting inside the strip).
+            px_delta = strip_f - bg_f[None, None, :]
+            px_delta_norm = np.linalg.norm(px_delta, axis=2)
+            cos_sim = np.sum(px_delta * rule_dir[None, None, :], axis=2) / np.maximum(
+                px_delta_norm, 1e-4
+            )
+            dist_to_rule = np.linalg.norm(
+                strip_f - rule_rgb[None, None, :], axis=2
+            )
+            px_luma = (
+                0.299 * strip_f[:, :, 0]
+                + 0.587 * strip_f[:, :, 1]
+                + 0.114 * strip_f[:, :, 2]
+            )
+            color_matches_rule = (
+                cand_seed
+                & (cos_sim >= 0.85)
+                & (dist_to_rule <= 38.0)
+                & (px_luma >= rule_luma - 22.0)
+            )
+
+            # 2. Protect horizontal/diagonal handwriting strokes crossing the margin rule
+            # (even if written in a similar hue) by checking flanking columns just outside [x0, x1).
+            fx0 = max(0, x0 - flank_w)
+            fx1 = min(w, x1 + flank_w)
+            left_flank = full_u8[:, fx0:x0, :].astype(np.float32)
+            right_flank = full_u8[:, x1:fx1, :].astype(np.float32)
+            crossing_rows = np.zeros(h, dtype=bool)
+            if left_flank.shape[1] > 0:
+                ld = np.linalg.norm(left_flank - bg_f[None, None, :], axis=2)
+                crossing_rows |= (ld > 26.0).any(axis=1)
+            if right_flank.shape[1] > 0:
+                rd = np.linalg.norm(right_flank - bg_f[None, None, :], axis=2)
+                crossing_rows |= (rd > 26.0).any(axis=1)
+            if crossing_rows.any():
+                crossing_rows = (
+                    cv2.dilate(
+                        crossing_rows.astype(np.uint8)[:, None],
+                        np.ones((3, 1), dtype=np.uint8),
+                    )[:, 0]
+                    > 0
+                )
+
+            m_rule = color_matches_rule & (~crossing_rows[:, None])
+            strip[m_rule] = bg_u8
+        return Image.fromarray(full_u8), audit
 
     # Detect broad neon/pastel highlighter bands on otherwise low-chroma paper
     px_max = np.max(proxy, axis=2)

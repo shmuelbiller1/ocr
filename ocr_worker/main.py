@@ -32,15 +32,24 @@ def _engine_of(job: dict):
     """
     name = str(job.get("engine") or "kraken")
     model_path = job["model_path"]
+    page_enh = (
+        bool(job["page_enhancement"])
+        if "page_enhancement" in job and job["page_enhancement"] is not None
+        else None
+    )
     if name == "mishkefet":
         from hebrew_workbench.engine.mishkefet import MishkefetEngine
 
-        return MishkefetEngine(model_path, artifact_id="mishkefet-v1",
-                               mode=job.get("decoding_mode", "raw"))
+        return MishkefetEngine(
+            model_path,
+            artifact_id="mishkefet-v1",
+            mode=job.get("decoding_mode", "raw"),
+            page_enhancement=page_enh,
+        )
     if name == "kraken":
         from hebrew_workbench.engine.kraken_local import KrakenEngine
 
-        return KrakenEngine(model_path)
+        return KrakenEngine(model_path, page_enhancement=page_enh)
     raise ValueError(f"unknown engine: {name}")
 
 
@@ -75,11 +84,57 @@ def _install_offline_guard(attempts: list) -> None:
     sys.addaudithook(guard)
 
 
+def _run_enhance_preview(input_path: Path, output_path: Path, enabled: bool) -> int:
+    """Render processed-page preview PNG via worker vision libs for GUI comparison."""
+    from PIL import Image
+    from hebrew_workbench.engine.photocraft_audit import (
+        encode_preview_png,
+        prepare_page_for_ocr,
+        resolve_page_enhancement_enabled,
+    )
+
+    eff = resolve_page_enhancement_enabled(enabled)
+    with Image.open(input_path) as im:
+        prepared, audit = prepare_page_for_ocr(im, enabled=eff)
+        was_enhanced = bool(eff and audit is not None and audit.needs_adjustment)
+        png = encode_preview_png(prepared) or b""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(png)
+    meta_path = output_path.with_suffix(".json")
+    meta_path.write_text(
+        json.dumps(
+            {
+                "enhanced": was_enhanced,
+                "enhancement_enabled": eff,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Hebrew Notes Workbench OCR worker")
-    parser.add_argument("--job", required=True, help="path of the job description")
-    parser.add_argument("--result", required=True, help="path of the result file")
+    parser.add_argument("--job", help="path of the job description")
+    parser.add_argument("--result", help="path of the result file")
+    parser.add_argument("--enhance-preview", help="input image for processed preview")
+    parser.add_argument("--output-preview", help="output PNG for processed preview")
+    parser.add_argument(
+        "--disable-enhancement",
+        action="store_true",
+        help="run preview with automatic page enhancement disabled",
+    )
     args = parser.parse_args(argv)
+
+    if args.enhance_preview and args.output_preview:
+        return _run_enhance_preview(
+            Path(args.enhance_preview),
+            Path(args.output_preview),
+            enabled=not args.disable_enhancement,
+        )
+    if not args.job or not args.result:
+        parser.error("--job and --result are required unless --enhance-preview is used")
 
     job_path = Path(args.job)
     result_path = Path(args.result)
@@ -93,18 +148,28 @@ def main(argv: list[str] | None = None) -> int:
             _install_offline_guard(attempts)
         engine = _engine_of(job)
         result = engine.recognize(job["document"])
-        payload = {
-            "text": result.text,
-            "engine_name": result.engine_name,
-            "duration_seconds": result.duration_seconds,
-            "assisted_text": result.assisted_text,
-            "decoding_mode": result.decoding_mode,
-            "pages": [
+        pages_payload = []
+        for page in result.pages:
+            proc_name = None
+            if getattr(page, "processed_image_png", None):
+                proc_name = f"processed-page-{page.number}.png"
+                try:
+                    (result_path.parent / proc_name).write_bytes(
+                        page.processed_image_png
+                    )
+                except OSError:
+                    proc_name = None
+            pages_payload.append(
                 {
                     "number": page.number,
                     "text": page.text,
                     "confidence": page.confidence,
                     "assisted_text": page.assisted_text,
+                    "enhanced": bool(getattr(page, "enhanced", False)),
+                    "enhancement_enabled": bool(
+                        getattr(page, "enhancement_enabled", True)
+                    ),
+                    "processed_image_file": proc_name,
                     "lines": [
                         {
                             "text": line.text,
@@ -114,8 +179,14 @@ def main(argv: list[str] | None = None) -> int:
                         for line in page.lines
                     ],
                 }
-                for page in result.pages
-            ],
+            )
+        payload = {
+            "text": result.text,
+            "engine_name": result.engine_name,
+            "duration_seconds": result.duration_seconds,
+            "assisted_text": result.assisted_text,
+            "decoding_mode": result.decoding_mode,
+            "pages": pages_payload,
         }
     except Exception as exc:
         message = str(exc) or type(exc).__name__

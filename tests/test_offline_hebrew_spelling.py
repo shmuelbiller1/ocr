@@ -105,6 +105,17 @@ class OfflineHebrewSpellingTests(unittest.TestCase):
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0].alternatives, ())
 
+    def test_rabbinic_proclitics_mishnaic_plurals_and_confusions(self) -> None:
+        rabbinic_clean = (
+            'בסייעתא דשמיא מחלוקת רש"י ותוס\' בהלפיכך בשותפין ובניזוקין '
+            "דלמרא דאמרינן כדמשמע מדכתב שהוחזק מוחזק."
+        )
+        self.assertEqual(self.module.check(rabbinic_clean), [])
+        self.assertEqual(self.module.check("שהותזק")[0].replacement, "שהוחזק")
+        self.assertEqual(self.module.check("והתירוע")[0].replacement, "והתירוץ")
+        self.assertEqual(self.module.check("חליקו")[0].replacement, "חלוקו")
+        self.assertEqual(self.module.check("צוחזק")[0].replacement, "מוחזק")
+
 
 if __name__ == "__main__":
     unittest.main()
