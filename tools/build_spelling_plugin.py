@@ -24,12 +24,29 @@ TEMPLATE = ROOT / 'optional_plugins/hunspell_hebrew'
 def fetch(name, pin, cache):
     path = cache / name
     if not path.exists():
+        url = pin['url']
         headers = {'User-Agent': 'HebrewNotesWorkbench-builder'}
         if pin.get('encoding') == 'raw-github-blob':
             headers['Accept'] = 'application/vnd.github.raw+json'
-        request = urllib.request.Request(pin['url'], headers=headers)
-        with urllib.request.urlopen(request, timeout=60) as response:
-            data = response.read(16 * 1024 * 1024 + 1)
+        token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+        if token and ('api.github.com/' in url or 'github.com/' in url):
+            headers['Authorization'] = f'Bearer {token}'
+        data = None
+        last_exc = None
+        for attempt in range(3):
+            try:
+                request = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    data = response.read(16 * 1024 * 1024 + 1)
+                break
+            except Exception as exc:
+                last_exc = exc
+                if attempt < 2:
+                    import time
+
+                    time.sleep(2 * (attempt + 1))
+        if data is None:
+            raise last_exc  # type: ignore[misc]
         if len(data) > 16 * 1024 * 1024:
             raise ValueError('Upstream response exceeds build limit')
         if pin.get('encoding') == 'github-blob':

@@ -92,6 +92,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
