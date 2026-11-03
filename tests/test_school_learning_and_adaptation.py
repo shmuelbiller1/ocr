@@ -903,28 +903,38 @@ class WriterAdaptationCTCTests(unittest.TestCase):
         self.assertFalse(self.store.writer_head_path(student.writer_id).exists())
 
     def test_online_trained_npz_import_and_shape_safety(self) -> None:
+        from hebrew_workbench.engine.vendor.hebocr.charset import (
+            BASE_PUNCT,
+            DIGITS,
+            HEBREW_LETTERS,
+            LATIN,
+            Charset,
+        )
         from hebrew_workbench.engine.writer_adaptation import (
             import_external_adapter_npz,
             load_writer_head_npz,
         )
 
-        student = self.store.create_writer("ייבוא מקוון")
+        # 1. Profile with < 8 verified lines: valid .npz is stored inactive (not auto-activated)
+        empty_student = self.store.create_writer("ייבוא ללא בקרה")
         good_npz = Path(self._tmp.name) / "head_online.npz"
-        w_online = np.ones((198, 512), dtype=np.float32) * 0.125
-        b_online = np.zeros((198,), dtype=np.float32)
-        np.savez(good_npz, W=w_online, b=b_online)
-
-        round_num = import_external_adapter_npz(
-            student.writer_id, good_npz, store_root=self.learn_dir
+        np.savez(
+            good_npz,
+            W=np.ones((198, 512), dtype=np.float32) * 0.125,
+            b=np.zeros((198,), dtype=np.float32),
         )
-        self.assertEqual(round_num, 1)
-        w_loaded, b_loaded = load_writer_head_npz(
-            self.store.writer_head_path(student.writer_id)
+        rep_unproven = import_external_adapter_npz(
+            empty_student.writer_id, good_npz, store_root=self.learn_dir
         )
-        self.assertTrue(np.allclose(w_loaded, w_online))
-        self.assertTrue(np.allclose(b_loaded, b_online))
+        self.assertFalse(rep_unproven.accepted)
+        self.assertEqual(rep_unproven.status, "insufficient_evidence")
+        self.assertEqual(rep_unproven.active_round, 0)
+        with self.assertRaises(ValueError):
+            self.store.rollback_writer_adapter(
+                empty_student.writer_id, target_round=1
+            )
 
-        # Wrong shape .npz is rejected cleanly without touching round #1
+        # 2. Wrong shape .npz is rejected cleanly
         bad_npz = Path(self._tmp.name) / "bad_shape.npz"
         np.savez(
             bad_npz,
@@ -933,8 +943,117 @@ class WriterAdaptationCTCTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             import_external_adapter_npz(
-                student.writer_id, bad_npz, store_root=self.learn_dir
+                empty_student.writer_id, bad_npz, store_root=self.learn_dir
             )
+
+        # 3. Profile with held-out set: improving .npz activates, degrading .npz stays inactive
+        charset = Charset(
+            [""] + list(HEBREW_LETTERS + BASE_PUNCT + DIGITS + LATIN)
+        )
+        vocab_size = charset.n_classes
+        feat_dim = 512
+        rng = np.random.default_rng(77)
+        protos = rng.normal(0.0, 1.0, size=(vocab_size, feat_dim)).astype(
+            np.float32
+        )
+        protos /= np.linalg.norm(protos, axis=-1, keepdims=True) + 1e-8
+        # Base head misclassifies bet as kaf; online-trained head fixes bet!
+        id_bet = charset.encode("ב")[0]
+        id_kaf = charset.encode("כ")[0]
+        w_true = (0.4 * protos).astype(np.float32)
+        b_true = np.zeros((vocab_size,), dtype=np.float32)
+        b_true[0] = 2.4
+        w_base = w_true.copy()
+        w_base[id_bet] = -w_true[id_bet]
+        w_base[id_kaf] = w_true[id_bet] * 1.2
+        scale = float(np.sqrt(feat_dim))
+
+        def _feat_for(text: str) -> np.ndarray:
+            rows = [(scale * protos[0]).astype(np.float32)]
+            for tok in charset.encode(text):
+                rows.append((scale * protos[tok]).astype(np.float32))
+                rows.append((scale * protos[0]).astype(np.float32))
+            return np.stack(rows, axis=0)
+
+        class _FakeRec:
+            def __init__(self, *_a, **_kw) -> None:
+                self.charset = charset
+
+            def base_head_numpy(self):
+                return w_base.copy(), b_true.copy()
+
+            def extract_line_features(self, _views):
+                return []
+
+        student = self.store.create_writer("ייבוא מאומת בבקרה")
+        saved = self.store.record_verified_lines(
+            student.writer_id,
+            "imp.png",
+            [
+                VerifiedLineInput(
+                    crop_image=_make_line_image(seed=i),
+                    diplomatic_text="בבא בתרא בדף ברור",
+                    page_number=(1 if i < 7 else 2),
+                    line_index=(i if i < 7 else i - 7),
+                    review_status=STATUS_VERIFIED,
+                    verified_exact_as_written=True,
+                    grammar_unedited_confirmed=True,
+                )
+                for i in range(10)
+            ],
+        )
+        model_sha = "9988776655443322" * 4
+        feat_dir = self.store.writer_dir(student.writer_id) / "features"
+        feat_dir.mkdir(parents=True, exist_ok=True)
+        for smp in saved:
+            np.savez(
+                feat_dir / f"{smp.sample_id}--{model_sha[:12]}.npz",
+                plain=_feat_for(smp.diplomatic_text).astype(np.float16),
+                n_aug=np.asarray([0], dtype=np.int32),
+            )
+
+        better_npz = Path(self._tmp.name) / "better_online.npz"
+        np.savez(better_npz, W=w_true, b=b_true)
+        worse_npz = Path(self._tmp.name) / "worse_online.npz"
+        np.savez(
+            worse_npz,
+            W=np.zeros((vocab_size, feat_dim), dtype=np.float32),
+            b=np.zeros((vocab_size,), dtype=np.float32),
+        )
+        dummy_pt = Path(self._tmp.name) / "m.pt"
+        dummy_pt.write_bytes(b"stub")
+
+        with mock.patch(
+            "hebrew_workbench.engine.models.MODEL_ARTIFACTS",
+            {"mishkefet-v1": mock.Mock(sha256=model_sha)},
+        ):
+            rep_ok = import_external_adapter_npz(
+                student.writer_id,
+                better_npz,
+                store_root=self.learn_dir,
+                model_path=dummy_pt,
+                recognizer_factory=_FakeRec,
+                expected_vocab_size=vocab_size,
+            )
+            self.assertTrue(rep_ok.accepted, msg=rep_ok.message)
+            self.assertEqual(rep_ok.active_round, 1)
+            w_loaded, _ = load_writer_head_npz(
+                self.store.writer_head_path(student.writer_id)
+            )
+            self.assertTrue(np.allclose(w_loaded, w_true))
+
+            # Importing a degraded .npz is blocked by held-out gate; round #1 stays active!
+            rep_bad = import_external_adapter_npz(
+                student.writer_id,
+                worse_npz,
+                store_root=self.learn_dir,
+                model_path=dummy_pt,
+                recognizer_factory=_FakeRec,
+                expected_vocab_size=vocab_size,
+            )
+            self.assertFalse(rep_bad.accepted)
+            self.assertEqual(rep_bad.status, "kept_previous")
+            self.assertEqual(rep_bad.active_round, 1)
 
         # Rollback returns cleanly to round 0 (base model)
         self.store.rollback_writer_adapter(student.writer_id, target_round=0)
@@ -1130,6 +1249,98 @@ class HardeningAndEdgeCaseRegressionTests(unittest.TestCase):
             eng.recognize(dummy_pt)
 
         self.assertEqual(seen_writers, ["student-a", "student-a"])
+
+    def test_restore_database_zip_rolls_back_and_preserves_existing_store_on_swap_failure(
+        self,
+    ) -> None:
+        from hebrew_workbench.training import STATUS_VERIFIED
+
+        s_orig = self.store.create_writer("נתונים קיימים שאסור לאבד")
+        self.store.record_verified_lines(
+            s_orig.writer_id,
+            "orig.png",
+            [
+                VerifiedLineInput(
+                    crop_image=_make_line_image(seed=5),
+                    diplomatic_text="שורה חשובה במאגר הקיים",
+                    page_number=1,
+                    line_index=0,
+                    review_status=STATUS_VERIFIED,
+                    verified_exact_as_written=True,
+                    grammar_unedited_confirmed=True,
+                )
+            ],
+        )
+
+        other_dir = Path(self._tmp.name) / "other_store"
+        other_store = SchoolLearningStore(other_dir)
+        other_store.create_writer("גיבוי אחר")
+        backup_zip = Path(self._tmp.name) / "other_backup.zip"
+        other_store.backup_database_zip(backup_zip)
+
+        real_replace = os.replace
+
+        def _fail_stage_to_root(src, dst):
+            if Path(dst) == self.learn_dir and "staged" in str(src):
+                raise OSError("Simulated disk/swap failure during restore")
+            return real_replace(src, dst)
+
+        with mock.patch("os.replace", side_effect=_fail_stage_to_root):
+            with self.assertRaises(OSError):
+                self.store.restore_database_zip(backup_zip)
+
+        # Original SQLite DB, writers, and verified crops remain 100% intact!
+        self.assertTrue(self.store.db_path.is_file())
+        writers_after = self.store.list_writers()
+        self.assertEqual(len(writers_after), 1)
+        self.assertEqual(writers_after[0].name, "נתונים קיימים שאסור לאבד")
+        samples_after = self.store.list_writer_samples(s_orig.writer_id)
+        self.assertEqual(len(samples_after), 1)
+        self.assertEqual(samples_after[0].diplomatic_text, "שורה חשובה במאגר הקיים")
+
+    def test_reconcile_document_lines_retires_obsolete_segmentation_rows_with_history(
+        self,
+    ) -> None:
+        from hebrew_workbench.training import STATUS_SKIPPED, STATUS_VERIFIED
+
+        student = self.store.create_writer("ריצה מחדש של סגמנטציה")
+        saved = self.store.record_verified_lines(
+            student.writer_id,
+            "reseg.png",
+            [
+                VerifiedLineInput(
+                    crop_image=_make_line_image(seed=1),
+                    diplomatic_text="שורה ראשונה שנשארת",
+                    page_number=1,
+                    line_index=0,
+                    review_status=STATUS_VERIFIED,
+                    verified_exact_as_written=True,
+                    grammar_unedited_confirmed=True,
+                ),
+                VerifiedLineInput(
+                    crop_image=_make_line_image(seed=2),
+                    diplomatic_text="שורה שנייה מריצה ישנה",
+                    page_number=1,
+                    line_index=1,
+                    review_status=STATUS_VERIFIED,
+                    verified_exact_as_written=True,
+                    grammar_unedited_confirmed=True,
+                ),
+            ],
+        )
+        self.assertEqual(len(self.store.list_writer_samples(student.writer_id)), 2)
+
+        # New segmentation only has (1, 0) -> (1, 1) is retired from training but keeps history
+        retired_n = self.store.reconcile_document_lines(
+            student.writer_id, "reseg.png", {(1, 0)}
+        )
+        self.assertEqual(retired_n, 1)
+        remaining = self.store.list_writer_samples(student.writer_id)
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(remaining[0].line_index, 0)
+
+        hist = self.store.get_line_history(saved[1].sample_id)
+        self.assertEqual(hist[-1].new_status, STATUS_SKIPPED)
 
 
 if __name__ == "__main__":

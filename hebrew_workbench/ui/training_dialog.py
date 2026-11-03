@@ -624,6 +624,11 @@ class AdapterHistoryDialog(QDialog):
 
         for ver in self.store.list_adapter_versions(self.writer_id):
             cer_str = ""
+            proven = (
+                ver.held_out_cer_before is not None
+                and ver.held_out_cer_after is not None
+                and ver.held_out_cer_after <= ver.held_out_cer_before + 1e-6
+            )
             if (
                 ver.held_out_cer_before is not None
                 and ver.held_out_cer_after is not None
@@ -632,10 +637,14 @@ class AdapterHistoryDialog(QDialog):
                     f" | בקרה CER: {ver.held_out_cer_before * 100:.1f}% → "
                     f"{ver.held_out_cer_after * 100:.1f}%"
                 )
+            state_tag = (
+                "  [פעילה כעת]"
+                if ver.is_active
+                else ("" if proven else "  [לא הופעלה — ללא שיפור מוכח בבקרה]")
+            )
             txt = (
                 f"גרסה #{ver.round_number} ({ver.created_at}) — "
-                f"{ver.train_samples} אימון, {ver.held_out_samples} בקרה{cer_str}"
-                + ("  [פעילה כעת]" if ver.is_active else "")
+                f"{ver.train_samples} אימון, {ver.held_out_samples} בקרה{cer_str}{state_tag}"
             )
             item = QListWidgetItem(txt)
             item.setData(Qt.UserRole, ver.round_number)
@@ -652,7 +661,13 @@ class AdapterHistoryDialog(QDialog):
         if item is None:
             return
         target_round = int(item.data(Qt.UserRole))
-        self.store.rollback_writer_adapter(self.writer_id, target_round=target_round)
+        try:
+            self.store.rollback_writer_adapter(
+                self.writer_id, target_round=target_round
+            )
+        except Exception as exc:
+            QMessageBox.warning(self, "הפעלת גרסת מתאם", str(exc))
+            return
         self.rolled_back = True
         self._populate()
 
@@ -666,18 +681,19 @@ class AdapterHistoryDialog(QDialog):
         if not path:
             return
         try:
-            new_round = import_external_adapter_npz(
+            report = import_external_adapter_npz(
                 self.writer_id, path, store_root=self.store.root
             )
         except Exception as exc:
             QMessageBox.warning(self, "ייבוא מתאם (.npz)", str(exc))
             return
-        self.rolled_back = True
+        if report.accepted:
+            self.rolled_back = True
         self._populate()
         QMessageBox.information(
             self,
-            "ייבוא מתאם הושלם",
-            f"המתאם החיצוני אומת והופעל כגרסה #{new_round} (ניתן לשחזר בלחיצה אחת בכל עת).",
+            "ייבוא מתאם (.npz)",
+            report.message,
         )
 
 
@@ -1507,6 +1523,16 @@ class DiplomaticVerificationDialog(QDialog):
                         page_inputs,
                     )
                 )
+        active_keys = {
+            (max(1, int(pnum)), max(0, int(st.line_index)))
+            for pnum, states in self._states_by_page.items()
+            for st in states
+        }
+        self.store.reconcile_document_lines(
+            self.selected_writer_id,
+            self.entry.file_path,
+            active_keys,
+        )
         return persisted
 
     def _on_save_draft_clicked(self) -> None:
@@ -1537,6 +1563,23 @@ class DiplomaticVerificationDialog(QDialog):
         self.delete_writer_btn.setEnabled(has_student)
         self.rollback_btn.setEnabled(has_student)
 
+    def _set_review_controls_enabled(self, enabled: bool) -> None:
+        self.lines_container.setEnabled(enabled)
+        self.confirm_exact_checkbox.setEnabled(enabled)
+        self.mark_all_page_btn.setEnabled(enabled and bool(self._active_page_cards))
+        self.unmark_all_page_btn.setEnabled(enabled and bool(self._active_page_cards))
+        self.vocab_admin_btn.setEnabled(enabled)
+        self.export_school_btn.setEnabled(enabled)
+        self.backup_btn.setEnabled(enabled)
+        if not enabled:
+            self.prev_page_btn.setEnabled(False)
+            self.next_page_btn.setEnabled(False)
+        else:
+            self.prev_page_btn.setEnabled(self._current_page_idx > 0)
+            self.next_page_btn.setEnabled(
+                self._current_page_idx < len(self._page_numbers) - 1
+            )
+
     def _on_save_and_train_clicked(self) -> None:
         verified = self._verified_states()
         if not verified:
@@ -1557,6 +1600,7 @@ class DiplomaticVerificationDialog(QDialog):
         writer_id = self.selected_writer_id
         self.committed_writer_id = writer_id
         self._set_writer_controls_enabled(False)
+        self._set_review_controls_enabled(False)
 
         try:
             saved = self._persist_all_reviewed_states(
@@ -1564,6 +1608,7 @@ class DiplomaticVerificationDialog(QDialog):
             )
         except Exception as exc:
             self._set_writer_controls_enabled(True)
+            self._set_review_controls_enabled(True)
             QMessageBox.warning(self, "שמירת שורות מאומתות", str(exc))
             return
 
@@ -1611,6 +1656,7 @@ class DiplomaticVerificationDialog(QDialog):
         self.save_draft_btn.setEnabled(True)
         self.cancel_btn.setEnabled(True)
         self._set_writer_controls_enabled(True)
+        self._set_review_controls_enabled(True)
         self._train_task = None
         self._update_summary_and_buttons()
 

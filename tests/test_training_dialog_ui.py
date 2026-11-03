@@ -360,13 +360,45 @@ class DiplomaticVerificationUITests(unittest.TestCase):
         self.assertEqual(doc_map[(1, 0)].review_status, STATUS_VERIFIED)
         self.assertEqual(doc_map[(1, 1)].review_status, STATUS_NOT_REVIEWED)
 
-        # Verify Esc / reject() is ignored while _train_task is running
+        # Verify Esc / reject() is ignored AND review controls are disabled while _train_task runs
+        dlg2._set_review_controls_enabled(False)
+        self.assertFalse(dlg2.lines_container.isEnabled())
+        self.assertFalse(dlg2.confirm_exact_checkbox.isEnabled())
         dlg2._train_task = mock.Mock(isRunning=mock.Mock(return_value=True))
         dlg2.setResult(0)
         dlg2.reject()
         self.assertEqual(dlg2.result(), 0)
         dlg2._train_task = None
+        dlg2._set_review_controls_enabled(True)
+        self.assertTrue(dlg2.lines_container.isEnabled())
         dlg2.close()
+
+        # Verify MainWindow keeps recognizing document's writer_id fixed even if
+        # _apply_active_writer is called mid-OCR task
+        student_b = self.window.learning_store.create_writer("תלמיד שני באמצע ריצה")
+        entry.writer_id = student.writer_id
+        self.window._recognizing_entry = entry
+        self.window._recognizing_writer_id = student.writer_id
+        self.window.task = mock.Mock(isRunning=mock.Mock(return_value=True))
+        self.window._apply_active_writer(student_b.writer_id, update_entry=True)
+        # Entry still belongs to Student A while OCR is running, and _on_ocr_done keeps Student A!
+        self.assertEqual(entry.writer_id, student.writer_id)
+        self.window._on_ocr_done(
+            mock.Mock(
+                text="שורה חדשה",
+                engine_name="Mishkefet",
+                duration_seconds=0.2,
+                assisted_text=None,
+                decoding_mode="raw",
+                pages=(),
+                manifest=None,
+            ),
+            entry,
+        )
+        self.assertEqual(entry.writer_id, student.writer_id)
+        self.window.task = None
+        self.window._on_task_finished()
+        self.assertEqual(self.window.plugins.active_writer_id, student_b.writer_id)
 
 
 if __name__ == "__main__":

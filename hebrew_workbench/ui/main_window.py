@@ -98,6 +98,7 @@ class MainWindow(QMainWindow):
         self._shown_entry = None
         self._recognizing_entry = None
         self._recognizing_writer_id: str | None = None
+        self._deferred_writer_id: str | None = None
         self._loading = False
         self.task: TaskThread | None = None
 
@@ -909,6 +910,9 @@ class MainWindow(QMainWindow):
         self._recognizing_entry = entry
         job_wid = str(entry.writer_id or self.plugins.active_writer_id or "").strip()
         self._recognizing_writer_id = job_wid
+        self._deferred_writer_id = None
+        if hasattr(self, "writer_combo"):
+            self.writer_combo.setEnabled(False)
         self._sync_engines_writer_context(job_wid)
         self.editor.setReadOnly(True)
 
@@ -982,13 +986,10 @@ class MainWindow(QMainWindow):
                 for p in pages
             ]
             entry.diplomatic_transcription = ""
-            rec_wid = (
-                self._recognizing_writer_id
-                if self._recognizing_writer_id is not None
-                else self.plugins.active_writer_id
-            )
-            if not entry.writer_id and rec_wid:
-                entry.writer_id = rec_wid
+            if self._recognizing_writer_id is not None:
+                entry.writer_id = self._recognizing_writer_id
+            elif not entry.writer_id and self.plugins.active_writer_id:
+                entry.writer_id = self.plugins.active_writer_id
             doc_key = str(entry.path)
             self._processed_previews.pop(doc_key, None)
             self._processed_previews[doc_key] = {
@@ -1061,12 +1062,23 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 1)
         self.cancel_action.setEnabled(False)
         self.run_ocr_action.setEnabled(True)
+        if hasattr(self, "writer_combo"):
+            self.writer_combo.setEnabled(True)
         # The editor is open again: the work is over.
         self._recognizing_entry = None
         self._recognizing_writer_id = None
+        deferred = self._deferred_writer_id
+        self._deferred_writer_id = None
         self.editor.setReadOnly(False)
         self.task = None
-        self._sync_engines_writer_context(self.plugins.active_writer_id)
+        if deferred is not None:
+            self._apply_active_writer(deferred, update_entry=False)
+        else:
+            self._sync_engines_writer_context(self.plugins.active_writer_id)
+            if self._shown_entry is not None:
+                self._refresh_writer_selector(
+                    select_id=self._shown_entry.writer_id or ""
+                )
         self._show_decoding_comparison(self._shown_entry)
 
     def cancel_task(self) -> None:
@@ -1282,6 +1294,20 @@ class MainWindow(QMainWindow):
         clean_id = writer_id.strip()
         if clean_id and self.learning_store.get_writer(clean_id) is None:
             clean_id = ""
+        if self.task is not None and self.task.isRunning():
+            # Never mutate the running OCR job's writer_id, plugin config, or
+            # recognizing document mid-task; queue any selection for _on_task_finished.
+            self._deferred_writer_id = clean_id
+            if (
+                update_entry
+                and self._shown_entry is not None
+                and self._shown_entry is not self._recognizing_entry
+                and self._shown_entry.writer_id != clean_id
+            ):
+                self._shown_entry.writer_id = clean_id
+                self.project.dirty = True
+            self._refresh_writer_selector(select_id=clean_id)
+            return
         self.plugins.set_active_writer_id(clean_id or None)
         self._sync_engines_writer_context(clean_id)
         self._refresh_writer_selector(select_id=clean_id)

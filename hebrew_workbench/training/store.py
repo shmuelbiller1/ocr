@@ -979,6 +979,64 @@ class SchoolLearningStore:
         self._sync_shared_manifest_files()
         return persisted
 
+    def reconcile_document_lines(
+        self,
+        writer_id: str,
+        document_path: str | Path,
+        active_keys: set[tuple[int, int]],
+    ) -> int:
+        """Retire obsolete lines from an older segmentation while keeping audit history."""
+        self._ensure_db()
+        clean_wid = (writer_id or "").strip()
+        if clean_wid and self.get_writer(clean_wid) is None:
+            raise KeyError(f"לא נמצא פרופיל תלמיד עבור {clean_wid!r}.")
+        doc_key = compute_document_id(Path(document_path))[:16]
+        now = _now_iso()
+        retired_ids: list[str] = []
+
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT sample_id, page_number, line_index, diplomatic_text, review_status
+                FROM reviewed_lines
+                WHERE writer_id = ? AND document_key = ?
+                """,
+                (clean_wid, doc_key),
+            ).fetchall()
+            for r in rows:
+                key = (int(r["page_number"]), int(r["line_index"]))
+                old_st = str(r["review_status"])
+                if key in active_keys or old_st == STATUS_SKIPPED:
+                    continue
+                sid = str(r["sample_id"])
+                txt = str(r["diplomatic_text"])
+                conn.execute(
+                    """
+                    INSERT INTO line_revisions(
+                        sample_id, changed_at, old_text, new_text, old_status, new_status
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (sid, now, txt, txt, old_st, STATUS_SKIPPED),
+                )
+                conn.execute(
+                    """
+                    UPDATE reviewed_lines
+                    SET review_status = ?,
+                        verified_exact = 0,
+                        grammar_unedited = 0,
+                        updated_at = ?
+                    WHERE sample_id = ?
+                    """,
+                    (STATUS_SKIPPED, now, sid),
+                )
+                retired_ids.append(sid)
+
+        if retired_ids:
+            for sid in retired_ids:
+                self._invalidate_sample_features(clean_wid, sid)
+            self._sync_shared_manifest_files()
+        return len(retired_ids)
+
     def record_verified_lines(
         self,
         writer_id: str,
@@ -1349,6 +1407,11 @@ class SchoolLearningStore:
                 v.round_number
                 for v in versions
                 if v.round_number < prof.active_round
+                and (
+                    v.held_out_cer_before is None
+                    or v.held_out_cer_after is None
+                    or v.held_out_cer_after <= v.held_out_cer_before + 1e-6
+                )
             ]
             chosen_round = earlier[-1] if earlier else 0
         else:
@@ -1383,6 +1446,14 @@ class SchoolLearningStore:
         if match is None:
             raise ValueError(
                 f"גרסת מתאם #{chosen_round} אינה קיימת עבור {prof.name}."
+            )
+        if (
+            match.held_out_cer_before is None
+            or match.held_out_cer_after is None
+            or match.held_out_cer_after > match.held_out_cer_before + 1e-6
+        ):
+            raise ValueError(
+                f"גרסת מתאם #{chosen_round} לא עברה אימות שיפור על קבוצת בקרה עצמאית ולכן לא ניתן להפעילה."
             )
         src_head = self.root.joinpath(*match.head_relpath.split("/")).resolve()
         if not src_head.is_file():
@@ -2004,8 +2075,12 @@ class SchoolLearningStore:
         if not src.is_file():
             raise FileNotFoundError(f"Backup archive not found: {src}")
 
-        with tempfile.TemporaryDirectory(prefix="hw-restore-") as td:
+        self.root.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix=".hw-restore-", dir=str(self.root.parent)
+        ) as td:
             stage = Path(td) / "staged"
+            prev_root = Path(td) / "previous"
             stage.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(src, "r") as zf:
                 names = zf.namelist()
@@ -2062,19 +2137,20 @@ class SchoolLearningStore:
             except ImportError:
                 pass
 
-            # Swap staged files into self.root cleanly
-            if self.root.is_dir():
-                for child in list(self.root.iterdir()):
-                    if child.is_dir():
-                        shutil.rmtree(child, ignore_errors=True)
-                    else:
-                        child.unlink(missing_ok=True)
-            else:
-                self.root.mkdir(parents=True, exist_ok=True)
+            (stage / "backup_manifest.json").unlink(missing_ok=True)
 
-            for item in stage.iterdir():
-                if item.name == "backup_manifest.json":
-                    continue
-                shutil.move(str(item), str(self.root / item.name))
-            self._schema_ready = False
-            self._ensure_db()
+            # Atomic same-filesystem swap with full rollback on failure so the
+            # existing store is never deleted before replacement succeeds.
+            had_existing = self.root.exists()
+            if had_existing:
+                os.replace(self.root, prev_root)
+            try:
+                os.replace(stage, self.root)
+                self._schema_ready = False
+                self._ensure_db()
+            except Exception:
+                if self.root.exists():
+                    shutil.rmtree(self.root, ignore_errors=True)
+                if had_existing and prev_root.exists():
+                    os.replace(prev_root, self.root)
+                raise

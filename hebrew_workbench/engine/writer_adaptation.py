@@ -1034,17 +1034,25 @@ def import_external_adapter_npz(
     npz_path: str | Path,
     *,
     store_root: str | Path | None = None,
+    model_path: str | Path | None = None,
+    recognizer_factory=None,
     expected_vocab_size: int = 198,
     expected_feat_dim: int = 512,
-) -> int:
-    """Safely import an externally/online-trained ``.npz`` CTC head for a student.
+    timeout_seconds: float = 300.0,
+) -> AdaptationReport:
+    """Safely validate, evaluate on held-out lines, and import an external ``.npz`` head.
 
-    Validates binary ``float32`` arrays strictly without ``pickle`` (so it works
-    offline even inside the GUI process without NumPy), stores a versioned copy
-    under ``heads/head-rXXXX.npz``, activates it, and preserves one-click rollback.
+    - Always validates binary ``float32`` arrays strictly without ``pickle`` (pure Python).
+    - Activates the imported head **only** when independent held-out evaluation on
+      that student's verified lines proves lower CER (or tied CER below the base
+      model with better CTC calibration and non-worsening WER).
+    - Otherwise stores the candidate as an **inactive** version in ``adapter_versions``
+      and preserves the currently active model untouched.
     """
     import shutil
-    from .models import MODEL_ARTIFACTS
+    from .mishkefet import mishkefet_importable
+    from .models import MODEL_ARTIFACTS, models_directory, verify_file
+    from .worker import worker_path
 
     src = Path(npz_path)
     _validate_npz_head_pure_python(
@@ -1052,7 +1060,6 @@ def import_external_adapter_npz(
         expected_vocab_size=expected_vocab_size,
         expected_feat_dim=expected_feat_dim,
     )
-    # Also run numpy allow_pickle=False check when numpy is available
     try:
         load_writer_head_npz(src)
     except ImportError:
@@ -1065,6 +1072,206 @@ def import_external_adapter_npz(
 
     art = MODEL_ARTIFACTS.get("mishkefet-v1")
     model_sha256 = art.sha256 if art is not None else ""
+    samples = store.list_writer_samples(profile.writer_id)
+
+    def _store_inactive(status: str, message: str, **metrics) -> AdaptationReport:
+        existing_rounds = [
+            v.round_number for v in store.list_adapter_versions(profile.writer_id)
+        ]
+        new_round = max([int(profile.active_round), *existing_rounds], default=0) + 1
+        rel_head = f"writers/{profile.writer_id}/heads/head-r{new_round:04d}.npz"
+        round_path = store.root.joinpath(*rel_head.split("/"))
+        round_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, round_path)
+        h_before = metrics.get("held_out_cer_before")
+        h_after = metrics.get("held_out_cer_after")
+        hw_before = metrics.get("held_out_wer_before")
+        hw_after = metrics.get("held_out_wer_after")
+        store.record_adapter_version(
+            profile.writer_id,
+            round_number=new_round,
+            head_relpath=rel_head,
+            model_sha256=model_sha256,
+            samples_total=len(samples),
+            train_samples=int(metrics.get("train_samples", 0)),
+            held_out_samples=int(metrics.get("held_out_samples", 0)),
+            held_out_chars=int(metrics.get("held_out_chars", 0)),
+            held_out_cer_before=round(h_before, 4) if h_before is not None else None,
+            held_out_cer_after=round(h_after, 4) if h_after is not None else None,
+            held_out_wer_before=round(hw_before, 4) if hw_before is not None else None,
+            held_out_wer_after=round(hw_after, 4) if hw_after is not None else None,
+            activate=False,
+        )
+        return AdaptationReport(
+            writer_id=profile.writer_id,
+            writer_name=profile.name,
+            accepted=False,
+            status=status,
+            active_round=profile.active_round,
+            samples_total=len(samples),
+            train_samples=int(metrics.get("train_samples", 0)),
+            held_out_samples=int(metrics.get("held_out_samples", 0)),
+            held_out_chars=int(metrics.get("held_out_chars", 0)),
+            held_out_cer_before=h_before,
+            held_out_cer_after=h_after,
+            held_out_wer_before=hw_before,
+            held_out_wer_after=hw_after,
+            train_cer_before=0.0,
+            train_cer_after=0.0,
+            message=message,
+        )
+
+    if len(samples) < MIN_VERIFIED_FOR_ADAPT:
+        needed = MIN_VERIFIED_FOR_ADAPT - len(samples)
+        return _store_inactive(
+            "insufficient_evidence",
+            (
+                f"קובץ ה-.npz אומת ללא pickle ונשמר כגרסה לא-פעילה עבור {profile.name}, "
+                f"אך לא הופעל משום שנדרשות עוד {needed} שורות מאומתות (לפחות {MIN_VERIFIED_FOR_ADAPT} סה״כ) "
+                "כדי להוכיח שיפור על קבוצת בקרה עצמאית."
+            ),
+        )
+
+    m_path = (
+        Path(model_path)
+        if model_path is not None
+        else models_directory() / (art.filename if art else "mishkefet-v1.pt")
+    )
+
+    if recognizer_factory is None and not mishkefet_importable():
+        w_exe = worker_path()
+        if w_exe is not None and w_exe.is_file() and m_path.is_file():
+            with tempfile.TemporaryDirectory(prefix="hw-imp-") as td:
+                job_file = Path(td) / "import-job.json"
+                res_file = Path(td) / "import-result.json"
+                job_file.write_text(
+                    json.dumps(
+                        {
+                            "writer_id": profile.writer_id,
+                            "model_path": str(m_path),
+                            "learning_dir": str(store.root),
+                            "import_npz_path": str(src),
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+                proc = subprocess.run(
+                    [
+                        str(w_exe),
+                        "--train-writer",
+                        str(job_file),
+                        "--result",
+                        str(res_file),
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=timeout_seconds,
+                    check=False,
+                )
+                if res_file.is_file():
+                    payload = json.loads(res_file.read_text(encoding="utf-8"))
+                    if not payload.get("error"):
+                        return AdaptationReport.from_dict(payload)
+        return _store_inactive(
+            "insufficient_evidence",
+            (
+                f"קובץ ה-.npz אומת ללא pickle ונשמר כגרסה לא-פעילה עבור {profile.name}. "
+                "להפעלתו יש להתקין את מודל Mishkefet המקומי כדי לבדוק שיפור על קבוצת הבקרה."
+            ),
+        )
+
+    if recognizer_factory is None:
+        if not m_path.is_file():
+            return _store_inactive(
+                "insufficient_evidence",
+                (
+                    f"קובץ ה-.npz אומת ונשמר כגרסה לא-פעילה עבור {profile.name} "
+                    "(קובץ המודל mishkefet-v1.pt אינו מותקן עדיין לבדיקת קבוצת הבקרה)."
+                ),
+            )
+        if art is not None:
+            prob = verify_file(m_path, art)
+            if prob is not None:
+                raise RuntimeError(f"קובץ המודל אינו תקין: {prob}")
+        from .vendor.hebocr.recognize import Recognizer
+
+        recognizer = Recognizer(str(m_path), device="cpu")
+    else:
+        recognizer = recognizer_factory(m_path)
+
+    W0, b0 = recognizer.base_head_numpy()
+    W_imp, b_imp = load_writer_head_npz(src)
+    prev_head = store.active_head_path(profile.writer_id, model_sha256=model_sha256)
+    if prev_head is not None:
+        try:
+            W_prev, b_prev = load_writer_head_npz(prev_head)
+        except Exception:
+            W_prev, b_prev = W0.copy(), b0.copy()
+    else:
+        W_prev, b_prev = W0.copy(), b0.copy()
+
+    train_samples, held_out_samples = _split_train_and_holdout(samples)
+    held_out_pairs: list[tuple[object, list[int]]] = []
+    held_chars = 0
+    for s in held_out_samples:
+        lbl = recognizer.charset.encode(s.diplomatic_text)
+        if not lbl:
+            continue
+        plain_f, _ = _load_or_extract_sample_features(
+            recognizer, store, s, model_sha256, ()
+        )
+        held_out_pairs.append((plain_f, lbl))
+        held_chars += len(lbl)
+
+    if len(held_out_pairs) < MIN_HELDOUT_SAMPLES or held_chars < MIN_HELDOUT_CHARS:
+        return _store_inactive(
+            "insufficient_evidence",
+            (
+                f"קובץ ה-.npz נשמר כגרסה לא-פעילה עבור {profile.name}: "
+                "קבוצת הבקרה העצמאית עדיין קטנה מדי להוכחת שיפור מהימנה."
+            ),
+            train_samples=len(train_samples),
+            held_out_samples=len(held_out_pairs),
+            held_out_chars=held_chars,
+        )
+
+    charset = getattr(recognizer, "charset", None)
+    prev_held = evaluate_head_detailed(W_prev, b_prev, held_out_pairs, charset)
+    base_held = evaluate_head_detailed(W0, b0, held_out_pairs, charset)
+    cand_held = evaluate_head_detailed(W_imp, b_imp, held_out_pairs, charset)
+
+    held_cer_before = float(prev_held["cer"])
+    held_wer_before = float(prev_held["wer"])
+    held_cer_after = float(cand_held["cer"])
+    held_wer_after = float(cand_held["wer"])
+    ref_cer = min(held_cer_before, float(base_held["cer"]))
+    ref_nll = min(float(prev_held["nll"]), float(base_held["nll"]))
+
+    cer_improved = held_cer_after < (ref_cer - 1e-6)
+    tied_better_calibrated = (
+        abs(held_cer_after - ref_cer) <= 1e-6
+        and held_cer_after < (float(base_held["cer"]) - 1e-6)
+        and float(cand_held["nll"]) < (ref_nll - 0.02)
+        and held_wer_after <= (held_wer_before + 1e-6)
+    )
+    if not (cer_improved or tied_better_calibrated):
+        return _store_inactive(
+            "kept_previous",
+            (
+                f"המתאם המיובא נשמר כגרסה לא-פעילה משום שלא שיפר את הדיוק על שורות הבקרה "
+                f"({held_cer_before * 100:.1f}% לפני לעומת {held_cer_after * 100:.1f}% במתאם המיובא) — "
+                "המודל הפעיל נשמר ללא שינוי."
+            ),
+            train_samples=len(train_samples),
+            held_out_samples=len(held_out_pairs),
+            held_out_chars=held_chars,
+            held_out_cer_before=held_cer_before,
+            held_out_cer_after=held_cer_after,
+            held_out_wer_before=held_wer_before,
+            held_out_wer_after=held_wer_after,
+        )
+
     existing_rounds = [
         v.round_number for v in store.list_adapter_versions(profile.writer_id)
     ]
@@ -1075,19 +1282,20 @@ def import_external_adapter_npz(
     shutil.copy2(src, round_path)
     shutil.copy2(src, store.writer_head_path(profile.writer_id))
 
-    samples_n = len(store.list_writer_samples(profile.writer_id))
     meta = {
         "writer_id": profile.writer_id,
         "writer_name": profile.name,
         "round": new_round,
         "source": "external_online_import",
         "model_sha256": model_sha256,
-        "samples_total": samples_n,
-        "train_samples": 0,
-        "held_out_samples": 0,
-        "held_out_chars": 0,
-        "held_out_cer_before": None,
-        "held_out_cer_after": None,
+        "samples_total": len(samples),
+        "train_samples": len(train_samples),
+        "held_out_samples": len(held_out_pairs),
+        "held_out_chars": held_chars,
+        "held_out_cer_before": round(held_cer_before, 4),
+        "held_out_cer_after": round(held_cer_after, 4),
+        "held_out_wer_before": round(held_wer_before, 4),
+        "held_out_wer_after": round(held_wer_after, 4),
     }
     store.writer_head_meta_path(profile.writer_id).write_text(
         json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -1097,14 +1305,35 @@ def import_external_adapter_npz(
         round_number=new_round,
         head_relpath=rel_head,
         model_sha256=model_sha256,
-        samples_total=samples_n,
-        train_samples=0,
-        held_out_samples=0,
-        held_out_chars=0,
-        held_out_cer_before=None,
-        held_out_cer_after=None,
-        held_out_wer_before=None,
-        held_out_wer_after=None,
+        samples_total=len(samples),
+        train_samples=len(train_samples),
+        held_out_samples=len(held_out_pairs),
+        held_out_chars=held_chars,
+        held_out_cer_before=meta["held_out_cer_before"],
+        held_out_cer_after=meta["held_out_cer_after"],
+        held_out_wer_before=meta["held_out_wer_before"],
+        held_out_wer_after=meta["held_out_wer_after"],
         activate=True,
     )
-    return new_round
+    return AdaptationReport(
+        writer_id=profile.writer_id,
+        writer_name=profile.name,
+        accepted=True,
+        status="accepted",
+        active_round=new_round,
+        samples_total=len(samples),
+        train_samples=len(train_samples),
+        held_out_samples=len(held_out_pairs),
+        held_out_chars=held_chars,
+        held_out_cer_before=held_cer_before,
+        held_out_cer_after=held_cer_after,
+        held_out_wer_before=held_wer_before,
+        held_out_wer_after=held_wer_after,
+        train_cer_before=0.0,
+        train_cer_after=0.0,
+        message=(
+            f"המתאם החיצוני הוכיח שיפור על קבוצת הבקרה של {profile.name} "
+            f"({held_cer_before * 100:.1f}% → {held_cer_after * 100:.1f}% CER) "
+            f"והופעל כגרסה #{new_round}."
+        ),
+    )

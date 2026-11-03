@@ -56,13 +56,19 @@ from the unmodified original scan:
     into page-grouped `train.jsonl` and `val.jsonl` splits plus HuggingFace-compatible
     `metadata.jsonl`, `approved_shared_vocab.json`, `load_dataset_example.py`, and
     `train_online_guide.py` (including profiles that do not yet have verified lines).
-  - **Anonymized by default (`writer_001`, `doc_<hash>`)** so schools can take
-    verified data offline-to-online (e.g., Colab / GPU cluster for full
-    base-model or cohort head training) without exposing student names or OS file paths.
+  - **Metadata anonymized by default (`writer_001`, `doc_<hash>`)**: replaces
+    student profile IDs, profile names, and local OS file paths in JSON/JSONL
+    manifests. Because the archive necessarily preserves the original handwritten
+    line crops and Stage-A diplomatic text for model training, **schools must
+    review exported lines to confirm no personal names or identifying details
+    appear inside the handwritten text itself** before uploading the ZIP to any
+    external/online GPU service.
   - `import_external_adapter_npz()` (and `ייבוא מתאם מאומן (.npz)...` inside
-    `AdapterHistoryDialog`) safely imports an online-trained `(198, 512)` `float32`
-    `.npz` head back into an offline Windows PC using pure-Python `.npy` header
-    verification (never executing `pickle`) with full version history and 1-click rollback.
+    `AdapterHistoryDialog`) validates `(198, 512)` `float32` `.npz` heads in pure
+    Python without `pickle`, evaluates them against the student's independent
+    held-out lines, and activates the imported head **only** when held-out
+    accuracy improves (storing unproven candidates as inactive versions with
+    1-click rollback).
 
 ## 3. Opt-In, Administrator-Approved Shared Vocabulary
 
@@ -112,5 +118,12 @@ from the unmodified original scan:
     `~168 KB` SQLite DB (`learning.sqlite3`).
 - Real-page 4-way (`Base`, `Base + Adapter`, `Base + Approved Vocab`,
   `Combined`), cross-writer isolation, reload, and rollback measurements run
-  automatically in isolated processes on Windows CI (`ocr-engine` ->
-  `writer-adaptation-benchmark.json`).
+  automatically in isolated processes on CI (`ocr-engine` ->
+  `writer-adaptation-benchmark.json`): on unseen `PDM-1.0` modern cursive
+  (`Rachel Bluwstein`, 33 verified lines across 3 pages -> unseen 4th page
+  `rachel_rak_al_atzmi`, 265 chars), `Base` achieves `42.26%` CER / `94.44%` WER,
+  held-out validation (`22.92% -> 22.92%` on 10 held-out lines) honestly blocks
+  small-sample head overfitting (`0.0%` regression on unseen page and `0.0%`
+  delta on other writers `Bialik` `34.91%` CER & `Imber` `58.08%` CER), and
+  `Base + Approved Shared Vocab` improves unseen-page decoding to **`41.13%` CER
+  (`-1.13` pp) / `90.74%` WER (`-3.70` pp)**.

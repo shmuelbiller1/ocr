@@ -117,20 +117,32 @@ def _run_enhance_preview(input_path: Path, output_path: Path, enabled: bool) -> 
 
 
 def _run_train_writer(job_path: Path, result_path: Path) -> int:
-    """Adapt a student's Mishkefet CTC head inside the standalone worker."""
+    """Adapt or validate an imported student's Mishkefet CTC head inside the worker."""
     try:
         job = json.loads(job_path.read_text(encoding="utf-8"))
         if job.get("offline_check") is True:
             _install_offline_guard([])
-        from hebrew_workbench.engine.writer_adaptation import (
-            train_writer_profile_in_process,
-        )
+        if job.get("import_npz_path"):
+            from hebrew_workbench.engine.writer_adaptation import (
+                import_external_adapter_npz,
+            )
 
-        report = train_writer_profile_in_process(
-            writer_id=str(job["writer_id"]),
-            model_path=Path(job["model_path"]),
-            store_root=job.get("learning_dir"),
-        )
+            report = import_external_adapter_npz(
+                writer_id=str(job["writer_id"]),
+                npz_path=Path(job["import_npz_path"]),
+                store_root=job.get("learning_dir"),
+                model_path=Path(job["model_path"]),
+            )
+        else:
+            from hebrew_workbench.engine.writer_adaptation import (
+                train_writer_profile_in_process,
+            )
+
+            report = train_writer_profile_in_process(
+                writer_id=str(job["writer_id"]),
+                model_path=Path(job["model_path"]),
+                store_root=job.get("learning_dir"),
+            )
         payload = report.to_dict()
     except Exception as exc:
         message = str(exc) or type(exc).__name__
