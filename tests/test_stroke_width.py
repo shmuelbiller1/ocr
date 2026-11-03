@@ -245,6 +245,15 @@ class StrokeWidthOperatorsTests(unittest.TestCase):
             self.assertEqual([pid for pid, _, _ in loaded], ["p1"])
 
 
+def _qt_available() -> bool:
+    try:
+        from PySide6.QtWidgets import QApplication  # noqa: F401
+
+        return True
+    except Exception:
+        return False
+
+
 class PageEnhancementSettingsAndWorkerTests(unittest.TestCase):
     def test_plugin_settings_persist_page_enhancement_and_propagate_to_ocr(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -292,6 +301,7 @@ class PageEnhancementSettingsAndWorkerTests(unittest.TestCase):
             if HAS_STROKE_VISION:
                 self.assertTrue(meta["enhanced"])
 
+    @unittest.skipUnless(_qt_available(), "PySide6 GUI runtime not available")
     def test_main_window_and_settings_dialog_enhancement_and_compare_controls(
         self,
     ) -> None:

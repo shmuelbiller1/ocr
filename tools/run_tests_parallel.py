@@ -18,6 +18,20 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from hebrew_workbench.console import use_utf8  # noqa: E402
+
+
+def _safe_print(text: str, *, stream=None) -> None:
+    target = stream if stream is not None else sys.stdout
+    try:
+        print(text, file=target, flush=True)
+    except UnicodeEncodeError:
+        enc = getattr(target, "encoding", None) or "utf-8"
+        safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
+        print(safe, file=target, flush=True)
 
 
 def _discover_test_modules(tests_dir: Path, pattern: str = "test_*.py") -> list[str]:
@@ -30,10 +44,14 @@ def _run_one_module(
 ) -> tuple[str, int, float, str]:
     python_exe, module_name, timeout_sec = spec
     t0 = time.perf_counter()
+    child_env = dict(os.environ)
+    child_env.setdefault("PYTHONUTF8", "1")
+    child_env.setdefault("PYTHONIOENCODING", "utf-8:replace")
     try:
         proc = subprocess.run(
             [python_exe, "-m", "unittest", "-v", module_name],
             cwd=str(ROOT),
+            env=child_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -52,6 +70,7 @@ def _run_one_module(
 
 
 def main(argv: list[str] | None = None) -> int:
+    use_utf8()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--workers",
@@ -96,21 +115,23 @@ def main(argv: list[str] | None = None) -> int:
             mod, rc, dt, out = fut.result()
             results.append((mod, rc, dt, out))
             status = "PASS" if rc == 0 else f"FAIL(rc={rc})"
-            print(f"[{status}] {mod} ({dt:.2f}s)", flush=True)
+            _safe_print(f"[{status}] {mod} ({dt:.2f}s)")
             if args.verbose_all or rc != 0:
-                print(out, flush=True)
+                _safe_print(out)
 
     wall = time.perf_counter() - t_start
     results.sort(key=lambda r: r[0])
     failed = [r for r in results if r[1] != 0]
     total_cpu = sum(r[2] for r in results)
-    print(
+    _safe_print(
         f"\nParallel test summary: {len(results) - len(failed)}/{len(results)} modules passed "
-        f"in {wall:.2f}s wall ({total_cpu:.2f}s cumulative, workers={workers}).",
-        flush=True,
+        f"in {wall:.2f}s wall ({total_cpu:.2f}s cumulative, workers={workers})."
     )
     if failed:
-        print("Failed modules:", ", ".join(r[0] for r in failed), file=sys.stderr)
+        _safe_print(
+            "Failed modules: " + ", ".join(r[0] for r in failed),
+            stream=sys.stderr,
+        )
         return 1
     return 0
 
