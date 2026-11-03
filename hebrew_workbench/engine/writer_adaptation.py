@@ -19,7 +19,6 @@ Adapted from the MIT-licensed ``mishkefet-app`` writer-adaptation reference
 
 from __future__ import annotations
 
-import hashlib
 import json
 import subprocess
 import tempfile
@@ -41,6 +40,7 @@ __all__ = [
     "AdaptationReport",
     "ctc_loss_grad",
     "greedy_decode_logits",
+    "import_external_adapter_in_process",
     "import_external_adapter_npz",
     "load_writer_head_npz",
     "run_writer_training",
@@ -364,7 +364,7 @@ def train_ctc_head(
             f32 = np.asarray(feat, dtype=np.float32)
             logits = f32 @ W.T + b
             loss, dz = ctc_loss_grad(logits, label)
-            if loss == 0.0 and not dz.any():
+            if abs(loss) <= 1e-12 and not dz.any():
                 continue
             inv_len = 1.0 / max(1, len(label))
             dz_scaled = dz * inv_len
@@ -550,15 +550,14 @@ def train_writer_profile_in_process(
 
     model_file = Path(model_path)
     artifact = MODEL_ARTIFACTS.get("mishkefet-v1")
-    if artifact is not None:
-        problem = verify_file(model_file, artifact)
-        if problem is not None:
-            raise RuntimeError(
-                f"קובץ המודל של Mishkefet נכשל בבדיקת שלמות ({problem})."
-            )
-        model_sha256 = artifact.sha256
-    else:
-        model_sha256 = hashlib.sha256(model_file.read_bytes()).hexdigest()
+    if artifact is None:
+        raise RuntimeError("הגדרת המודל mishkefet-v1 אינה זמינה.")
+    problem = verify_file(model_file, artifact)
+    if problem is not None:
+        raise RuntimeError(
+            f"קובץ המודל של Mishkefet נכשל בבדיקת שלמות ({problem})."
+        )
+    model_sha256 = artifact.sha256
 
     samples = store.list_writer_samples(profile.writer_id)
     if not samples:
@@ -992,13 +991,15 @@ def _validate_npz_head_pure_python(
 ) -> None:
     """Verify ``W`` and ``b`` ``.npy`` arrays inside ``npz_path`` without pickle."""
     import ast
-    import shutil
     import struct
     import zipfile
 
-    if not npz_path.is_file():
-        raise ValueError(f"קובץ המתאם לא נמצא: {npz_path}")
-    with zipfile.ZipFile(npz_path, "r") as zf:
+    try:
+        zf_ctx = zipfile.ZipFile(npz_path, "r")
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise ValueError("קובץ המתאם (.npz) לא נמצא או שאינו ארכיון תקין.") from exc
+
+    with zf_ctx as zf:
         names = set(zf.namelist())
         if not {"W.npy", "b.npy"}.issubset(names):
             raise ValueError("קובץ ה-.npz חייב להכיל מערכי W.npy ו-b.npy.")
@@ -1040,10 +1041,69 @@ def _validate_npz_head_pure_python(
                 n_elems *= dim
             if len(raw) - hdr_end != n_elems * 4:
                 raise ValueError(f"אורך הנתונים הבינאריים ב-{member} שגוי.")
-    _ = shutil  # keep helper self-contained
 
 
-def import_external_adapter_npz(
+def _store_inactive_imported_head(
+    store: SchoolLearningStore,
+    profile,
+    src: Path,
+    *,
+    model_sha256: str,
+    samples_total: int,
+    status: str,
+    message: str,
+    **metrics,
+) -> AdaptationReport:
+    import shutil
+
+    existing_rounds = [
+        v.round_number for v in store.list_adapter_versions(profile.writer_id)
+    ]
+    new_round = max([int(profile.active_round), *existing_rounds], default=0) + 1
+    rel_head = f"writers/{profile.writer_id}/heads/head-r{new_round:04d}.npz"
+    round_path = store.root.joinpath(*rel_head.split("/"))
+    round_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, round_path)
+    h_before = metrics.get("held_out_cer_before")
+    h_after = metrics.get("held_out_cer_after")
+    hw_before = metrics.get("held_out_wer_before")
+    hw_after = metrics.get("held_out_wer_after")
+    store.record_adapter_version(
+        profile.writer_id,
+        round_number=new_round,
+        head_relpath=rel_head,
+        model_sha256=model_sha256,
+        samples_total=samples_total,
+        train_samples=int(metrics.get("train_samples", 0)),
+        held_out_samples=int(metrics.get("held_out_samples", 0)),
+        held_out_chars=int(metrics.get("held_out_chars", 0)),
+        held_out_cer_before=round(h_before, 4) if h_before is not None else None,
+        held_out_cer_after=round(h_after, 4) if h_after is not None else None,
+        held_out_wer_before=round(hw_before, 4) if hw_before is not None else None,
+        held_out_wer_after=round(hw_after, 4) if hw_after is not None else None,
+        activate=False,
+    )
+    return AdaptationReport(
+        writer_id=profile.writer_id,
+        writer_name=profile.name,
+        accepted=False,
+        status=status,
+        active_round=profile.active_round,
+        samples_total=samples_total,
+        train_samples=int(metrics.get("train_samples", 0)),
+        held_out_samples=int(metrics.get("held_out_samples", 0)),
+        held_out_chars=int(metrics.get("held_out_chars", 0)),
+        held_out_cer_before=h_before,
+        held_out_cer_after=h_after,
+        held_out_wer_before=hw_before,
+        held_out_wer_after=hw_after,
+        train_cer_before=0.0,
+        train_cer_after=0.0,
+        message=message,
+    )
+
+
+def import_external_adapter_in_process(
     writer_id: str,
     npz_path: str | Path,
     *,
@@ -1052,21 +1112,10 @@ def import_external_adapter_npz(
     recognizer_factory=None,
     expected_vocab_size: int = 198,
     expected_feat_dim: int = 512,
-    timeout_seconds: float = 300.0,
 ) -> AdaptationReport:
-    """Safely validate, evaluate on held-out lines, and import an external ``.npz`` head.
-
-    - Always validates binary ``float32`` arrays strictly without ``pickle`` (pure Python).
-    - Activates the imported head **only** when independent held-out evaluation on
-      that student's verified lines proves lower CER (or tied CER below the base
-      model with better CTC calibration and non-worsening WER).
-    - Otherwise stores the candidate as an **inactive** version in ``adapter_versions``
-      and preserves the currently active model untouched.
-    """
+    """In-process validation & held-out evaluation of an external ``.npz`` head."""
     import shutil
-    from .mishkefet import mishkefet_importable
     from .models import MODEL_ARTIFACTS, models_directory, verify_file
-    from .worker import worker_path
 
     src = Path(npz_path)
     _validate_npz_head_pure_python(
@@ -1089,50 +1138,15 @@ def import_external_adapter_npz(
     samples = store.list_writer_samples(profile.writer_id)
 
     def _store_inactive(status: str, message: str, **metrics) -> AdaptationReport:
-        existing_rounds = [
-            v.round_number for v in store.list_adapter_versions(profile.writer_id)
-        ]
-        new_round = max([int(profile.active_round), *existing_rounds], default=0) + 1
-        rel_head = f"writers/{profile.writer_id}/heads/head-r{new_round:04d}.npz"
-        round_path = store.root.joinpath(*rel_head.split("/"))
-        round_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, round_path)
-        h_before = metrics.get("held_out_cer_before")
-        h_after = metrics.get("held_out_cer_after")
-        hw_before = metrics.get("held_out_wer_before")
-        hw_after = metrics.get("held_out_wer_after")
-        store.record_adapter_version(
-            profile.writer_id,
-            round_number=new_round,
-            head_relpath=rel_head,
+        return _store_inactive_imported_head(
+            store,
+            profile,
+            src,
             model_sha256=model_sha256,
             samples_total=len(samples),
-            train_samples=int(metrics.get("train_samples", 0)),
-            held_out_samples=int(metrics.get("held_out_samples", 0)),
-            held_out_chars=int(metrics.get("held_out_chars", 0)),
-            held_out_cer_before=round(h_before, 4) if h_before is not None else None,
-            held_out_cer_after=round(h_after, 4) if h_after is not None else None,
-            held_out_wer_before=round(hw_before, 4) if hw_before is not None else None,
-            held_out_wer_after=round(hw_after, 4) if hw_after is not None else None,
-            activate=False,
-        )
-        return AdaptationReport(
-            writer_id=profile.writer_id,
-            writer_name=profile.name,
-            accepted=False,
             status=status,
-            active_round=profile.active_round,
-            samples_total=len(samples),
-            train_samples=int(metrics.get("train_samples", 0)),
-            held_out_samples=int(metrics.get("held_out_samples", 0)),
-            held_out_chars=int(metrics.get("held_out_chars", 0)),
-            held_out_cer_before=h_before,
-            held_out_cer_after=h_after,
-            held_out_wer_before=hw_before,
-            held_out_wer_after=hw_after,
-            train_cer_before=0.0,
-            train_cer_after=0.0,
             message=message,
+            **metrics,
         )
 
     if len(samples) < MIN_VERIFIED_FOR_ADAPT:
@@ -1152,56 +1166,15 @@ def import_external_adapter_npz(
         else models_directory() / (art.filename if art else "mishkefet-v1.pt")
     )
 
-    if recognizer_factory is None and not mishkefet_importable():
-        w_exe = worker_path()
-        if w_exe is not None and w_exe.is_file() and m_path.is_file():
-            with tempfile.TemporaryDirectory(prefix="hw-imp-") as td:
-                job_file = Path(td) / "import-job.json"
-                res_file = Path(td) / "import-result.json"
-                job_file.write_text(
-                    json.dumps(
-                        {
-                            "writer_id": profile.writer_id,
-                            "model_path": str(m_path),
-                            "learning_dir": str(store.root),
-                            "import_npz_path": str(src),
-                        },
-                        ensure_ascii=False,
-                    ),
-                    encoding="utf-8",
-                )
-                proc = subprocess.run(
-                    [
-                        str(w_exe),
-                        "--train-writer",
-                        str(job_file),
-                        "--result",
-                        str(res_file),
-                    ],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=timeout_seconds,
-                    check=False,
-                )
-                if res_file.is_file():
-                    payload = json.loads(res_file.read_text(encoding="utf-8"))
-                    if not payload.get("error"):
-                        return AdaptationReport.from_dict(payload)
-        return _store_inactive(
-            "insufficient_evidence",
-            (
-                f"קובץ ה-.npz אומת ללא pickle ונשמר כגרסה לא-פעילה עבור {profile.name}. "
-                "להפעלתו יש להתקין את מודל Mishkefet המקומי כדי לבדוק שיפור על קבוצת הבקרה."
-            ),
-        )
-
     if recognizer_factory is None:
-        if not m_path.is_file():
+        from .mishkefet import mishkefet_importable
+
+        if not m_path.is_file() or not mishkefet_importable():
             return _store_inactive(
                 "insufficient_evidence",
                 (
                     f"קובץ ה-.npz אומת ונשמר כגרסה לא-פעילה עבור {profile.name} "
-                    "(קובץ המודל mishkefet-v1.pt אינו מותקן עדיין לבדיקת קבוצת הבקרה)."
+                    "(קובץ המודל או מנוע Mishkefet אינם מותקנים עדיין לבדיקת קבוצת הבקרה)."
                 ),
             )
         if art is not None:
@@ -1354,3 +1327,90 @@ def import_external_adapter_npz(
             f"והופעל כגרסה #{new_round}."
         ),
     )
+
+
+def import_external_adapter_npz(
+    writer_id: str,
+    npz_path: str | Path,
+    *,
+    store_root: str | Path | None = None,
+    model_path: str | Path | None = None,
+    recognizer_factory=None,
+    expected_vocab_size: int = 198,
+    expected_feat_dim: int = 512,
+    timeout_seconds: float = 300.0,
+) -> AdaptationReport:
+    """Safely validate, evaluate on held-out lines, and import an external ``.npz`` head."""
+    import shutil
+    from .mishkefet import mishkefet_importable
+    from .models import MODEL_ARTIFACTS, models_directory
+    from .worker import worker_path
+
+    if recognizer_factory is None and not mishkefet_importable():
+        src = Path(npz_path)
+        _validate_npz_head_pure_python(
+            src,
+            expected_vocab_size=expected_vocab_size,
+            expected_feat_dim=expected_feat_dim,
+        )
+        store = SchoolLearningStore(store_root)
+        profile = store.get_writer(writer_id)
+        if profile is None:
+            raise KeyError(f"לא נמצא פרופיל תלמיד עבור {writer_id!r}.")
+        art = MODEL_ARTIFACTS.get("mishkefet-v1")
+        m_path = (
+            Path(model_path)
+            if model_path is not None
+            else models_directory() / (art.filename if art else "mishkefet-v1.pt")
+        )
+        w_exe = worker_path()
+        if (
+            w_exe is not None
+            and w_exe.is_file()
+            and m_path.is_file()
+            and len(store.list_writer_samples(profile.writer_id)) >= MIN_VERIFIED_FOR_ADAPT
+        ):
+            with tempfile.TemporaryDirectory(prefix="hw-imp-") as td:
+                shutil.copyfile(src, Path(td) / "candidate.npz")
+                job_file = Path(td) / "import-job.json"
+                res_file = Path(td) / "import-result.json"
+                job_file.write_text(
+                    json.dumps(
+                        {
+                            "mode": "import_npz",
+                            "writer_id": profile.writer_id,
+                            "model_path": str(m_path),
+                            "learning_dir": str(store.root),
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+                subprocess.run(
+                    [
+                        str(w_exe),
+                        "--train-writer",
+                        str(job_file),
+                        "--result",
+                        str(res_file),
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=timeout_seconds,
+                    check=False,
+                )
+                if res_file.is_file():
+                    payload = json.loads(res_file.read_text(encoding="utf-8"))
+                    if not payload.get("error"):
+                        return AdaptationReport.from_dict(payload)
+
+    return import_external_adapter_in_process(
+        writer_id,
+        npz_path,
+        store_root=store_root,
+        model_path=model_path,
+        recognizer_factory=recognizer_factory,
+        expected_vocab_size=expected_vocab_size,
+        expected_feat_dim=expected_feat_dim,
+    )
+

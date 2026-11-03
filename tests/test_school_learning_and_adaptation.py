@@ -1643,6 +1643,53 @@ class HardeningAndEdgeCaseRegressionTests(unittest.TestCase):
         self.assertEqual(getattr(ctx.exception, "rescue_path", None), rescues[0])
         self.assertTrue((rescues[0] / "learning.sqlite3").is_file())
 
+    @unittest.skipUnless(HAS_NUMPY, "requires numpy")
+    def test_worker_train_writer_enforces_temp_ipc_and_allowed_paths(self) -> None:
+        import shutil
+        from ocr_worker.main import _run_train_writer
+
+        # 1) Rejects IPC files outside system temp directory
+        repo_root = Path(__file__).resolve().parents[1]
+        rc_outside = _run_train_writer(
+            repo_root / "outside-job.json",
+            repo_root / "outside-res.json",
+        )
+        self.assertEqual(rc_outside, 1)
+        self.assertFalse((repo_root / "outside-res.json").exists())
+
+        # 2) Accepts valid temp IPC JSON and staged candidate.npz
+        student = self.store.create_writer("בדיקת תהליך עבודה")
+        ext_npz = Path(self._tmp.name) / "cand.npz"
+        np.savez(
+            ext_npz,
+            W=np.zeros((198, 512), dtype=np.float32),
+            b=np.zeros((198,), dtype=np.float32),
+        )
+        dummy_model = Path(self._tmp.name) / "mishkefet-v1.pt"
+        dummy_model.write_bytes(b"pt")
+
+        with tempfile.TemporaryDirectory(prefix="hw-worker-ipc-") as ipc_dir:
+            ipc_p = Path(ipc_dir)
+            shutil.copyfile(ext_npz, ipc_p / "candidate.npz")
+            job_f = ipc_p / "job.json"
+            res_f = ipc_p / "res.json"
+            job_f.write_text(
+                json.dumps(
+                    {
+                        "mode": "import_npz",
+                        "writer_id": student.writer_id,
+                        "model_path": str(dummy_model),
+                        "learning_dir": str(self.store.root),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            rc = _run_train_writer(job_f, res_f)
+            self.assertEqual(rc, 0)
+            out = json.loads(res_f.read_text(encoding="utf-8"))
+            self.assertEqual(out["status"], "insufficient_evidence")
+            self.assertFalse(out["accepted"])
+
 
 if __name__ == "__main__":
     unittest.main()

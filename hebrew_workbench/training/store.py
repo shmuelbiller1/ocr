@@ -2389,7 +2389,7 @@ class SchoolLearningStore:
                             f"Restore rollback failed ({rollback_exc!r}). "
                             f"Original store data is preserved at: {prev_root}"
                         )
-                    raise original_exc
+                    raise original_exc from rollback_exc
                 shutil.rmtree(prev_root, ignore_errors=True)
                 self._schema_ready = False
                 raise

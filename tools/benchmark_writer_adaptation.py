@@ -26,7 +26,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 import tempfile
 import time
@@ -483,6 +482,17 @@ def _run_child_real_model_benchmark(models_dir: Path, corpus_dir: Path) -> dict:
         }
 
 
+def _confine_benchmark_path(raw: str | Path, repo_base: str, tmp_base: str) -> Path:
+    real = os.path.realpath(str(raw))
+    repo_prefix = repo_base if repo_base.endswith(os.sep) else repo_base + os.sep
+    if real.startswith(repo_prefix):
+        return Path(real)
+    tmp_prefix = tmp_base if tmp_base.endswith(os.sep) else tmp_base + os.sep
+    if real.startswith(tmp_prefix):
+        return Path(real)
+    raise ValueError("Benchmark path must stay within repository or temp dir")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -508,23 +518,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Run only the 50-student store, backup/restore, export & bounded-RAM check",
     )
-    parser.add_argument(
-        "--child-real-eval",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
     args = parser.parse_args(argv)
 
-    if args.child_real_eval:
-        res = _run_child_real_model_benchmark(
-            args.models.resolve(), args.corpus.resolve()
-        )
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(
-            json.dumps(res, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        return 0
+    repo_base = os.path.realpath(str(REPO_ROOT))
+    tmp_base = os.path.realpath(tempfile.gettempdir())
+
+    safe_models = _confine_benchmark_path(args.models, repo_base, tmp_base)
+    safe_corpus = _confine_benchmark_path(args.corpus, repo_base, tmp_base)
+    safe_output = _confine_benchmark_path(args.output, repo_base, tmp_base)
+    if safe_output.suffix.lower() != ".json":
+        raise ValueError("Output JSON must end with .json")
 
     report: dict[str, object] = {
         "platform": sys.platform,
@@ -533,43 +536,14 @@ def main(argv: list[str] | None = None) -> int:
         "real_handwriting_evaluation": None,
     }
 
-    model_pt = args.models / "mishkefet-v1.pt"
+    model_pt = safe_models / "mishkefet-v1.pt"
     if not args.low_memory_only and model_pt.is_file():
-        with tempfile.TemporaryDirectory(prefix="hw-child-out-") as td:
-            child_json = Path(td) / "real_eval.json"
-            env = dict(os.environ)
-            env["PYTHONUTF8"] = "1"
-            env["PYTHONIOENCODING"] = "utf-8:replace"
-            proc = subprocess.run(
-                [
-                    sys.executable,
-                    str(Path(__file__).resolve()),
-                    "--child-real-eval",
-                    "--models",
-                    str(args.models),
-                    "--corpus",
-                    str(args.corpus),
-                    "--output",
-                    str(child_json),
-                ],
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=False,
-                timeout=600,
-            )
-            if proc.returncode != 0 or not child_json.is_file():
-                err = proc.stderr.decode("utf-8", errors="replace")
-                print(err, file=sys.stderr)
-                raise SystemExit(
-                    f"Real-model writer adaptation benchmark failed (rc={proc.returncode})"
-                )
-            report["real_handwriting_evaluation"] = json.loads(
-                child_json.read_text(encoding="utf-8")
-            )
+        report["real_handwriting_evaluation"] = _run_child_real_model_benchmark(
+            safe_models, safe_corpus
+        )
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
+    safe_output.parent.mkdir(parents=True, exist_ok=True)
+    safe_output.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )

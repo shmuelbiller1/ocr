@@ -1341,7 +1341,11 @@ class DiplomaticVerificationDialog(QDialog):
                     self, "שחזור הושלם", "מאגר הלמידה שוחזר ואומת בהצלחה."
                 )
             except Exception as exc:
-                QMessageBox.warning(self, "שגיאה בשחזור", str(exc))
+                msg = str(exc)
+                rescue = getattr(exc, "rescue_path", None)
+                if rescue is not None:
+                    msg += f"\n\nנתוני המאגר המקוריים שלא שוחזרו נשמרו בתיקייה:\n{rescue}"
+                QMessageBox.warning(self, "שגיאה בשחזור", msg)
 
     def _refresh_school_stats_label(self) -> None:
         summary = self.store.school_summary()
