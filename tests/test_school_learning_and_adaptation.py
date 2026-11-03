@@ -1433,6 +1433,212 @@ class HardeningAndEdgeCaseRegressionTests(unittest.TestCase):
         )
         self.assertEqual(rolled.active_round, 1)
 
+    def test_exported_train_samples_never_enter_import_gate_after_more_pages_verified(
+        self,
+    ) -> None:
+        from hebrew_workbench.engine.writer_adaptation import (
+            _split_for_external_import,
+        )
+        from hebrew_workbench.training import STATUS_VERIFIED, fnv1a_32
+        from hebrew_workbench.training.store import (
+            compute_document_id,
+            split_writer_train_and_holdout,
+        )
+
+        student = self.store.create_writer("בדיקת דליפה לאחר הוספת עמודים")
+        doc_path = Path(self._tmp.name) / "multi_round_export.pdf"
+        doc_path.write_bytes(b"pdf-placeholder")
+        doc_key = compute_document_id(doc_path)
+
+        # Pick two page numbers with identical FNV-1a % 8 bucket so that:
+        # - when pg_a has 7 lines and pg_b has 3 lines (N=10), len-tiebreak puts pg_b (3) first -> pg_a goes to train.jsonl!
+        # - Wait: let's pick pg_a in a LOWER FNV-1a % 8 bucket than pg_b and pg_c!
+        # Then at T1 (pg_a=7, pg_b=3, N=10), pg_a ranks #1, holding out pg_a leaves 3 < 6, so pg_a is skipped -> train.jsonl!
+        # And at T2 (+pg_c=10, N=20), pg_a STILL ranks #1, holding out pg_a leaves 13 >= 6 -> naive split holds out pg_a!
+        buckets: dict[int, list[int]] = {}
+        for p in range(1, 40):
+            b = fnv1a_32(f"{student.writer_id}:{doc_key}:{p}") % 8
+            buckets.setdefault(b, []).append(p)
+        sorted_b = sorted(buckets.keys())
+        pg_a = buckets[sorted_b[0]][0]
+        pg_b = buckets[sorted_b[1]][0]
+        pg_c = buckets[sorted_b[2]][0]
+
+        # At T1: pg_a has 7 lines, pg_b has 3 lines (N=10).
+        # Holding out pg_a would leave 3 < 6 train lines, so pg_b is held out
+        # and all 7 lines of pg_a go to train.jsonl!
+        t1_inputs = [
+            VerifiedLineInput(
+                crop_image=_make_line_image(seed=i),
+                diplomatic_text=f"שורת אימון עמוד א {i}",
+                page_number=pg_a,
+                line_index=i,
+                review_status=STATUS_VERIFIED,
+                verified_exact_as_written=True,
+                grammar_unedited_confirmed=True,
+            )
+            for i in range(7)
+        ] + [
+            VerifiedLineInput(
+                crop_image=_make_line_image(seed=20 + i),
+                diplomatic_text=f"שורת בקרה עמוד ב {i}",
+                page_number=pg_b,
+                line_index=i,
+                review_status=STATUS_VERIFIED,
+                verified_exact_as_written=True,
+                grammar_unedited_confirmed=True,
+            )
+            for i in range(3)
+        ]
+        self.store.record_verified_lines(student.writer_id, doc_path, t1_inputs)
+
+        export1 = Path(self._tmp.name) / "export_t1.zip"
+        self.store.export_online_training_bundle_zip(
+            export1, anonymize_writers=False
+        )
+        with zipfile.ZipFile(export1, "r") as zf:
+            t1_train_pages = {
+                json.loads(ln)["page_number"]
+                for ln in zf.read("train.jsonl").decode("utf-8").splitlines()
+                if ln.strip()
+            }
+        self.assertIn(pg_a, t1_train_pages)
+        exported_ids = self.store.exported_training_sample_ids(student.writer_id)
+        self.assertEqual(len(exported_ids), 7)
+
+        # At T2: student verifies pg_c with 10 lines (N=20).
+        # Naive recalculation now holds out pg_a because 20 - 7 = 13 >= 6!
+        t2_inputs = [
+            VerifiedLineInput(
+                crop_image=_make_line_image(seed=40 + i),
+                diplomatic_text=f"שורה חדשה עמוד ג {i}",
+                page_number=pg_c,
+                line_index=i,
+                review_status=STATUS_VERIFIED,
+                verified_exact_as_written=True,
+                grammar_unedited_confirmed=True,
+            )
+            for i in range(10)
+        ]
+        self.store.record_verified_lines(student.writer_id, doc_path, t2_inputs)
+        all_samples = self.store.list_writer_samples(student.writer_id)
+        self.assertEqual(len(all_samples), 20)
+
+        _naive_tr, naive_held = split_writer_train_and_holdout(all_samples)
+        self.assertTrue(
+            any(s.sample_id in exported_ids for s in naive_held),
+            "Precondition: naive split would have placed pg_a into held_out",
+        )
+
+        # Import split strictly excludes every previously exported training ID!
+        _imp_tr, imp_held = _split_for_external_import(all_samples, exported_ids)
+        self.assertGreaterEqual(len(imp_held), 4)
+        self.assertEqual(
+            {s.sample_id for s in imp_held} & exported_ids,
+            set(),
+        )
+
+        # Second export also keeps previously exported train lines out of val.jsonl!
+        export2 = Path(self._tmp.name) / "export_t2.zip"
+        self.store.export_online_training_bundle_zip(
+            export2, anonymize_writers=False
+        )
+        with zipfile.ZipFile(export2, "r") as zf:
+            t2_val_pages = {
+                json.loads(ln)["page_number"]
+                for ln in zf.read("val.jsonl").decode("utf-8").splitlines()
+                if ln.strip()
+            }
+        self.assertNotIn(pg_a, t2_val_pages)
+
+    def test_restore_rollback_preserves_untouched_entries_on_first_loop_failure_and_rescues(
+        self,
+    ) -> None:
+        from hebrew_workbench.training import STATUS_VERIFIED
+        import hebrew_workbench.training.store as store_mod
+
+        s_orig = self.store.create_writer("תלמיד מקורי מוגן")
+        self.store.record_verified_lines(
+            s_orig.writer_id,
+            "orig_keep.png",
+            [
+                VerifiedLineInput(
+                    crop_image=_make_line_image(seed=3),
+                    diplomatic_text="מידע מקורי שאסור למחוק",
+                    page_number=1,
+                    line_index=0,
+                    review_status=STATUS_VERIFIED,
+                    verified_exact_as_written=True,
+                    grammar_unedited_confirmed=True,
+                )
+            ],
+        )
+
+        other_dir = Path(self._tmp.name) / "other_src"
+        other_store = SchoolLearningStore(other_dir)
+        s_other = other_store.create_writer("גיבוי חיצוני")
+        other_store.record_verified_lines(
+            s_other.writer_id,
+            "other.png",
+            [
+                VerifiedLineInput(
+                    crop_image=_make_line_image(seed=9),
+                    diplomatic_text="שורה מגיבוי",
+                    page_number=1,
+                    line_index=0,
+                    review_status=STATUS_VERIFIED,
+                    verified_exact_as_written=True,
+                    grammar_unedited_confirmed=True,
+                )
+            ],
+        )
+        bzip = Path(self._tmp.name) / "bzip.zip"
+        other_store.backup_database_zip(bzip)
+
+        # 1) Fail on the 2nd move in Loop 1 (moving existing entries out of self.root):
+        # untouched original entries must NOT be deleted!
+        real_swap = store_mod._swap_store_entry
+        first_loop_calls = {"n": 0}
+
+        def _fail_second_existing_move(src: Path, dst: Path) -> None:
+            if src.parent == self.store.root:
+                first_loop_calls["n"] += 1
+                if first_loop_calls["n"] >= 2:
+                    raise PermissionError("Simulated locked file in self.root")
+            real_swap(src, dst)
+
+        with mock.patch.object(
+            store_mod, "_swap_store_entry", side_effect=_fail_second_existing_move
+        ):
+            with self.assertRaises(PermissionError):
+                self.store.restore_database_zip(bzip)
+
+        self.assertTrue(self.store.db_path.is_file())
+        self.assertEqual(len(self.store.list_writers()), 1)
+        self.assertEqual(
+            self.store.list_writer_samples(s_orig.writer_id)[0].diplomatic_text,
+            "מידע מקורי שאסור למחוק",
+        )
+
+        # 2) If rollback's own os.replace fails, prev_root is rescued outside temp dir!
+        real_replace = os.replace
+
+        def _fail_staged_and_rollback(src, dst):
+            src_p, dst_p = Path(src), Path(dst)
+            if "staged" in src_p.parts:
+                raise OSError("Simulated staged move failure")
+            if "previous" in src_p.parts and dst_p.parent == self.store.root:
+                raise PermissionError("Simulated rollback replace failure")
+            return real_replace(src, dst)
+
+        with mock.patch("hebrew_workbench.training.store.os.replace", side_effect=_fail_staged_and_rollback):
+            with self.assertRaises(PermissionError):
+                self.store.restore_database_zip(bzip)
+
+        rescues = list(self.store.root.parent.glob(".hw-restore-rescue-*"))
+        self.assertEqual(len(rescues), 1)
+        self.assertTrue((rescues[0] / "learning.sqlite3").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

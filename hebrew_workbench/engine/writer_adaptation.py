@@ -432,6 +432,54 @@ def _split_train_and_holdout(
     )
 
 
+def _split_for_external_import(
+    samples: list[VerifiedLineSample],
+    exported_train_ids: set[str],
+) -> tuple[list[VerifiedLineSample], list[VerifiedLineSample]]:
+    """Select an unseen held-out set for externally trained ``.npz`` adapters.
+
+    Guarantees that no sample previously emitted into ``train.jsonl`` for this
+    writer is ever included in ``held_out_samples``, even when additional pages
+    were verified between export and import.
+    """
+    base_train, base_held = _split_train_and_holdout(samples)
+    if not exported_train_ids:
+        return base_train, base_held
+
+    clean_held = [s for s in base_held if s.sample_id not in exported_train_ids]
+    held_ids = {s.sample_id for s in clean_held}
+    target_hold = max(MIN_HELDOUT_SAMPLES, int(round(0.20 * len(samples))))
+
+    if len(clean_held) < target_hold:
+        unseen_candidates = [
+            s
+            for s in samples
+            if s.sample_id not in exported_train_ids and s.sample_id not in held_ids
+        ]
+        by_page: dict[tuple[str, int], list[VerifiedLineSample]] = {}
+        for s in unseen_candidates:
+            by_page.setdefault((s.document_key, s.page_number), []).append(s)
+        ranked_pages = sorted(
+            by_page.keys(),
+            key=lambda pg: (
+                fnv1a_32(
+                    f"{unseen_candidates[0].writer_id}:{pg[0]}:{pg[1]}"
+                )
+                % 8,
+                pg,
+            ),
+        )
+        for pg in ranked_pages:
+            for s in by_page[pg]:
+                clean_held.append(s)
+                held_ids.add(s.sample_id)
+            if len(clean_held) >= target_hold:
+                break
+
+    train_out = [s for s in samples if s.sample_id not in held_ids]
+    return train_out[-MAX_TRAIN_SAMPLES:], clean_held
+
+
 def _scale_width(im: Image.Image, scale: float) -> Image.Image:
     if abs(scale - 1.0) < 1e-3:
         return im
@@ -625,26 +673,46 @@ def train_writer_profile_in_process(
     held_cer_before = float(prev_held["cer"])
     held_wer_before = float(prev_held["wer"])
 
-    candidate_cfgs = [cfg]
+    candidate_runs: list[tuple[list[tuple[object, list[int]]], AdaptConfig]] = [
+        (train_fit_pairs, cfg)
+    ]
     if len(train_plain_pairs) < 48 and cfg.steps > 45:
-        candidate_cfgs.append(
-            AdaptConfig(
-                steps=45,
-                lr=cfg.lr,
-                l2=max(0.45, cfg.l2),
-                small_sample_l2=max(0.45, cfg.small_sample_l2),
-                beta1=cfg.beta1,
-                beta2=cfg.beta2,
-                eps=cfg.eps,
-                aug_scales=cfg.aug_scales,
+        candidate_runs.append(
+            (
+                train_fit_pairs,
+                AdaptConfig(
+                    steps=45,
+                    lr=cfg.lr,
+                    l2=max(0.45, cfg.l2),
+                    small_sample_l2=max(0.45, cfg.small_sample_l2),
+                    beta1=cfg.beta1,
+                    beta2=cfg.beta2,
+                    eps=cfg.eps,
+                    aug_scales=cfg.aug_scales,
+                ),
+            )
+        )
+        candidate_runs.append(
+            (
+                train_plain_pairs,
+                AdaptConfig(
+                    steps=35,
+                    lr=min(5e-4, cfg.lr),
+                    l2=max(1.0, cfg.l2),
+                    small_sample_l2=max(1.0, cfg.small_sample_l2),
+                    beta1=cfg.beta1,
+                    beta2=cfg.beta2,
+                    eps=cfg.eps,
+                    aug_scales=(),
+                ),
             )
         )
 
     best_tuple: tuple[float, float, float] | None = None
     W_new, b_new = W_prev, b_prev
     cand_held: dict[str, float | int] = prev_held
-    for c_cfg in candidate_cfgs:
-        w_cand, b_cand = train_ctc_head(W0, b0, train_fit_pairs, cfg=c_cfg)
+    for c_pairs, c_cfg in candidate_runs:
+        w_cand, b_cand = train_ctc_head(W0, b0, c_pairs, cfg=c_cfg)
         h_eval = evaluate_head_detailed(w_cand, b_cand, held_out_pairs, charset)
         score_key = (
             round(float(h_eval["cer"]), 6),
@@ -1157,7 +1225,10 @@ def import_external_adapter_npz(
     else:
         W_prev, b_prev = W0.copy(), b0.copy()
 
-    train_samples, held_out_samples = _split_train_and_holdout(samples)
+    exported_train_ids = store.exported_training_sample_ids(profile.writer_id)
+    train_samples, held_out_samples = _split_for_external_import(
+        samples, exported_train_ids
+    )
     held_out_pairs: list[tuple[object, list[int]]] = []
     held_chars = 0
     for s in held_out_samples:

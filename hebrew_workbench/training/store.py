@@ -40,6 +40,7 @@ import re
 import shutil
 import sqlite3
 import tempfile
+import uuid
 import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -553,6 +554,17 @@ CREATE TABLE IF NOT EXISTS vocab_terms (
     note TEXT NOT NULL DEFAULT '',
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS exported_training_samples (
+    export_id TEXT NOT NULL,
+    writer_id TEXT NOT NULL,
+    sample_id TEXT NOT NULL,
+    exported_at TEXT NOT NULL,
+    PRIMARY KEY (export_id, sample_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exported_train_writer
+    ON exported_training_samples(writer_id, sample_id);
 """
 
 
@@ -768,9 +780,17 @@ class SchoolLearningStore:
                 conn.execute(
                     "DELETE FROM reviewed_lines WHERE writer_id = ?", (wid,)
                 )
+                conn.execute(
+                    "DELETE FROM exported_training_samples WHERE writer_id = ?",
+                    (wid,),
+                )
             else:
                 conn.execute(
                     "UPDATE reviewed_lines SET writer_id = '' WHERE writer_id = ?",
+                    (wid,),
+                )
+                conn.execute(
+                    "UPDATE exported_training_samples SET writer_id = '' WHERE writer_id = ?",
                     (wid,),
                 )
             conn.execute(
@@ -1883,40 +1903,93 @@ class SchoolLearningStore:
         for idx, wid in enumerate(distinct_wids, start=1):
             anon_map[wid] = f"writer_{idx:03d}" if anonymize_writers else wid
 
-        # Unified page-grouped train/val split per writer matching local adaptation
-        # so exported train.jsonl never overlaps local held-out validation!
+        # Unified page-grouped train/val split per writer matching local adaptation,
+        # while monotonically preserving any previously exported train.jsonl IDs
+        # so exported training examples never enter val.jsonl or later import gates!
         by_writer: dict[str, list[VerifiedLineSample]] = {}
         for smp in verified:
             by_writer.setdefault(smp.writer_id, []).append(smp)
 
         val_ids: set[str] = set()
         for wid, wsamples in by_writer.items():
-            if len(wsamples) >= 8:
-                _tr, held = split_writer_train_and_holdout(
-                    wsamples, max_train_samples=max(240, len(wsamples))
-                )
-                val_ids.update(s.sample_id for s in held)
-            else:
-                pages = sorted({(s.document_key, s.page_number) for s in wsamples})
-                if len(pages) >= 2:
-                    ranked_pages = sorted(
-                        pages,
-                        key=lambda pg: (
-                            fnv1a_32(f"{wid}:{pg[0]}:{pg[1]}") % 8,
-                            pg,
-                        ),
+            prev_exported_train = self.exported_training_sample_ids(wid)
+            committed_train_cnt = sum(
+                1 for s in wsamples if s.sample_id in prev_exported_train
+            )
+            unexported = [
+                s for s in wsamples if s.sample_id not in prev_exported_train
+            ]
+            if not prev_exported_train:
+                if len(wsamples) >= 8:
+                    _tr, held = split_writer_train_and_holdout(
+                        wsamples, max_train_samples=max(240, len(wsamples))
                     )
-                    held_pg = ranked_pages[0]
-                    for s in wsamples:
-                        if (s.document_key, s.page_number) == held_pg:
+                    val_ids.update(s.sample_id for s in held)
+                else:
+                    pages = sorted(
+                        {(s.document_key, s.page_number) for s in wsamples}
+                    )
+                    if len(pages) >= 2:
+                        ranked_pages = sorted(
+                            pages,
+                            key=lambda pg: (
+                                fnv1a_32(f"{wid}:{pg[0]}:{pg[1]}") % 8,
+                                pg,
+                            ),
+                        )
+                        held_pg = ranked_pages[0]
+                        for s in wsamples:
+                            if (s.document_key, s.page_number) == held_pg:
+                                val_ids.add(s.sample_id)
+                    elif len(wsamples) >= 4:
+                        for s in wsamples:
+                            if is_held_out_sample(s.sample_id):
+                                val_ids.add(s.sample_id)
+                        if not any(s.sample_id in val_ids for s in wsamples):
+                            val_ids.add(wsamples[-1].sample_id)
+            elif unexported:
+                # Never place previously exported training lines into val.jsonl;
+                # select validation pages/lines strictly from unexported samples.
+                target_hold = max(4, int(round(0.2 * len(wsamples))))
+                min_total_train = min(6, len(wsamples))
+                by_page: dict[tuple[str, int], list[VerifiedLineSample]] = {}
+                for s in unexported:
+                    by_page.setdefault((s.document_key, s.page_number), []).append(s)
+                ranked_pages = sorted(
+                    by_page.keys(),
+                    key=lambda pg: (
+                        fnv1a_32(f"{wid}:{pg[0]}:{pg[1]}") % 8,
+                        pg,
+                    ),
+                )
+                held_cnt = 0
+                for pg in ranked_pages:
+                    pg_samples = by_page[pg]
+                    remaining_train = committed_train_cnt + (
+                        len(unexported) - (held_cnt + len(pg_samples))
+                    )
+                    if remaining_train >= min_total_train and (
+                        held_cnt < target_hold or held_cnt == 0
+                    ):
+                        for s in pg_samples:
                             val_ids.add(s.sample_id)
-                elif len(wsamples) >= 4:
-                    for s in wsamples:
-                        if is_held_out_sample(s.sample_id):
+                        held_cnt += len(pg_samples)
+                        if held_cnt >= target_hold:
+                            break
+                if held_cnt == 0 and len(unexported) >= 1:
+                    for s in unexported:
+                        if (
+                            committed_train_cnt
+                            + (len(unexported) - (held_cnt + 1))
+                            >= min_total_train
+                            and is_held_out_sample(s.sample_id)
+                        ):
                             val_ids.add(s.sample_id)
-                    if not any(s.sample_id in val_ids for s in wsamples):
-                        val_ids.add(wsamples[-1].sample_id)
+                            held_cnt += 1
 
+        exported_at = _now_iso()
+        export_id = f"exp-{uuid.uuid4().hex[:12]}"
+        exported_train_pairs: list[tuple[str, str]] = []
         train_rows: list[str] = []
         val_rows: list[str] = []
         hf_meta_rows: list[str] = []
@@ -2013,7 +2086,23 @@ class SchoolLearningStore:
                     val_rows.append(line_json)
                 else:
                     train_rows.append(line_json)
+                    exported_train_pairs.append((smp.writer_id, smp.sample_id))
 
+            zf.writestr(
+                "export_manifest.json",
+                json.dumps(
+                    {
+                        "export_id": export_id,
+                        "exported_at": exported_at,
+                        "anonymized": anonymize_writers,
+                        "train_samples": len(train_rows),
+                        "val_samples": len(val_rows),
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+            )
             zf.writestr(
                 "train.jsonl",
                 ("\n".join(train_rows) + "\n") if train_rows else "",
@@ -2083,7 +2172,44 @@ class SchoolLearningStore:
                     ("\n".join(unc_rows) + "\n") if unc_rows else "",
                 )
 
+        if exported_train_pairs:
+            self._record_exported_training_samples(
+                export_id, exported_train_pairs, exported_at
+            )
         return dest
+
+    def exported_training_sample_ids(self, writer_id: str) -> set[str]:
+        """Return all ``sample_id``s ever emitted in ``train.jsonl`` for ``writer_id``."""
+        if not self.db_path.is_file():
+            return set()
+        self._ensure_db()
+        clean_wid = (writer_id or "").strip()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT sample_id FROM exported_training_samples WHERE writer_id = ?",
+                (clean_wid,),
+            ).fetchall()
+        return {str(r["sample_id"]) for r in rows}
+
+    def _record_exported_training_samples(
+        self,
+        export_id: str,
+        pairs: list[tuple[str, str]],
+        exported_at: str,
+    ) -> None:
+        self._ensure_db()
+        with self._connect() as conn:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO exported_training_samples(
+                    export_id, writer_id, sample_id, exported_at
+                ) VALUES (?, ?, ?, ?)
+                """,
+                [
+                    (export_id, (wid or "").strip(), sid, exported_at)
+                    for wid, sid in pairs
+                ],
+            )
 
     def export_school_dataset_zip(
         self,
@@ -2221,9 +2347,10 @@ class SchoolLearningStore:
 
             # Same-filesystem entry-level swap with full rollback on failure:
             # avoids renaming self.root itself (Windows NTFS directory-handle safe)
-            # and never deletes previous data before replacement succeeds.
+            # and never deletes untouched original entries before replacement succeeds.
             prev_root.mkdir(parents=True, exist_ok=True)
             self.root.mkdir(parents=True, exist_ok=True)
+            original_names = {p.name for p in self.root.iterdir()}
             moved_existing: list[str] = []
             try:
                 for existing_item in list(self.root.iterdir()):
@@ -2234,14 +2361,29 @@ class SchoolLearningStore:
                 self._schema_ready = False
                 self._ensure_db()
             except Exception:
-                for partial_item in list(self.root.iterdir()):
-                    if partial_item.is_dir():
-                        shutil.rmtree(partial_item, ignore_errors=True)
-                    else:
-                        partial_item.unlink(missing_ok=True)
-                for name in moved_existing:
-                    src_prev = prev_root / name
-                    if src_prev.exists():
-                        os.replace(src_prev, self.root / name)
+                untouched = original_names - set(moved_existing)
+                try:
+                    for partial_item in list(self.root.iterdir()):
+                        if partial_item.name in untouched:
+                            continue
+                        if partial_item.is_dir():
+                            shutil.rmtree(partial_item)
+                        else:
+                            partial_item.unlink(missing_ok=True)
+                    for name in moved_existing:
+                        src_prev = prev_root / name
+                        if src_prev.exists():
+                            os.replace(src_prev, self.root / name)
+                except Exception:
+                    rescue = (
+                        self.root.parent
+                        / f".hw-restore-rescue-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+                    )
+                    try:
+                        os.replace(prev_root, rescue)
+                    except OSError:
+                        shutil.copytree(prev_root, rescue, dirs_exist_ok=True)
+                    self._schema_ready = False
+                    raise
                 self._schema_ready = False
                 raise

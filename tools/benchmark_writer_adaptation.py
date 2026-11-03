@@ -71,7 +71,7 @@ def _align_crops_to_reference_lines(
     boxes: list,
     ocr_lines: list[str],
     ref_lines: list[str],
-    max_cer: float = 0.72,
+    max_cer: float = 0.55,
 ) -> list[tuple[int, Image.Image, tuple[float, float, float, float], str, str]]:
     """Monotone DP alignment pairing detected line crops with ground-truth lines.
 
