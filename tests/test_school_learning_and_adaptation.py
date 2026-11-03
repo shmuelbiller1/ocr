@@ -1071,6 +1071,67 @@ class HardeningAndEdgeCaseRegressionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
+    def test_external_adapter_worker_result_and_failures(self) -> None:
+        import struct
+        import subprocess
+        from hebrew_workbench.engine import writer_adaptation
+
+        student = self.store.create_writer("ייבוא דרך תהליך עבודה")
+        candidate = Path(self._tmp.name) / "candidate.npz"
+
+        def array_bytes(shape, count):
+            header = f"{{'descr': '<f4', 'fortran_order': False, 'shape': {shape!r}, }}"
+            padding = (-10 - len(header) - 1) % 64
+            header = (header + " " * padding + "\n").encode("ascii")
+            return b"\x93NUMPY\x01\x00" + struct.pack("<H", len(header)) + header + b"\0" * (count * 4)
+
+        with zipfile.ZipFile(candidate, "w") as archive:
+            archive.writestr("W.npy", array_bytes((2, 3), 6))
+            archive.writestr("b.npy", array_bytes((2,), 2))
+        worker = Path(self._tmp.name) / "worker"
+        worker.touch()
+        model = Path(self._tmp.name) / "model.pt"
+        model.touch()
+        report = writer_adaptation.AdaptationReport(
+            writer_id=student.writer_id, writer_name=student.name,
+            accepted=True, active_round=2, samples_total=8, train_samples=6,
+            held_out_samples=2, held_out_cer_before=0.2, held_out_cer_after=0.1,
+            train_cer_before=0.0, train_cer_after=0.0, message="imported",
+            status="accepted",
+        )
+
+        for case in ("success", "error", "missing"):
+            with self.subTest(case=case):
+                def run_worker(args, **kwargs):
+                    result = Path(args[args.index("--result") + 1])
+                    if case != "missing":
+                        payload = (
+                            report.to_dict() if case == "success"
+                            else {"error": "worker failed"}
+                        )
+                        result.write_text(json.dumps(payload), encoding="utf-8")
+                    return subprocess.CompletedProcess(
+                        args, 0 if case == "success" else 7,
+                        stdout=b"", stderr=b"worker stderr",
+                    )
+
+                with mock.patch("hebrew_workbench.engine.mishkefet.mishkefet_importable", return_value=False), \
+                     mock.patch("hebrew_workbench.engine.worker.worker_path", return_value=worker), \
+                     mock.patch.object(SchoolLearningStore, "list_writer_samples", return_value=[None] * 8), \
+                     mock.patch.object(writer_adaptation.subprocess, "run", side_effect=run_worker) as run, \
+                     mock.patch.object(writer_adaptation, "import_external_adapter_in_process") as fallback:
+                    kwargs = dict(store_root=self.learn_dir, model_path=model,
+                                  expected_vocab_size=2, expected_feat_dim=3)
+                    if case == "success":
+                        self.assertEqual(writer_adaptation.import_external_adapter_npz(
+                            student.writer_id, candidate, **kwargs), report)
+                    else:
+                        message = "worker failed" if case == "error" else r"\(7\): worker stderr"
+                        with self.assertRaisesRegex(RuntimeError, message):
+                            writer_adaptation.import_external_adapter_npz(student.writer_id, candidate, **kwargs)
+                    run.assert_called_once()
+                    fallback.assert_not_called()
+
     def test_export_succeeds_when_empty_and_draft_only_profiles_exist(self) -> None:
         from hebrew_workbench.training import STATUS_NOT_REVIEWED, STATUS_VERIFIED
 

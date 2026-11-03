@@ -1386,7 +1386,7 @@ def import_external_adapter_npz(
                     ),
                     encoding="utf-8",
                 )
-                subprocess.run(
+                proc = subprocess.run(
                     [
                         str(w_exe),
                         "--train-writer",
@@ -1399,10 +1399,15 @@ def import_external_adapter_npz(
                     timeout=timeout_seconds,
                     check=False,
                 )
-                if res_file.is_file():
-                    payload = json.loads(res_file.read_text(encoding="utf-8"))
-                    if not payload.get("error"):
-                        return AdaptationReport.from_dict(payload)
+                if not res_file.is_file():
+                    err = proc.stderr.decode("utf-8", errors="replace").strip()
+                    raise RuntimeError(
+                        f"ייבוא מתאם כתב היד נכשל ({proc.returncode}): {err}"
+                    )
+                payload = json.loads(res_file.read_text(encoding="utf-8"))
+                if payload.get("error"):
+                    raise RuntimeError(str(payload["error"]))
+                return AdaptationReport.from_dict(payload)
 
     return import_external_adapter_in_process(
         writer_id,
