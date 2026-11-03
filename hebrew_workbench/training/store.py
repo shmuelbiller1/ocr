@@ -767,176 +767,212 @@ class SchoolLearningStore:
         sharing_on = self.vocab_sharing_enabled()
         new_verified_texts: list[str] = []
 
-        with self._connect() as conn:
-            for item, status in resolved_statuses:
+        # Stage all crop PNGs to sibling temp files FIRST so a mid-batch I/O or
+        # DB failure never overwrites an existing crop while leaving old DB labels.
+        staged_crops: dict[tuple[int, int], tuple[str, str, Path, Path]] = {}
+        try:
+            for idx, (item, _status) in enumerate(resolved_statuses):
                 pnum = max(1, int(item.page_number))
                 lidx = max(0, int(item.line_index))
                 sample_id = f"{bucket}--{doc_key}-p{pnum:03d}-l{lidx:03d}"
                 rel_crop = f"crops/{bucket}/{sample_id}.png"
                 abs_crop = self.root.joinpath(*rel_crop.split("/"))
-                _atomic_save_png(abs_crop, item.crop_image)
+                stage_crop = abs_crop.with_name(
+                    f".stage-{os.getpid()}-{idx}-{sample_id}.png"
+                )
+                _atomic_save_png(stage_crop, item.crop_image)
+                prev_staged = staged_crops.get((pnum, lidx))
+                if prev_staged is not None:
+                    prev_staged[2].unlink(missing_ok=True)
+                staged_crops[(pnum, lidx)] = (
+                    sample_id,
+                    rel_crop,
+                    stage_crop,
+                    abs_crop,
+                )
 
-                txt = " ".join((item.diplomatic_text or "").strip().split())
-                prev = conn.execute(
-                    "SELECT diplomatic_text, review_status FROM reviewed_lines WHERE sample_id = ?",
-                    (sample_id,),
-                ).fetchone()
+            invalidated_samples: list[str] = []
+            with self._connect() as conn:
+                for item, status in resolved_statuses:
+                    pnum = max(1, int(item.page_number))
+                    lidx = max(0, int(item.line_index))
+                    sample_id, rel_crop, _stage_crop, _abs_crop = staged_crops[
+                        (pnum, lidx)
+                    ]
 
-                created_at = now
-                if prev is not None:
-                    old_txt = str(prev["diplomatic_text"])
-                    old_st = str(prev["review_status"])
-                    # Always invalidate cached features on re-save because the
-                    # PNG crop on disk was rewritten (e.g. after a fresh OCR segmentation)
-                    self._invalidate_sample_features(clean_wid, sample_id)
-                    if old_txt != txt or old_st != status:
+                    txt = " ".join((item.diplomatic_text or "").strip().split())
+                    prev = conn.execute(
+                        "SELECT diplomatic_text, review_status FROM reviewed_lines WHERE sample_id = ?",
+                        (sample_id,),
+                    ).fetchone()
+
+                    created_at = now
+                    if prev is not None:
+                        old_txt = str(prev["diplomatic_text"])
+                        old_st = str(prev["review_status"])
+                        invalidated_samples.append(sample_id)
+                        if old_txt != txt or old_st != status:
+                            conn.execute(
+                                """
+                                INSERT INTO line_revisions(
+                                    sample_id, changed_at, old_text, new_text, old_status, new_status
+                                ) VALUES (?, ?, ?, ?, ?, ?)
+                                """,
+                                (sample_id, now, old_txt, txt, old_st, status),
+                            )
+                        created_row = conn.execute(
+                            "SELECT created_at FROM reviewed_lines WHERE sample_id = ?",
+                            (sample_id,),
+                        ).fetchone()
+                        if created_row is not None:
+                            created_at = str(created_row["created_at"])
+                    else:
                         conn.execute(
                             """
                             INSERT INTO line_revisions(
                                 sample_id, changed_at, old_text, new_text, old_status, new_status
                             ) VALUES (?, ?, ?, ?, ?, ?)
                             """,
-                            (sample_id, now, old_txt, txt, old_st, status),
+                            (
+                                sample_id,
+                                now,
+                                (item.ocr_text or "").strip(),
+                                txt,
+                                STATUS_NOT_REVIEWED,
+                                status,
+                            ),
                         )
-                    created_row = conn.execute(
-                        "SELECT created_at FROM reviewed_lines WHERE sample_id = ?",
-                        (sample_id,),
-                    ).fetchone()
-                    if created_row is not None:
-                        created_at = str(created_row["created_at"])
-                else:
+
+                    box_tuple = (
+                        tuple(float(v) for v in item.box[:4])
+                        if item.box is not None and len(item.box) == 4
+                        else None
+                    )
+                    psize_tuple = (
+                        (int(item.page_size[0]), int(item.page_size[1]))
+                        if item.page_size is not None and len(item.page_size) == 2
+                        else None
+                    )
+                    preproc = dict(item.preprocessing or {})
+                    is_ver = 1 if status == STATUS_VERIFIED else 0
+                    is_gram_unedited = (
+                        1
+                        if (
+                            status == STATUS_VERIFIED
+                            and item.grammar_unedited_confirmed
+                        )
+                        else 0
+                    )
+
                     conn.execute(
                         """
-                        INSERT INTO line_revisions(
-                            sample_id, changed_at, old_text, new_text, old_status, new_status
-                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO reviewed_lines(
+                            sample_id, writer_id, document_key, document_name,
+                            page_number, line_index, box_json, page_size_json,
+                            image_relpath, ocr_text, ocr_confidence,
+                            engine_name, engine_version, model_id, model_sha256,
+                            decoding_mode, preprocessing_json,
+                            diplomatic_text, review_status,
+                            verified_exact, grammar_unedited,
+                            created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(writer_id, document_key, page_number, line_index) DO UPDATE SET
+                            sample_id = excluded.sample_id,
+                            document_name = excluded.document_name,
+                            box_json = excluded.box_json,
+                            page_size_json = excluded.page_size_json,
+                            image_relpath = excluded.image_relpath,
+                            ocr_text = CASE WHEN excluded.ocr_text != '' THEN excluded.ocr_text ELSE reviewed_lines.ocr_text END,
+                            ocr_confidence = COALESCE(excluded.ocr_confidence, reviewed_lines.ocr_confidence),
+                            engine_name = CASE WHEN excluded.engine_name != '' THEN excluded.engine_name ELSE reviewed_lines.engine_name END,
+                            engine_version = CASE WHEN excluded.engine_version != '' THEN excluded.engine_version ELSE reviewed_lines.engine_version END,
+                            model_id = CASE WHEN excluded.model_id != '' THEN excluded.model_id ELSE reviewed_lines.model_id END,
+                            model_sha256 = CASE WHEN excluded.model_sha256 != '' THEN excluded.model_sha256 ELSE reviewed_lines.model_sha256 END,
+                            decoding_mode = excluded.decoding_mode,
+                            preprocessing_json = excluded.preprocessing_json,
+                            diplomatic_text = excluded.diplomatic_text,
+                            review_status = excluded.review_status,
+                            verified_exact = excluded.verified_exact,
+                            grammar_unedited = excluded.grammar_unedited,
+                            updated_at = excluded.updated_at
                         """,
                         (
                             sample_id,
-                            now,
+                            clean_wid,
+                            doc_key,
+                            doc_name,
+                            pnum,
+                            lidx,
+                            json.dumps(list(box_tuple)) if box_tuple else None,
+                            json.dumps(list(psize_tuple)) if psize_tuple else None,
+                            rel_crop,
                             (item.ocr_text or "").strip(),
+                            (
+                                float(item.ocr_confidence)
+                                if item.ocr_confidence is not None
+                                else None
+                            ),
+                            str(item.engine_name or ""),
+                            str(item.engine_version or ""),
+                            str(item.model_id or ""),
+                            str(item.model_sha256 or ""),
+                            str(item.decoding_mode or "raw"),
+                            json.dumps(preproc, ensure_ascii=False),
                             txt,
-                            STATUS_NOT_REVIEWED,
                             status,
+                            is_ver,
+                            is_gram_unedited,
+                            created_at,
+                            now,
                         ),
                     )
 
-                box_tuple = (
-                    tuple(float(v) for v in item.box[:4])
-                    if item.box is not None and len(item.box) == 4
-                    else None
-                )
-                psize_tuple = (
-                    (int(item.page_size[0]), int(item.page_size[1]))
-                    if item.page_size is not None and len(item.page_size) == 2
-                    else None
-                )
-                preproc = dict(item.preprocessing or {})
-                is_ver = 1 if status == STATUS_VERIFIED else 0
-                is_gram_unedited = (
-                    1
-                    if (status == STATUS_VERIFIED and item.grammar_unedited_confirmed)
-                    else 0
-                )
+                    if status == STATUS_VERIFIED and sharing_on:
+                        new_verified_texts.append(txt)
 
-                conn.execute(
-                    """
-                    INSERT INTO reviewed_lines(
-                        sample_id, writer_id, document_key, document_name,
-                        page_number, line_index, box_json, page_size_json,
-                        image_relpath, ocr_text, ocr_confidence,
-                        engine_name, engine_version, model_id, model_sha256,
-                        decoding_mode, preprocessing_json,
-                        diplomatic_text, review_status,
-                        verified_exact, grammar_unedited,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(writer_id, document_key, page_number, line_index) DO UPDATE SET
-                        sample_id = excluded.sample_id,
-                        document_name = excluded.document_name,
-                        box_json = excluded.box_json,
-                        page_size_json = excluded.page_size_json,
-                        image_relpath = excluded.image_relpath,
-                        ocr_text = CASE WHEN excluded.ocr_text != '' THEN excluded.ocr_text ELSE reviewed_lines.ocr_text END,
-                        ocr_confidence = COALESCE(excluded.ocr_confidence, reviewed_lines.ocr_confidence),
-                        engine_name = CASE WHEN excluded.engine_name != '' THEN excluded.engine_name ELSE reviewed_lines.engine_name END,
-                        engine_version = CASE WHEN excluded.engine_version != '' THEN excluded.engine_version ELSE reviewed_lines.engine_version END,
-                        model_id = CASE WHEN excluded.model_id != '' THEN excluded.model_id ELSE reviewed_lines.model_id END,
-                        model_sha256 = CASE WHEN excluded.model_sha256 != '' THEN excluded.model_sha256 ELSE reviewed_lines.model_sha256 END,
-                        decoding_mode = excluded.decoding_mode,
-                        preprocessing_json = excluded.preprocessing_json,
-                        diplomatic_text = excluded.diplomatic_text,
-                        review_status = excluded.review_status,
-                        verified_exact = excluded.verified_exact,
-                        grammar_unedited = excluded.grammar_unedited,
-                        updated_at = excluded.updated_at
-                    """,
-                    (
-                        sample_id,
-                        clean_wid,
-                        doc_key,
-                        doc_name,
-                        pnum,
-                        lidx,
-                        json.dumps(list(box_tuple)) if box_tuple else None,
-                        json.dumps(list(psize_tuple)) if psize_tuple else None,
-                        rel_crop,
-                        (item.ocr_text or "").strip(),
-                        (
-                            float(item.ocr_confidence)
-                            if item.ocr_confidence is not None
-                            else None
-                        ),
-                        str(item.engine_name or ""),
-                        str(item.engine_version or ""),
-                        str(item.model_id or ""),
-                        str(item.model_sha256 or ""),
-                        str(item.decoding_mode or "raw"),
-                        json.dumps(preproc, ensure_ascii=False),
-                        txt,
-                        status,
-                        is_ver,
-                        is_gram_unedited,
-                        created_at,
-                        now,
-                    ),
-                )
-
-                if status == STATUS_VERIFIED and sharing_on:
-                    new_verified_texts.append(txt)
-
-                persisted.append(
-                    VerifiedLineSample(
-                        sample_id=sample_id,
-                        writer_id=clean_wid,
-                        writer_name=writer_name,
-                        diplomatic_text=txt,
-                        review_status=status,
-                        image_relpath=rel_crop,
-                        document_key=doc_key,
-                        document_name=doc_name,
-                        page_number=pnum,
-                        line_index=lidx,
-                        box=box_tuple,
-                        page_size=psize_tuple,
-                        ocr_text=(item.ocr_text or "").strip(),
-                        ocr_confidence=(
-                            float(item.ocr_confidence)
-                            if item.ocr_confidence is not None
-                            else None
-                        ),
-                        engine_name=str(item.engine_name or ""),
-                        engine_version=str(item.engine_version or ""),
-                        model_id=str(item.model_id or ""),
-                        model_sha256=str(item.model_sha256 or ""),
-                        decoding_mode=str(item.decoding_mode or "raw"),
-                        preprocessing=preproc,
-                        created_at=created_at,
-                        verified_at=now,
-                        verified_exact_as_written=bool(is_ver),
-                        grammar_unedited_confirmed=bool(is_gram_unedited),
+                    persisted.append(
+                        VerifiedLineSample(
+                            sample_id=sample_id,
+                            writer_id=clean_wid,
+                            writer_name=writer_name,
+                            diplomatic_text=txt,
+                            review_status=status,
+                            image_relpath=rel_crop,
+                            document_key=doc_key,
+                            document_name=doc_name,
+                            page_number=pnum,
+                            line_index=lidx,
+                            box=box_tuple,
+                            page_size=psize_tuple,
+                            ocr_text=(item.ocr_text or "").strip(),
+                            ocr_confidence=(
+                                float(item.ocr_confidence)
+                                if item.ocr_confidence is not None
+                                else None
+                            ),
+                            engine_name=str(item.engine_name or ""),
+                            engine_version=str(item.engine_version or ""),
+                            model_id=str(item.model_id or ""),
+                            model_sha256=str(item.model_sha256 or ""),
+                            decoding_mode=str(item.decoding_mode or "raw"),
+                            preprocessing=preproc,
+                            created_at=created_at,
+                            verified_at=now,
+                            verified_exact_as_written=bool(is_ver),
+                            grammar_unedited_confirmed=bool(is_gram_unedited),
+                        )
                     )
-                )
+
+            # DB committed cleanly -> atomically promote all staged crop PNGs
+            for _sid, _rel, stage_crop, abs_crop in staged_crops.values():
+                abs_crop.parent.mkdir(parents=True, exist_ok=True)
+                stage_crop.replace(abs_crop)
+            for sid in invalidated_samples:
+                self._invalidate_sample_features(clean_wid, sid)
+        except Exception:
+            for _sid, _rel, stage_crop, _abs_crop in staged_crops.values():
+                stage_crop.unlink(missing_ok=True)
+            raise
 
         if sharing_on and new_verified_texts:
             self._queue_vocab_candidates(clean_wid or GENERAL_BUCKET, new_verified_texts)
@@ -1688,10 +1724,16 @@ class SchoolLearningStore:
         """
         dest = Path(destination_zip).resolve()
         dest.parent.mkdir(parents=True, exist_ok=True)
-        verified = self.list_all_school_samples(verified_only=True)
+        all_samples = self.list_all_school_samples(verified_only=False)
+        verified = [s for s in all_samples if s.review_status == STATUS_VERIFIED]
+        writers_list = self.list_writers()
 
-        # Deterministic writer anonymization map
-        distinct_wids = sorted({s.writer_id for s in verified if s.writer_id})
+        # Deterministic writer anonymization map across ALL profiles + samples
+        # (so profiles with 0 verified samples yet never fail lookup during export)
+        distinct_wids = sorted(
+            {w.writer_id for w in writers_list if w.writer_id}
+            | {s.writer_id for s in all_samples if s.writer_id}
+        )
         anon_map: dict[str, str] = {"": "general"}
         for idx, wid in enumerate(distinct_wids, start=1):
             anon_map[wid] = f"writer_{idx:03d}" if anonymize_writers else wid
@@ -1743,20 +1785,37 @@ class SchoolLearningStore:
             "        with Image.open(root / rec['file_name']) as im:\n"
             "            yield im.convert('RGB'), rec['text'], rec\n"
         )
+        online_train_py = (
+            '"""Example online GPU/CPU head or full-model training script.\n\n'
+            "After training online (e.g. Colab / GPU server), save a head `.npz` with:\n"
+            "    np.savez('head-online.npz', W=head_weight_f32, b=head_bias_f32)\n"
+            "and import `head-online.npz` back into HebrewNotesWorkbench offline via\n"
+            "Adapter History -> 'ייבוא מתאם מאומן (.npz)...'.\n"
+            '"""\n'
+            "from pathlib import Path\n"
+            "from load_dataset_example import iter_split\n\n"
+            "if __name__ == '__main__':\n"
+            "    root = Path(__file__).resolve().parent\n"
+            "    tr = list(iter_split(root, 'train'))\n"
+            "    va = list(iter_split(root, 'val'))\n"
+            "    print(f'Loaded {len(tr)} train lines and {len(va)} validation lines.')\n"
+        )
         readme = (
             "# Exported Verified School Handwriting Corpus (Online-Training Ready)\n\n"
             "- Contains **only** human-verified Stage-A diplomatic transcriptions\n"
             "  (exact handwriting as written on the page, prior to Stage-B grammar edits).\n"
             "- `train.jsonl` / `val.jsonl`: deterministic page-grouped train/validation splits.\n"
             "- `metadata.jsonl`: HuggingFace `datasets.load_dataset('imagefolder', data_dir=...)` compatible.\n"
-            "- `approved_shared_vocab.json`: administrator-approved school vocabulary & abbreviations.\n"
+            "- `approved_shared_vocab.json` (and `shared_vocab.json`): administrator-approved school vocabulary & abbreviations.\n"
             "- `load_dataset_example.py`: zero-dependency Python/Pillow iterator for Colab / GPU training.\n"
+            "- `train_online_guide.py`: offline-to-online training & `.npz` re-import template.\n"
         )
 
         with zipfile.ZipFile(dest, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("README.md", readme)
             zf.writestr("README.txt", readme)
             zf.writestr("load_dataset_example.py", loader_py)
+            zf.writestr("train_online_guide.py", online_train_py)
 
             for smp in verified:
                 src_img = self.root.joinpath(*smp.image_relpath.split("/"))
@@ -1823,7 +1882,7 @@ class SchoolLearningStore:
 
             writers_export = [
                 {
-                    "writer_id": anon_map[w.writer_id],
+                    "writer_id": anon_map.get(w.writer_id, w.writer_id or "general"),
                     **(
                         {}
                         if anonymize_writers
@@ -1832,14 +1891,13 @@ class SchoolLearningStore:
                     "verified_samples": w.samples_count,
                     "active_round": w.active_round,
                 }
-                for w in self.list_writers()
+                for w in writers_list
             ]
             zf.writestr(
                 "writers.json",
                 json.dumps(writers_export, ensure_ascii=False, indent=2) + "\n",
             )
-            zf.writestr(
-                "shared_vocab.json",
+            vocab_json_str = (
                 json.dumps(
                     {
                         "approved_word_counts": self.load_shared_vocab_counts(),
@@ -1848,8 +1906,10 @@ class SchoolLearningStore:
                     ensure_ascii=False,
                     indent=2,
                 )
-                + "\n",
+                + "\n"
             )
+            zf.writestr("approved_shared_vocab.json", vocab_json_str)
+            zf.writestr("shared_vocab.json", vocab_json_str)
 
             if include_uncertain_separate:
                 unc_rows = [
@@ -1864,7 +1924,7 @@ class SchoolLearningStore:
                         },
                         ensure_ascii=False,
                     )
-                    for s in self.list_all_school_samples(verified_only=False)
+                    for s in all_samples
                     if s.review_status == STATUS_UNCERTAIN
                 ]
                 zf.writestr(

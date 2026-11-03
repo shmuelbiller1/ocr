@@ -97,6 +97,7 @@ class MainWindow(QMainWindow):
         ] = {}
         self._shown_entry = None
         self._recognizing_entry = None
+        self._recognizing_writer_id: str | None = None
         self._loading = False
         self.task: TaskThread | None = None
 
@@ -906,6 +907,9 @@ class MainWindow(QMainWindow):
         # of the recognition replaces the text of the editor, and what
         # the user writes in the meantime would be lost.
         self._recognizing_entry = entry
+        job_wid = str(entry.writer_id or self.plugins.active_writer_id or "").strip()
+        self._recognizing_writer_id = job_wid
+        self._sync_engines_writer_context(job_wid)
         self.editor.setReadOnly(True)
 
         def work(progress, cancel):
@@ -978,8 +982,13 @@ class MainWindow(QMainWindow):
                 for p in pages
             ]
             entry.diplomatic_transcription = ""
-            if not entry.writer_id and self.plugins.active_writer_id:
-                entry.writer_id = self.plugins.active_writer_id
+            rec_wid = (
+                self._recognizing_writer_id
+                if self._recognizing_writer_id is not None
+                else self.plugins.active_writer_id
+            )
+            if not entry.writer_id and rec_wid:
+                entry.writer_id = rec_wid
             doc_key = str(entry.path)
             self._processed_previews.pop(doc_key, None)
             self._processed_previews[doc_key] = {
@@ -1054,8 +1063,10 @@ class MainWindow(QMainWindow):
         self.run_ocr_action.setEnabled(True)
         # The editor is open again: the work is over.
         self._recognizing_entry = None
+        self._recognizing_writer_id = None
         self.editor.setReadOnly(False)
         self.task = None
+        self._sync_engines_writer_context(self.plugins.active_writer_id)
         self._show_decoding_comparison(self._shown_entry)
 
     def cancel_task(self) -> None:
@@ -1223,6 +1234,10 @@ class MainWindow(QMainWindow):
         return engines[0]
 
     def _sync_engines_writer_context(self, writer_id: str | None) -> None:
+        if self.task is not None and self.task.isRunning():
+            # Never overwrite an active OCR job's writer context mid-run;
+            # _on_task_finished applies the latest selection once the job completes.
+            return
         clean_id = (writer_id or "").strip()
         store_dir = Path(self.learning_store.root)
         for eng in self.engines:

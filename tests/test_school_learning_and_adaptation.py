@@ -902,6 +902,235 @@ class WriterAdaptationCTCTests(unittest.TestCase):
         self.assertEqual(report.status, "kept_previous")
         self.assertFalse(self.store.writer_head_path(student.writer_id).exists())
 
+    def test_online_trained_npz_import_and_shape_safety(self) -> None:
+        from hebrew_workbench.engine.writer_adaptation import (
+            import_external_adapter_npz,
+            load_writer_head_npz,
+        )
+
+        student = self.store.create_writer("ייבוא מקוון")
+        good_npz = Path(self._tmp.name) / "head_online.npz"
+        w_online = np.ones((198, 512), dtype=np.float32) * 0.125
+        b_online = np.zeros((198,), dtype=np.float32)
+        np.savez(good_npz, W=w_online, b=b_online)
+
+        round_num = import_external_adapter_npz(
+            student.writer_id, good_npz, store_root=self.learn_dir
+        )
+        self.assertEqual(round_num, 1)
+        w_loaded, b_loaded = load_writer_head_npz(
+            self.store.writer_head_path(student.writer_id)
+        )
+        self.assertTrue(np.allclose(w_loaded, w_online))
+        self.assertTrue(np.allclose(b_loaded, b_online))
+
+        # Wrong shape .npz is rejected cleanly without touching round #1
+        bad_npz = Path(self._tmp.name) / "bad_shape.npz"
+        np.savez(
+            bad_npz,
+            W=np.zeros((50, 512), dtype=np.float32),
+            b=np.zeros((50,), dtype=np.float32),
+        )
+        with self.assertRaises(ValueError):
+            import_external_adapter_npz(
+                student.writer_id, bad_npz, store_root=self.learn_dir
+            )
+
+        # Rollback returns cleanly to round 0 (base model)
+        self.store.rollback_writer_adapter(student.writer_id, target_round=0)
+        prof = self.store.get_writer(student.writer_id)
+        assert prof is not None
+        self.assertEqual(prof.active_round, 0)
+
+
+class HardeningAndEdgeCaseRegressionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.learn_dir = Path(self._tmp.name) / "learning"
+        self.store = SchoolLearningStore(self.learn_dir)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_export_succeeds_when_empty_and_draft_only_profiles_exist(self) -> None:
+        from hebrew_workbench.training import STATUS_NOT_REVIEWED, STATUS_VERIFIED
+
+        empty_student = self.store.create_writer("תלמיד חדש ריק")
+        draft_student = self.store.create_writer("תלמיד עם טיוטה בלבד")
+        verified_student = self.store.create_writer("תלמיד מאומת")
+
+        self.store.record_reviewed_lines(
+            draft_student.writer_id,
+            "draft_doc.png",
+            [
+                VerifiedLineInput(
+                    crop_image=_make_line_image(seed=1),
+                    diplomatic_text="שורה בטיוטה בלבד",
+                    page_number=1,
+                    line_index=0,
+                    review_status=STATUS_NOT_REVIEWED,
+                )
+            ],
+        )
+        self.store.record_reviewed_lines(
+            verified_student.writer_id,
+            "ver_doc.png",
+            [
+                VerifiedLineInput(
+                    crop_image=_make_line_image(seed=2),
+                    diplomatic_text="שורה מאומתת לייצוא",
+                    page_number=1,
+                    line_index=0,
+                    review_status=STATUS_VERIFIED,
+                    verified_exact_as_written=True,
+                    grammar_unedited_confirmed=True,
+                )
+            ],
+        )
+        _ = empty_student
+
+        for anon in (True, False):
+            out_zip = Path(self._tmp.name) / f"bundle_{anon}.zip"
+            self.store.export_online_training_bundle_zip(
+                out_zip, anonymize_writers=anon
+            )
+            with zipfile.ZipFile(out_zip, "r") as zf:
+                names = set(zf.namelist())
+                self.assertIn("approved_shared_vocab.json", names)
+                self.assertIn("train_online_guide.py", names)
+                writers_json = json.loads(
+                    zf.read("writers.json").decode("utf-8")
+                )
+                self.assertEqual(len(writers_json), 3)
+
+    def test_mid_batch_crop_failure_rolls_back_without_corrupting_existing_crop(
+        self,
+    ) -> None:
+        from hebrew_workbench.training import STATUS_VERIFIED
+        import hebrew_workbench.training.store as store_mod
+
+        s1 = self.store.create_writer("בדיקת אטומיות")
+        orig_crop = Image.new("RGB", (220, 44), (12, 34, 56))
+        saved = self.store.record_reviewed_lines(
+            s1.writer_id,
+            "atomic.png",
+            [
+                VerifiedLineInput(
+                    crop_image=orig_crop,
+                    diplomatic_text="טקסט מקורי תקין",
+                    page_number=1,
+                    line_index=0,
+                    review_status=STATUS_VERIFIED,
+                    verified_exact_as_written=True,
+                    grammar_unedited_confirmed=True,
+                )
+            ],
+        )
+        crop_path = self.learn_dir.joinpath(*saved[0].image_relpath.split("/"))
+        orig_bytes = crop_path.read_bytes()
+
+        real_save = store_mod._atomic_save_png
+        calls = {"n": 0}
+
+        def _fail_on_second(path: Path, image: Image.Image) -> None:
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise OSError("Simulated disk full on second crop")
+            real_save(path, image)
+
+        new_crop = Image.new("RGB", (220, 44), (200, 10, 10))
+        with mock.patch.object(
+            store_mod, "_atomic_save_png", side_effect=_fail_on_second
+        ):
+            with self.assertRaises(OSError):
+                self.store.record_reviewed_lines(
+                    s1.writer_id,
+                    "atomic.png",
+                    [
+                        VerifiedLineInput(
+                            crop_image=new_crop,
+                            diplomatic_text="טקסט חדש שלא נשמר",
+                            page_number=1,
+                            line_index=0,
+                            review_status=STATUS_VERIFIED,
+                            verified_exact_as_written=True,
+                            grammar_unedited_confirmed=True,
+                        ),
+                        VerifiedLineInput(
+                            crop_image=new_crop,
+                            diplomatic_text="שורה שנייה שנכשלת",
+                            page_number=1,
+                            line_index=1,
+                            review_status=STATUS_VERIFIED,
+                            verified_exact_as_written=True,
+                            grammar_unedited_confirmed=True,
+                        ),
+                    ],
+                )
+
+        # Existing PNG bytes AND DB label remain completely intact and matched!
+        self.assertEqual(crop_path.read_bytes(), orig_bytes)
+        after = self.store.list_writer_samples(s1.writer_id)
+        self.assertEqual(len(after), 1)
+        self.assertEqual(after[0].diplomatic_text, "טקסט מקורי תקין")
+
+    def test_benchmark_eval_page_metrics_uses_reference_denominator_and_normalises(
+        self,
+    ) -> None:
+        from tools.benchmark_writer_adaptation import _eval_page_metrics
+
+        ref = "שָׁלוֹם עוֹלָם בצה״ל"  # normalises to 'שלום עולם בצה"ל' (15 chars)
+        hyp_exact = 'שלום   עולם בצה"ל'
+        m_zero = _eval_page_metrics(hyp_exact, ref)
+        self.assertEqual(m_zero["cer"], 0.0)
+        self.assertEqual(m_zero["wer"], 0.0)
+
+        # Short hypothesis ('ש') against 10-char reference ('שלום עולם!') -> 9/10 = 0.9, NOT 9/1 = 9.0!
+        m_short = _eval_page_metrics("ש", "שלום עולם!")
+        self.assertAlmostEqual(m_short["cer"], 0.9, places=4)
+
+    def test_mishkefet_engine_snapshots_writer_id_across_multipage_job(self) -> None:
+        from hebrew_workbench.engine.base import PageResult
+        from hebrew_workbench.engine.mishkefet import MishkefetEngine
+
+        dummy_pt = Path(self._tmp.name) / "mishkefet-v1.pt"
+        dummy_pt.write_bytes(b"stub")
+        eng = MishkefetEngine(
+            model_path=dummy_pt,
+            writer_id="student-a",
+            learning_dir=self.learn_dir,
+        )
+        seen_writers: list[str | None] = []
+
+        class _FakePreview:
+            page_count = 2
+
+            def __init__(self, _p) -> None:
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_a):
+                return False
+
+            def render(self, number: int, dpi: int = 300):
+                if number == 2:
+                    # Simulate external caller mutating engine.writer_id mid-job!
+                    eng.writer_id = "student-b"
+                return mock.Mock(image=_make_line_image())
+
+        def _fake_page(number, _img, _budget, *, writer_id=None, learning_dir=None):
+            seen_writers.append(writer_id)
+            return PageResult(number=number, text=f"עמוד {number}")
+
+        with mock.patch.object(eng, "available", return_value=True), mock.patch(
+            "hebrew_workbench.preview.loader.DocumentPreview", _FakePreview
+        ), mock.patch.object(eng, "_recognize_page", side_effect=_fake_page):
+            eng.recognize(dummy_pt)
+
+        self.assertEqual(seen_writers, ["student-a", "student-a"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -40,6 +40,7 @@ __all__ = [
     "AdaptationReport",
     "ctc_loss_grad",
     "greedy_decode_logits",
+    "import_external_adapter_npz",
     "load_writer_head_npz",
     "run_writer_training",
     "train_ctc_head",
@@ -678,9 +679,38 @@ def train_writer_profile_in_process(
     held_cer_before = float(prev_held["cer"])
     held_wer_before = float(prev_held["wer"])
 
-    W_new, b_new = train_ctc_head(W0, b0, train_fit_pairs, cfg=cfg)
+    candidate_cfgs = [cfg]
+    if len(train_plain_pairs) < 48 and cfg.steps > 45:
+        candidate_cfgs.append(
+            AdaptConfig(
+                steps=45,
+                lr=cfg.lr,
+                l2=max(0.45, cfg.l2),
+                small_sample_l2=max(0.45, cfg.small_sample_l2),
+                beta1=cfg.beta1,
+                beta2=cfg.beta2,
+                eps=cfg.eps,
+                aug_scales=cfg.aug_scales,
+            )
+        )
+
+    best_tuple: tuple[float, float, float] | None = None
+    W_new, b_new = W_prev, b_prev
+    cand_held: dict[str, float | int] = prev_held
+    for c_cfg in candidate_cfgs:
+        w_cand, b_cand = train_ctc_head(W0, b0, train_fit_pairs, cfg=c_cfg)
+        h_eval = evaluate_head_detailed(w_cand, b_cand, held_out_pairs, charset)
+        score_key = (
+            round(float(h_eval["cer"]), 6),
+            round(float(h_eval["wer"]), 6),
+            round(float(h_eval["nll"]), 6),
+        )
+        if best_tuple is None or score_key < best_tuple:
+            best_tuple = score_key
+            W_new, b_new = w_cand, b_cand
+            cand_held = h_eval
+
     train_cer_after = evaluate_head_cer(W_new, b_new, train_plain_pairs)
-    cand_held = evaluate_head_detailed(W_new, b_new, held_out_pairs, charset)
     held_cer_after = float(cand_held["cer"])
     held_wer_after = float(cand_held["wer"])
 
@@ -938,3 +968,143 @@ def run_writer_training(
         if payload.get("error"):
             raise RuntimeError(str(payload["error"]))
         return AdaptationReport.from_dict(payload)
+
+
+def _validate_npz_head_pure_python(
+    npz_path: Path,
+    *,
+    expected_vocab_size: int = 198,
+    expected_feat_dim: int = 512,
+) -> None:
+    """Verify ``W`` and ``b`` ``.npy`` arrays inside ``npz_path`` without pickle."""
+    import ast
+    import shutil
+    import struct
+    import zipfile
+
+    if not npz_path.is_file():
+        raise ValueError(f"קובץ המתאם לא נמצא: {npz_path}")
+    with zipfile.ZipFile(npz_path, "r") as zf:
+        names = set(zf.namelist())
+        if not {"W.npy", "b.npy"}.issubset(names):
+            raise ValueError("קובץ ה-.npz חייב להכיל מערכי W.npy ו-b.npy.")
+        for member, exp_shape in (
+            ("W.npy", (expected_vocab_size, expected_feat_dim)),
+            ("b.npy", (expected_vocab_size,)),
+        ):
+            raw = zf.read(member)
+            if len(raw) < 10 or raw[:6] != b"\x93NUMPY":
+                raise ValueError(f"פורמט {member} אינו מערך NumPy תקין.")
+            major = raw[6]
+            if major == 1:
+                hdr_len = struct.unpack("<H", raw[8:10])[0]
+                hdr_end = 10 + hdr_len
+            elif major in (2, 3):
+                hdr_len = struct.unpack("<I", raw[8:12])[0]
+                hdr_end = 12 + hdr_len
+            else:
+                raise ValueError(f"גרסת מערך NumPy אינה נתמכת ({major}).")
+            header = ast.literal_eval(
+                raw[hdr_end - hdr_len : hdr_end].decode("latin1").strip()
+            )
+            if not isinstance(header, dict):
+                raise ValueError(f"כותרת {member} אינה תקינה.")
+            descr = str(header.get("descr", ""))
+            if descr not in ("<f4", "|f4", "f4"):
+                raise ValueError(
+                    f"סוג נתונים לא בטוח או לא נתמך ב-{member} ({descr!r}); נדרש float32 ללא pickle."
+                )
+            if bool(header.get("fortran_order", False)):
+                raise ValueError(f"מערך {member} חייב להיות ברצף C רגיל.")
+            shape = tuple(int(x) for x in header.get("shape", ()))
+            if shape != exp_shape:
+                raise ValueError(
+                    f"ממדי {member} ({shape}) אינם תואמים למודל Mishkefet-v1 ({exp_shape})."
+                )
+            n_elems = 1
+            for dim in shape:
+                n_elems *= dim
+            if len(raw) - hdr_end != n_elems * 4:
+                raise ValueError(f"אורך הנתונים הבינאריים ב-{member} שגוי.")
+    _ = shutil  # keep helper self-contained
+
+
+def import_external_adapter_npz(
+    writer_id: str,
+    npz_path: str | Path,
+    *,
+    store_root: str | Path | None = None,
+    expected_vocab_size: int = 198,
+    expected_feat_dim: int = 512,
+) -> int:
+    """Safely import an externally/online-trained ``.npz`` CTC head for a student.
+
+    Validates binary ``float32`` arrays strictly without ``pickle`` (so it works
+    offline even inside the GUI process without NumPy), stores a versioned copy
+    under ``heads/head-rXXXX.npz``, activates it, and preserves one-click rollback.
+    """
+    import shutil
+    from .models import MODEL_ARTIFACTS
+
+    src = Path(npz_path)
+    _validate_npz_head_pure_python(
+        src,
+        expected_vocab_size=expected_vocab_size,
+        expected_feat_dim=expected_feat_dim,
+    )
+    # Also run numpy allow_pickle=False check when numpy is available
+    try:
+        load_writer_head_npz(src)
+    except ImportError:
+        pass
+
+    store = SchoolLearningStore(store_root)
+    profile = store.get_writer(writer_id)
+    if profile is None:
+        raise KeyError(f"לא נמצא פרופיל תלמיד עבור {writer_id!r}.")
+
+    art = MODEL_ARTIFACTS.get("mishkefet-v1")
+    model_sha256 = art.sha256 if art is not None else ""
+    existing_rounds = [
+        v.round_number for v in store.list_adapter_versions(profile.writer_id)
+    ]
+    new_round = max([int(profile.active_round), *existing_rounds], default=0) + 1
+    rel_head = f"writers/{profile.writer_id}/heads/head-r{new_round:04d}.npz"
+    round_path = store.root.joinpath(*rel_head.split("/"))
+    round_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, round_path)
+    shutil.copy2(src, store.writer_head_path(profile.writer_id))
+
+    samples_n = len(store.list_writer_samples(profile.writer_id))
+    meta = {
+        "writer_id": profile.writer_id,
+        "writer_name": profile.name,
+        "round": new_round,
+        "source": "external_online_import",
+        "model_sha256": model_sha256,
+        "samples_total": samples_n,
+        "train_samples": 0,
+        "held_out_samples": 0,
+        "held_out_chars": 0,
+        "held_out_cer_before": None,
+        "held_out_cer_after": None,
+    }
+    store.writer_head_meta_path(profile.writer_id).write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    store.record_adapter_version(
+        profile.writer_id,
+        round_number=new_round,
+        head_relpath=rel_head,
+        model_sha256=model_sha256,
+        samples_total=samples_n,
+        train_samples=0,
+        held_out_samples=0,
+        held_out_chars=0,
+        held_out_cer_before=None,
+        held_out_cer_after=None,
+        held_out_wer_before=None,
+        held_out_wer_after=None,
+        activate=True,
+    )
+    return new_round

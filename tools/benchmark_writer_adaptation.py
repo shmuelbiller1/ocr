@@ -241,11 +241,13 @@ def run_low_memory_50_student_benchmark() -> dict:
 
 
 def _eval_page_metrics(hyp_text: str, ref_text: str) -> dict:
+    hyp = normalise(hyp_text)
+    ref = normalise(ref_text)
     return {
-        "cer": round(character_error_rate(hyp_text, ref_text), 4),
-        "wer": round(word_error_rate(hyp_text, ref_text), 4),
-        "ref_chars": len(normalise(ref_text)),
-        "hyp_preview": normalise(hyp_text)[:120],
+        "cer": round(character_error_rate(ref, hyp), 4),
+        "wer": round(word_error_rate(ref, hyp), 4),
+        "ref_chars": len(ref),
+        "hyp_preview": hyp[:120],
     }
 
 

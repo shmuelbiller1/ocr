@@ -230,6 +230,10 @@ class MishkefetEngine:
             if not self.timeout_seconds
             else started + float(self.timeout_seconds)
         )
+        # Snapshot the writer & learning store context once for the whole job so
+        # multi-page documents never mix two students' adapters mid-recognition.
+        job_writer_id = self.writer_id
+        job_learning_dir = self.learning_dir
         try:
             with DocumentPreview(file_path) as preview:
                 pages: list[PageResult] = []
@@ -244,7 +248,15 @@ class MishkefetEngine:
                         if deadline is None
                         else max(0.0, deadline - time.monotonic())
                     )
-                    pages.append(self._recognize_page(number, page_image, budget))
+                    pages.append(
+                        self._recognize_page(
+                            number,
+                            page_image,
+                            budget,
+                            writer_id=job_writer_id,
+                            learning_dir=job_learning_dir,
+                        )
+                    )
         except PreviewError as exc:
             raise EngineFailure(str(exc)) from exc
 
@@ -261,7 +273,14 @@ class MishkefetEngine:
             decoding_mode=self.mode,
         )
 
-    def _load_recognizer(self):
+    def _load_recognizer(
+        self,
+        *,
+        writer_id: str | None = None,
+        learning_dir: Path | None = None,
+    ):
+        eff_writer = self.writer_id if writer_id is None else writer_id
+        eff_learn = self.learning_dir if learning_dir is None else learning_dir
         if self._recognizer is None:
             if self.model_path is None:
                 raise EngineUnavailable("קובץ המודל של Mishkefet אינו מותקן.")
@@ -277,7 +296,7 @@ class MishkefetEngine:
                     options = {"beam_width": 12, "tta": 3}
                     if self.mode == "assisted":
                         char_lm, word_lm = load_language_models(
-                            self.model_path.parent, learning_dir=self.learning_dir
+                            self.model_path.parent, learning_dir=eff_learn
                         )
                         options.update(
                             lm=char_lm,
@@ -288,31 +307,34 @@ class MishkefetEngine:
                 self._recognizer = Recognizer(
                     str(self.model_path), device="cpu", **options
                 )
-                self._vocab_state_key = self._current_vocab_state_key()
+                self._vocab_state_key = self._current_vocab_state_key(eff_learn)
             except Exception as exc:
                 raise EngineFailure(
                     f"לא ניתן לטעון את מודל Mishkefet: {exc}"
                 ) from exc
         elif self.mode == "assisted" and self.model_path is not None:
-            cur_vkey = self._current_vocab_state_key()
+            cur_vkey = self._current_vocab_state_key(eff_learn)
             if cur_vkey != self._vocab_state_key:
                 try:
                     _, word_lm = load_language_models(
-                        self.model_path.parent, learning_dir=self.learning_dir
+                        self.model_path.parent, learning_dir=eff_learn
                     )
                     self._recognizer.word_lm = word_lm
                     self._recognizer._last_logit_cache = None
                     self._vocab_state_key = cur_vkey
                 except Exception:
                     pass
-        self._sync_writer_head(self._recognizer)
+        self._sync_writer_head(
+            self._recognizer, writer_id=eff_writer, learning_dir=eff_learn
+        )
         return self._recognizer
 
-    def _current_vocab_state_key(self) -> str:
+    def _current_vocab_state_key(self, learning_dir: Path | None = None) -> str:
+        eff_learn = self.learning_dir if learning_dir is None else learning_dir
         try:
             from ..training.store import SchoolLearningStore
 
-            store = SchoolLearningStore(self.learning_dir)
+            store = SchoolLearningStore(eff_learn)
             vp = store.shared_vocab_path
             if vp.is_file():
                 st = vp.stat()
@@ -321,9 +343,17 @@ class MishkefetEngine:
         except Exception:
             return ""
 
-    def _sync_writer_head(self, recognizer) -> None:
+    def _sync_writer_head(
+        self,
+        recognizer,
+        *,
+        writer_id: str | None = None,
+        learning_dir: Path | None = None,
+    ) -> None:
         """Apply the active student's adapted CTC head or reset to the base head."""
-        if not self.writer_id:
+        eff_writer = self.writer_id if writer_id is None else writer_id
+        eff_learn = self.learning_dir if learning_dir is None else learning_dir
+        if not eff_writer:
             recognizer.reset_writer_head()
             return
         try:
@@ -333,9 +363,9 @@ class MishkefetEngine:
 
             art = MODEL_ARTIFACTS.get(self.artifact_id)
             expected_sha = art.sha256 if art is not None else None
-            store = SchoolLearningStore(self.learning_dir)
+            store = SchoolLearningStore(eff_learn)
             head_path = store.active_head_path(
-                self.writer_id, model_sha256=expected_sha
+                eff_writer, model_sha256=expected_sha
             )
             if head_path is None:
                 recognizer.reset_writer_head()
@@ -370,7 +400,13 @@ class MishkefetEngine:
             )
 
     def _recognize_page(
-        self, number: int, image, budget: float | None = None
+        self,
+        number: int,
+        image,
+        budget: float | None = None,
+        *,
+        writer_id: str | None = None,
+        learning_dir: Path | None = None,
     ) -> PageResult:
         """Recognise one page, and give up when the time is up.
 
@@ -378,9 +414,18 @@ class MishkefetEngine:
         work is done in a thread that is left behind when the time is up,
         the same way the other engine does it.
         """
+        extra_kwargs = (
+            {"writer_id": writer_id, "learning_dir": learning_dir}
+            if (writer_id is not None or learning_dir is not None)
+            else {}
+        )
         if budget is None:
             with self._page_lock:
-                return self._recognize_page_now(number, image)
+                return self._recognize_page_now(
+                    number,
+                    image,
+                    **extra_kwargs,
+                )
 
         started = time.monotonic()
         if not self._page_lock.acquire(timeout=max(0.0, budget)):
@@ -389,7 +434,11 @@ class MishkefetEngine:
 
         def work() -> None:
             try:
-                outcome["page"] = self._recognize_page_now(number, image)
+                outcome["page"] = self._recognize_page_now(
+                    number,
+                    image,
+                    **extra_kwargs,
+                )
             except BaseException as exc:  # noqa: BLE001 - reported below
                 outcome["error"] = exc
             finally:
@@ -412,10 +461,19 @@ class MishkefetEngine:
             raise outcome["error"]
         return outcome["page"]
 
-    def _recognize_page_now(self, number: int, image) -> PageResult:
+    def _recognize_page_now(
+        self,
+        number: int,
+        image,
+        *,
+        writer_id: str | None = None,
+        learning_dir: Path | None = None,
+    ) -> PageResult:
         from .vendor.hebocr.page.segment import segment_page
 
-        recognizer = self._load_recognizer()
+        recognizer = self._load_recognizer(
+            writer_id=writer_id, learning_dir=learning_dir
+        )
         eff_enh = resolve_page_enhancement_enabled(self.page_enhancement)
         prepared_image, audit = prepare_page_for_ocr(image, enabled=eff_enh)
         was_enhanced = bool(eff_enh and audit is not None and audit.needs_adjustment)

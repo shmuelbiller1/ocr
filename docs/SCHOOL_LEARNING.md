@@ -51,13 +51,18 @@ from the unmodified original scan:
     files with `allow_pickle=False` before swapping.
   - `delete_writer()` removes a student's profile, personal adapters, cached
     features, and line crops from disk.
-- **Export for external / online GPU training (`export_online_training_bundle_zip`)**:
-  - Exports **only `verified` Stage-A lines** into page-grouped `train.jsonl`
-    and `val.jsonl` splits plus HuggingFace-compatible `metadata.jsonl` and a
-    zero-dependency `load_dataset_example.py` loader.
+- **Export for external / online GPU training & offline re-import**:
+  - `export_online_training_bundle_zip()` exports **only `verified` Stage-A lines**
+    into page-grouped `train.jsonl` and `val.jsonl` splits plus HuggingFace-compatible
+    `metadata.jsonl`, `approved_shared_vocab.json`, `load_dataset_example.py`, and
+    `train_online_guide.py` (including profiles that do not yet have verified lines).
   - **Anonymized by default (`writer_001`, `doc_<hash>`)** so schools can take
     verified data offline-to-online (e.g., Colab / GPU cluster for full
-    base-model training) without exposing student names or OS file paths.
+    base-model or cohort head training) without exposing student names or OS file paths.
+  - `import_external_adapter_npz()` (and `ייבוא מתאם מאומן (.npz)...` inside
+    `AdapterHistoryDialog`) safely imports an online-trained `(198, 512)` `float32`
+    `.npz` head back into an offline Windows PC using pure-Python `.npy` header
+    verification (never executing `pickle`) with full version history and 1-click rollback.
 
 ## 3. Opt-In, Administrator-Approved Shared Vocabulary
 

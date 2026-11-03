@@ -304,6 +304,70 @@ class DiplomaticVerificationUITests(unittest.TestCase):
         self.assertEqual(prof_after.active_round, 0)
         hdlg.close()
 
+    def test_reopen_draft_save_preserves_previously_verified_lines_and_esc_blocked_during_train(
+        self,
+    ) -> None:
+        from hebrew_workbench.training import STATUS_NOT_REVIEWED, STATUS_VERIFIED
+        from hebrew_workbench.ui.training_dialog import DiplomaticVerificationDialog
+
+        entry = self.window._shown_entry
+        assert entry is not None
+        self._simulate_ocr_result()
+
+        student = self.window.learning_store.create_writer("שמירת אימות קודם")
+        self.window._apply_active_writer(student.writer_id, update_entry=True)
+
+        # Round 1: Verify line 0 with confirmation gate ticked
+        dlg1 = DiplomaticVerificationDialog(
+            entry,
+            self.window.learning_store,
+            initial_writer_id=student.writer_id,
+            parent=self.window,
+        )
+        dlg1._active_page_cards[0].set_review_status(STATUS_VERIFIED)
+        dlg1.confirm_exact_checkbox.setChecked(True)
+        dlg1._persist_all_reviewed_states(grammar_confirmed_for_verified=True)
+        dlg1.close()
+        self.assertEqual(
+            len(self.window.learning_store.list_writer_samples(student.writer_id)),
+            1,
+        )
+
+        # Round 2: Reopen dialog; confirm_exact_checkbox starts unchecked.
+        # User marks line 1 as verified WITHOUT ticking confirm_exact_checkbox and clicks Save Draft.
+        # Previously verified untouched line 0 MUST stay STATUS_VERIFIED, while unconfirmed line 1 stays draft!
+        dlg2 = DiplomaticVerificationDialog(
+            entry,
+            self.window.learning_store,
+            initial_writer_id=student.writer_id,
+            parent=self.window,
+        )
+        self.assertFalse(dlg2.confirm_exact_checkbox.isChecked())
+        self.assertEqual(
+            dlg2._active_page_cards[0].review_status, STATUS_VERIFIED
+        )
+        dlg2._active_page_cards[1].set_review_status(STATUS_VERIFIED)
+        dlg2._on_save_draft_clicked()
+
+        samples_after = self.window.learning_store.list_writer_samples(
+            student.writer_id
+        )
+        self.assertEqual(len(samples_after), 1)
+        self.assertEqual(samples_after[0].line_index, 0)
+        doc_map = self.window.learning_store.list_document_lines(
+            student.writer_id, entry.file_path
+        )
+        self.assertEqual(doc_map[(1, 0)].review_status, STATUS_VERIFIED)
+        self.assertEqual(doc_map[(1, 1)].review_status, STATUS_NOT_REVIEWED)
+
+        # Verify Esc / reject() is ignored while _train_task is running
+        dlg2._train_task = mock.Mock(isRunning=mock.Mock(return_value=True))
+        dlg2.setResult(0)
+        dlg2.reject()
+        self.assertEqual(dlg2.result(), 0)
+        dlg2._train_task = None
+        dlg2.close()
+
 
 if __name__ == "__main__":
     unittest.main()

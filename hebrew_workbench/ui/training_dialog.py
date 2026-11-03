@@ -60,7 +60,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..engine.writer_adaptation import AdaptationReport, run_writer_training
+from ..engine.writer_adaptation import (
+    AdaptationReport,
+    import_external_adapter_npz,
+    run_writer_training,
+)
 from ..preview.loader import DocumentPreview, PreviewError
 from ..project import DocumentEntry
 from ..training.store import (
@@ -134,6 +138,9 @@ class _DraftLineState:
     model_sha256: str = ""
     decoding_mode: str = "raw"
     preprocessing: dict = field(default_factory=dict)
+    confirmed_verified_writer_id: str | None = None
+    confirmed_verified_text: str | None = None
+    confirmed_verified_box: tuple[float, float, float, float] | None = None
 
     @property
     def is_verified_for_training(self) -> bool:
@@ -588,10 +595,16 @@ class AdapterHistoryDialog(QDialog):
         self.rollback_prev_btn.clicked.connect(self._rollback_one_step)
         self.activate_selected_btn = QPushButton("הפעל גרסה נבחרת")
         self.activate_selected_btn.clicked.connect(self._activate_selected)
+        self.import_external_btn = QPushButton("ייבוא מתאם מאומן (.npz)...")
+        self.import_external_btn.setToolTip(
+            "ייבוא מתאם אישי שאומן במחשב חיצוני/מקוון (נבדק ללא pickle עם אפשרות שחזור בלחיצה אחת)."
+        )
+        self.import_external_btn.clicked.connect(self._import_external_npz)
         close_btn = QPushButton("סגירה")
         close_btn.clicked.connect(self.accept)
         btns.addWidget(self.rollback_prev_btn)
         btns.addWidget(self.activate_selected_btn)
+        btns.addWidget(self.import_external_btn)
         btns.addStretch(1)
         btns.addWidget(close_btn)
         layout.addLayout(btns)
@@ -642,6 +655,30 @@ class AdapterHistoryDialog(QDialog):
         self.store.rollback_writer_adapter(self.writer_id, target_round=target_round)
         self.rolled_back = True
         self._populate()
+
+    def _import_external_npz(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "ייבוא מתאם כתב-יד מאומן (.npz)",
+            "",
+            "קובץ מתאם NumPy (*.npz)",
+        )
+        if not path:
+            return
+        try:
+            new_round = import_external_adapter_npz(
+                self.writer_id, path, store_root=self.store.root
+            )
+        except Exception as exc:
+            QMessageBox.warning(self, "ייבוא מתאם (.npz)", str(exc))
+            return
+        self.rolled_back = True
+        self._populate()
+        QMessageBox.information(
+            self,
+            "ייבוא מתאם הושלם",
+            f"המתאם החיצוני אומת והופעל כגרסה #{new_round} (ניתן לשחזר בלחיצה אחת בכל עת).",
+        )
 
 
 class DiplomaticVerificationDialog(QDialog):
@@ -944,9 +981,16 @@ class DiplomaticVerificationDialog(QDialog):
                     else None
                 )
                 saved_rec = saved_map.get((pnum, l_idx))
+                conf_wid: str | None = None
+                conf_txt: str | None = None
+                conf_box: tuple[float, float, float, float] | None = None
                 if saved_rec is not None and _boxes_match(saved_rec.box, box):
                     init_txt = saved_rec.diplomatic_text
                     init_status = saved_rec.review_status
+                    if saved_rec.review_status == STATUS_VERIFIED:
+                        conf_wid = self.selected_writer_id
+                        conf_txt = saved_rec.diplomatic_text.strip()
+                        conf_box = box
                 elif override_lines is not None and flat_cursor < len(
                     override_lines
                 ):
@@ -990,6 +1034,9 @@ class DiplomaticVerificationDialog(QDialog):
                             or "raw"
                         ),
                         preprocessing=dict(page_preproc),
+                        confirmed_verified_writer_id=conf_wid,
+                        confirmed_verified_text=conf_txt,
+                        confirmed_verified_box=conf_box,
                     )
                 )
             self._states_by_page[pnum] = p_states
@@ -1397,9 +1444,20 @@ class DiplomaticVerificationDialog(QDialog):
                 page_inputs: list[VerifiedLineInput] = []
                 for st in states:
                     eff_status = st.review_status
-                    if eff_status == STATUS_VERIFIED and not grammar_confirmed_for_verified:
+                    previously_confirmed = (
+                        st.confirmed_verified_writer_id == self.selected_writer_id
+                        and st.confirmed_verified_text is not None
+                        and st.confirmed_verified_text == st.diplomatic_text.strip()
+                        and _boxes_match(st.confirmed_verified_box, st.box, tol=1.0)
+                    )
+                    if (
+                        eff_status == STATUS_VERIFIED
+                        and not grammar_confirmed_for_verified
+                        and not previously_confirmed
+                    ):
                         # Saving draft without ticking the Stage-A confirmation gate
-                        # never promotes unconfirmed lines to verified training data
+                        # never promotes NEW or EDITED lines to verified training data,
+                        # while preserving untouched lines that were already confirmed.
                         eff_status = STATUS_NOT_REVIEWED
                     if (
                         eff_status == STATUS_VERIFIED
@@ -1438,7 +1496,7 @@ class DiplomaticVerificationDialog(QDialog):
                             ),
                             grammar_unedited_confirmed=(
                                 eff_status == STATUS_VERIFIED
-                                and grammar_confirmed_for_verified
+                                and (grammar_confirmed_for_verified or previously_confirmed)
                             ),
                         )
                     )
@@ -1550,9 +1608,16 @@ class DiplomaticVerificationDialog(QDialog):
 
     def _on_training_finished(self) -> None:
         self.progress_bar.setVisible(False)
+        self.save_draft_btn.setEnabled(True)
         self.cancel_btn.setEnabled(True)
         self._set_writer_controls_enabled(True)
         self._train_task = None
+        self._update_summary_and_buttons()
+
+    def reject(self) -> None:
+        if self._train_task is not None and self._train_task.isRunning():
+            return
+        super().reject()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         if self._train_task is not None and self._train_task.isRunning():
