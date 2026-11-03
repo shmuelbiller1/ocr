@@ -13,9 +13,9 @@ for ``Mishkefet-v1`` and ``Kraken``:
                          protecting ridge cores, ``י``, dots, and punctuation.
 5. ``adaptive_norm``   — Adaptive stroke-width normalisation driven by measured
                          ridge stroke thickness ``sw_px`` at model-input height
-                         (strict deadband ``[2.45, 5.40] px`` leaves normal
+                         (strict deadband ``[3.05, 5.35] px`` leaves normal
                          strokes bit-identical; gently thickens ultra-fine nibs
-                         ``< 2.45 px`` and gently thins heavy bleed ``> 5.40 px``).
+                         ``< 3.05 px`` and gently thins heavy bleed ``> 5.35 px``).
 6. ``faint_repair``    — Selective repair of faint / skipped ballpoint strokes
                          along 4 directional stroke axes without widening normal
                          dark strokes or closing ``ה`` / counter gaps.
@@ -394,19 +394,18 @@ def _gap_and_loop_barrier(ink: "np.ndarray") -> "np.ndarray":
     hole_mask = np.zeros_like(ink, dtype=np.float32)
     if num_bg > 1:
         h, w = ink.shape
-        for cid in range(1, num_bg):
-            x0 = int(bg_stats[cid, cv2.CC_STAT_LEFT])
-            y0 = int(bg_stats[cid, cv2.CC_STAT_TOP])
-            cw = int(bg_stats[cid, cv2.CC_STAT_WIDTH])
-            ch = int(bg_stats[cid, cv2.CC_STAT_HEIGHT])
-            area = int(bg_stats[cid, cv2.CC_STAT_AREA])
-            touches_border = (
-                x0 == 0 or y0 == 0 or (x0 + cw) >= w or (y0 + ch) >= h
-            )
-            if not touches_border and 2 <= area <= int(0.15 * h * w):
-                hole_mask[bg_labels == cid] = 1.0
-        if float(np.max(hole_mask)) > 0.0:
-            hole_mask = cv2.dilate(hole_mask, k3) * np.clip(
+        x0 = bg_stats[:, cv2.CC_STAT_LEFT]
+        y0 = bg_stats[:, cv2.CC_STAT_TOP]
+        cw = bg_stats[:, cv2.CC_STAT_WIDTH]
+        ch = bg_stats[:, cv2.CC_STAT_HEIGHT]
+        area = bg_stats[:, cv2.CC_STAT_AREA]
+        touches_border = (x0 == 0) | (y0 == 0) | ((x0 + cw) >= w) | ((y0 + ch) >= h)
+        max_hole_area = max(4, int(0.15 * h * w))
+        keep_bg = (~touches_border) & (area >= 2) & (area <= max_hole_area)
+        keep_bg[0] = False
+        if bool(np.any(keep_bg)):
+            lut = keep_bg.astype(np.float32)
+            hole_mask = cv2.dilate(lut[bg_labels], k3) * np.clip(
                 (0.55 - ink) / 0.35, 0.0, 1.0
             )
 
@@ -419,7 +418,9 @@ def _gap_and_loop_barrier(ink: "np.ndarray") -> "np.ndarray":
     )
 
 
-def _core_and_small_glyph_protection(ink: "np.ndarray") -> "np.ndarray":
+def _core_and_small_glyph_protection(
+    ink: "np.ndarray", *, ref_line_height: float | None = None
+) -> "np.ndarray":
     """Compute a ``[0, 1]`` mask protecting stroke ridge cores & tiny glyphs.
 
     Prevents ``slight_thin`` / heavy-bleed ``adaptive_norm`` from severing thin
@@ -440,20 +441,23 @@ def _core_and_small_glyph_protection(ink: "np.ndarray") -> "np.ndarray":
     protect[thin_local] = np.maximum(protect[thin_local], 0.90)
 
     # 2. Protect small connected components (dots, commas, geresh, gershayim, י)
-    h = ink.shape[0]
-    scale2 = max(0.35, (h / float(MODEL_LINE_HEIGHT)) ** 2)
+    eff_h = float(ref_line_height) if (ref_line_height and ref_line_height > 0) else float(ink.shape[0])
+    scale2 = max(0.35, (eff_h / float(MODEL_LINE_HEIGHT)) ** 2)
     small_area_cap = max(8, int(round(34.0 * scale2)))
-    small_dim_cap = max(5, int(round(11.0 * (h / float(MODEL_LINE_HEIGHT)))))
+    small_dim_cap = max(5, int(round(11.0 * (eff_h / float(MODEL_LINE_HEIGHT)))))
 
     num_cc, labels, stats, _ = cv2.connectedComponentsWithStats(fg, connectivity=8)
     if num_cc > 1:
-        for cid in range(1, num_cc):
-            area = int(stats[cid, cv2.CC_STAT_AREA])
-            cw = int(stats[cid, cv2.CC_STAT_WIDTH])
-            ch = int(stats[cid, cv2.CC_STAT_HEIGHT])
-            if area <= small_area_cap or (cw <= small_dim_cap and ch <= small_dim_cap):
-                comp = (labels == cid).astype(np.float32)
-                protect = np.maximum(protect, cv2.dilate(comp, k3))
+        area = stats[:, cv2.CC_STAT_AREA]
+        cw = stats[:, cv2.CC_STAT_WIDTH]
+        ch = stats[:, cv2.CC_STAT_HEIGHT]
+        keep_cc = (area <= small_area_cap) | (
+            (cw <= small_dim_cap) & (ch <= small_dim_cap)
+        )
+        keep_cc[0] = False
+        if bool(np.any(keep_cc)):
+            cc_lut = keep_cc.astype(np.float32)
+            protect = np.maximum(protect, cv2.dilate(cc_lut[labels], k3))
 
     return np.clip(protect, 0.0, 1.0)
 
@@ -477,13 +481,105 @@ def _apply_soft_thicken(ink: "np.ndarray", alpha: float, isotropic: bool) -> "np
     return np.clip(ink + grow, 0.0, 1.0).astype(np.float32)
 
 
-def _apply_soft_thin(ink: "np.ndarray", alpha: float) -> "np.ndarray":
+def _estimate_page_line_strips_and_sw(
+    arr_u8: "np.ndarray",
+) -> tuple[float, float]:
+    """Estimate ``(sw_at_h64, est_line_height_px)`` from line-scale patches on a full page.
+
+    Avoids shrinking an entire page to ``MODEL_LINE_HEIGHT`` (which would collapse
+    text strokes to subpixel widths). Instead, locates horizontal ink-bearing line
+    bands and measures ``measure_stroke_width(..., normalize_height=64)`` across
+    representative line strips, falling back to connected-component glyph height.
+    """
+    h, w = arr_u8.shape[:2]
+    if h <= MODEL_LINE_HEIGHT * 2:
+        sw = measure_stroke_width(arr_u8, normalize_height=MODEL_LINE_HEIGHT).median_sw_px
+        return sw, float(h)
+
+    ink, _, _, _ = _extract_inkness(arr_u8)
+    fg = (ink >= 0.22).astype(np.uint8)
+    row_cov = fg.mean(axis=1)
+    # Smooth row density over 5 px to bridge intra-line breaks
+    k_smooth = min(7, max(3, (h // 350) | 1))
+    row_smooth = np.convolve(row_cov, np.ones(k_smooth) / k_smooth, mode="same")
+    thr = max(0.006, float(np.percentile(row_smooth, 55)) * 0.45)
+    active = row_smooth > thr
+
+    bands: list[tuple[int, int]] = []
+    in_band = False
+    b0 = 0
+    min_bh = max(12, h // 130)
+    max_bh = max(48, h // 5)
+    for y in range(h):
+        if active[y] and not in_band:
+            in_band = True
+            b0 = y
+        elif not active[y] and in_band:
+            in_band = False
+            bh = y - b0
+            if min_bh <= bh <= max_bh:
+                bands.append((b0, y))
+    if in_band and min_bh <= (h - b0) <= max_bh:
+        bands.append((b0, h))
+
+    if bands:
+        # Pad each detected text band slightly (~25% of band height) to match line crops
+        line_heights: list[float] = []
+        strip_sws: list[float] = []
+        step = max(1, len(bands) // 12)
+        for y0, y1 in bands[::step][:12]:
+            pad_y = max(3, int(round((y1 - y0) * 0.25)))
+            sy0 = max(0, y0 - pad_y)
+            sy1 = min(h, y1 + pad_y)
+            line_heights.append(float(sy1 - sy0))
+            strip = arr_u8[sy0:sy1]
+            m = measure_stroke_width(strip, normalize_height=MODEL_LINE_HEIGHT)
+            if m.median_sw_px > 0.0 and m.ridge_pixel_count >= 12:
+                strip_sws.append(m.median_sw_px)
+        est_lh = float(np.median(line_heights)) if line_heights else float(MODEL_LINE_HEIGHT)
+        if strip_sws:
+            return round(float(np.median(strip_sws)), 3), est_lh
+
+    # Fallback: estimate typical line box height from connected-component letter heights
+    num_cc, _, stats, _ = cv2.connectedComponentsWithStats(fg, connectivity=8)
+    est_lh = float(max(MODEL_LINE_HEIGHT, h // 22))
+    if num_cc > 2:
+        ch = stats[1:, cv2.CC_STAT_HEIGHT]
+        cw = stats[1:, cv2.CC_STAT_WIDTH]
+        area = stats[1:, cv2.CC_STAT_AREA]
+        plausible = (area >= 12) & (ch >= 8) & (ch <= max_bh) & (cw <= w // 2)
+        if bool(np.any(plausible)):
+            med_glyph_h = float(np.median(ch[plausible]))
+            est_lh = max(24.0, med_glyph_h * 2.2)
+    native_sw = measure_stroke_width(arr_u8, normalize_height=None).median_sw_px
+    scaled_sw = round(native_sw * (float(MODEL_LINE_HEIGHT) / est_lh), 3) if native_sw > 0 else 0.0
+    return scaled_sw, est_lh
+
+
+def measure_page_stroke_width(image_or_array: object) -> float:
+    """Estimate line-scale ``MODEL_LINE_HEIGHT``-equivalent stroke width on a full page."""
+    if not HAS_STROKE_VISION:
+        return 0.0
+    if isinstance(image_or_array, Image.Image):
+        im = image_or_array if image_or_array.mode in ("L", "RGB") else image_or_array.convert("RGB")
+        arr = np.asarray(im)
+    else:
+        arr = np.asarray(image_or_array)
+    if arr.size == 0:
+        return 0.0
+    sw, _ = _estimate_page_line_strips_and_sw(arr)
+    return sw
+
+
+def _apply_soft_thin(
+    ink: "np.ndarray", alpha: float, *, ref_line_height: float | None = None
+) -> "np.ndarray":
     """Antialiased core-and-punctuation-guarded stroke thinning by ``alpha``."""
     if alpha <= 1e-3:
         return ink
     cross = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
     ero = cv2.erode(ink, cross)
-    protect = _core_and_small_glyph_protection(ink)
+    protect = _core_and_small_glyph_protection(ink, ref_line_height=ref_line_height)
     shrink = np.maximum(0.0, ink - ero) * float(alpha) * (1.0 - protect)
     return np.clip(ink - shrink, 0.0, 1.0).astype(np.float32)
 
@@ -545,9 +641,13 @@ def apply_stroke_variant_array(
     variant: StrokeVariant,
     *,
     measured_sw_px: float | None = None,
+    page_scale: bool = False,
 ) -> tuple["np.ndarray", float]:
     """Apply one of the 6 stroke-width variants to an ``uint8`` image array.
 
+    When ``page_scale=True`` (whole-page input before segmentation), stroke width
+    and small-glyph protection are calibrated at line-strip scale rather than
+    shrinking the entire page to a single 64-px line.
     Returns ``(output_u8, effective_measured_sw_px)``.
     """
     if variant not in STROKE_VARIANTS:
@@ -556,23 +656,33 @@ def apply_stroke_variant_array(
         sw = float(measured_sw_px) if measured_sw_px is not None else 0.0
         return arr_u8.copy(), sw
 
+    ref_lh: float | None = None
+    if page_scale:
+        page_sw, est_lh = _estimate_page_line_strips_and_sw(arr_u8)
+        ref_lh = est_lh
+    else:
+        page_sw = 0.0
+
     ink, _bg, denom_signed, _rgb = _extract_inkness(arr_u8)
 
     if variant == "mild_thicken":
         ink_new = _apply_soft_thicken(ink, alpha=0.32, isotropic=False)
-        sw = float(measured_sw_px or 0.0)
+        sw = float(measured_sw_px if measured_sw_px is not None else page_sw)
     elif variant == "moderate_thicken":
         ink_new = _apply_soft_thicken(ink, alpha=0.65, isotropic=True)
-        sw = float(measured_sw_px or 0.0)
+        sw = float(measured_sw_px if measured_sw_px is not None else page_sw)
     elif variant == "slight_thin":
-        ink_new = _apply_soft_thin(ink, alpha=0.32)
-        sw = float(measured_sw_px or 0.0)
+        ink_new = _apply_soft_thin(ink, alpha=0.32, ref_line_height=ref_lh)
+        sw = float(measured_sw_px if measured_sw_px is not None else page_sw)
     elif variant == "adaptive_norm":
-        sw = (
-            float(measured_sw_px)
-            if measured_sw_px is not None
-            else measure_stroke_width(arr_u8, normalize_height=MODEL_LINE_HEIGHT).median_sw_px
-        )
+        if measured_sw_px is not None:
+            sw = float(measured_sw_px)
+        elif page_scale:
+            sw = page_sw
+        else:
+            sw = measure_stroke_width(
+                arr_u8, normalize_height=MODEL_LINE_HEIGHT
+            ).median_sw_px
         if sw <= 0.0 or (
             ADAPTIVE_THIN_THRESHOLD_PX <= sw <= ADAPTIVE_THICK_THRESHOLD_PX
         ):
@@ -589,10 +699,10 @@ def apply_stroke_variant_array(
             alpha = min(
                 0.35, max(0.0, (sw - ADAPTIVE_THICK_THRESHOLD_PX) / 2.80)
             )
-            ink_new = _apply_soft_thin(ink, alpha=alpha)
+            ink_new = _apply_soft_thin(ink, alpha=alpha, ref_line_height=ref_lh)
     elif variant == "faint_repair":
         ink_new = _apply_faint_repair(ink)
-        sw = float(measured_sw_px or 0.0)
+        sw = float(measured_sw_px if measured_sw_px is not None else page_sw)
     else:  # pragma: no cover
         return arr_u8.copy(), 0.0
 
@@ -605,11 +715,13 @@ def apply_stroke_variant(
     variant: StrokeVariant = "original",
     *,
     at_model_height: int | None = None,
+    page_scale: bool = False,
 ) -> Image.Image:
-    """Apply ``variant`` to a PIL crop (optionally resized to ``at_model_height``).
+    """Apply ``variant`` to a PIL crop or page (optionally resized to ``at_model_height``).
 
     When ``variant == 'original'`` and ``at_model_height is None``, returns ``crop``
-    unchanged with zero copy overhead.
+    unchanged with zero copy overhead. Pass ``page_scale=True`` when ``crop`` is an
+    unsegmented full page so ``adaptive_norm`` measures stroke width at line scale.
     """
     if variant not in STROKE_VARIANTS:
         raise ValueError(f"Unknown stroke variant: {variant!r}")
@@ -624,5 +736,5 @@ def apply_stroke_variant(
     if work.mode not in ("L", "RGB"):
         work = work.convert("RGB")
     arr = np.asarray(work)
-    out_arr, _ = apply_stroke_variant_array(arr, variant)
+    out_arr, _ = apply_stroke_variant_array(arr, variant, page_scale=page_scale)
     return Image.fromarray(out_arr)

@@ -166,7 +166,83 @@ class StrokeWidthOperatorsTests(unittest.TestCase):
             self.assertEqual(
                 payload["memory_measurement"], "isolated_process_per_engine"
             )
+            self.assertEqual(
+                payload["evaluation_normalization"],
+                "hebrew_workbench.benchmark.metrics.normalise",
+            )
             self.assertEqual(len(payload["variants_tested"]), 6)
+
+    def test_page_scale_and_normalized_verified_only_benchmark_helpers(self) -> None:
+        import numpy as np
+        from hebrew_workbench.engine.stroke_width import measure_page_stroke_width
+        from tools.benchmark_stroke_width import (
+            _evaluate_predictions,
+            _load_verified_corpus_pages,
+        )
+
+        # Full-page multi-line synthetic image (~120 px line height)
+        page_arr = np.full((520, 700), 246, dtype=np.uint8)
+        for row_y in (90, 230, 370):
+            page_arr[row_y : row_y + 10, 80:620] = 28
+            for gx in range(100, 600, 45):
+                page_arr[row_y - 35 : row_y + 45, gx : gx + 8] = 28
+        page_im = Image.fromarray(page_arr)
+        m_page_sw = measure_page_stroke_width(page_im)
+        self.assertGreater(m_page_sw, 1.0)
+        scaled = apply_stroke_variant(page_im, "mild_thicken", page_scale=True)
+        self.assertEqual(scaled.size, page_im.size)
+
+        # _evaluate_predictions normalizes niqqud, gershayim/geresh, and repeated spaces
+        metrics = _evaluate_predictions(
+            [("p1", "שָׁלוֹם   בצה״ל")],
+            [("שלום\nבצה\"ל", ["שלום", "בצה\"ל"], [0.9], 4.2)],
+        )
+        self.assertEqual(metrics["macro_cer"], 0.0)
+        self.assertEqual(metrics["macro_wer"], 0.0)
+
+        # _load_verified_corpus_pages strictly excludes unverified & [?]-incomplete pages
+        with tempfile.TemporaryDirectory() as td:
+            cdir = Path(td)
+            for idx, (txt, ver) in enumerate(
+                [
+                    ("שורה מאומתת מלאה", "Independent Verifier"),
+                    ("שורה עם ספק [?] באמצע", "Independent Verifier"),
+                    ("טיוטה לא מאומתת", ""),
+                ],
+                start=1,
+            ):
+                Image.new("RGB", (60, 40), "white").save(cdir / f"p{idx}.png")
+                (cdir / f"p{idx}.txt").write_text(txt, encoding="utf-8")
+            (cdir / "corpus.json").write_text(
+                json.dumps(
+                    {
+                        "name": "Mixed Test Corpus",
+                        "target": "modern_cursive",
+                        "pages": [
+                            {
+                                "image": "p1.png",
+                                "transcript": "p1.txt",
+                                "verified_by": ["Independent Verifier"],
+                            },
+                            {
+                                "image": "p2.png",
+                                "transcript": "p2.txt",
+                                "verified_by": ["Independent Verifier"],
+                            },
+                            {
+                                "image": "p3.png",
+                                "transcript": "p3.txt",
+                                "verified_by": [],
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            loaded, total_p, meas_p = _load_verified_corpus_pages(cdir)
+            self.assertEqual(total_p, 3)
+            self.assertEqual(meas_p, 1)
+            self.assertEqual([pid for pid, _, _ in loaded], ["p1"])
 
 
 class PageEnhancementSettingsAndWorkerTests(unittest.TestCase):
@@ -184,6 +260,11 @@ class PageEnhancementSettingsAndWorkerTests(unittest.TestCase):
             self.assertFalse(reg.options_of(mish).get("page_enhancement"))
             if mish.object is not None and hasattr(mish.object, "page_enhancement"):
                 self.assertFalse(mish.object.page_enhancement)
+
+            # Even if stale per-plugin options contain page_enhancement=True,
+            # global settings.page_enhancement remains authoritative for KIND_OCR.
+            reg.settings.options["mishkefet"] = {"page_enhancement": True}
+            self.assertFalse(reg.options_of(mish).get("page_enhancement"))
 
             reloaded = PluginSettings.load(reg.settings_path)
             self.assertFalse(reloaded.page_enhancement)
@@ -260,6 +341,36 @@ class PageEnhancementSettingsAndWorkerTests(unittest.TestCase):
                 win._recognizing_entry = win.project[0]
                 win._on_ocr_done(res)
                 self.assertIn("OCR", win.preview.status.text())
+
+                # Subsequent clean/disabled OCR run replaces stale processed snapshot
+                res_clean = OCRResult(
+                    text="שלום",
+                    engine_name="Test Engine",
+                    pages=(
+                        PageResult(
+                            number=1,
+                            text="שלום",
+                            enhanced=False,
+                            enhancement_enabled=False,
+                            processed_image_png=png_bytes,
+                        ),
+                    ),
+                )
+                win._recognizing_entry = win.project[0]
+                win._on_ocr_done(res_clean)
+                snap_key = str(Path(win.project[0].path).resolve())
+                self.assertEqual(
+                    win._processed_previews[snap_key][1], (None, False, False)
+                )
+
+                # Active OCR task guard prevents mutating page enhancement mid-run
+                win.task = object()  # type: ignore[assignment]
+                try:
+                    win.set_page_enhancement_enabled(False)
+                    self.assertTrue(win.plugins.page_enhancement)
+                    self.assertTrue(win.toggle_page_enhancement_action.isChecked())
+                finally:
+                    win.task = None
 
                 # Toggle automatic page enhancement Off via SettingsDialog
                 dlg = SettingsDialog(win.plugins, win)

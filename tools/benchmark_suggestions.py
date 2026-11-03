@@ -291,24 +291,29 @@ def evaluate_cases(
 
         # Count unwanted changes directly: applied non-identity changes that did
         # NOT reduce edit distance toward reference.
+        norm_ref = normalise(case.reference)
+        ref_chars_seq: list[str] | None = None
         s_step = SuggestionSession(case.noisy)
         s_step.set_suggestions(actionable, case.noisy)
         for proposal in list(s_step.pending()):
             prev_text = s_step.current_text
-            prev_dist = character_error_rate(normalise(case.reference), normalise(prev_text))
-            prev_raw = levenshtein(list(case.reference), list(prev_text))
             res = s_step.accept(proposal)
             if res is None:
                 continue
             next_text = res[0]
             if next_text == prev_text:
                 continue
-            next_dist = character_error_rate(normalise(case.reference), normalise(next_text))
-            next_raw = levenshtein(list(case.reference), list(next_text))
-            if next_dist >= prev_dist - 1e-9 and next_raw >= prev_raw:
+            prev_dist = character_error_rate(norm_ref, normalise(prev_text))
+            next_dist = character_error_rate(norm_ref, normalise(next_text))
+            if next_dist < prev_dist - 1e-9:
+                continue
+            if ref_chars_seq is None:
+                ref_chars_seq = list(case.reference)
+            prev_raw = levenshtein(ref_chars_seq, list(prev_text))
+            next_raw = levenshtein(ref_chars_seq, list(next_text))
+            if next_raw >= prev_raw:
                 unwanted_changes += 1
 
-        norm_ref = normalise(case.reference)
         norm_before = normalise(case.noisy)
         norm_after = normalise(after_text)
         cer_b = character_error_rate(norm_ref, norm_before)

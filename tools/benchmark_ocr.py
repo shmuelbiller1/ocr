@@ -740,10 +740,25 @@ def _run_isolated_engine_subprocess(
     identifier: str,
     args: argparse.Namespace,
     dataset_root: Path | None = None,
+    pages_count: int = 1,
 ) -> dict:
     """Measure one engine in a fresh child process for accurate standalone RAM."""
     import subprocess
     import tempfile
+
+    per_page_timeout = max(30, int(getattr(args, "timeout", 300) or 300))
+    child_timeout = max(300, per_page_timeout * max(1, pages_count) + 300)
+
+    def _failed_entry(reason: str) -> dict:
+        return {
+            "engine": identifier,
+            "model": identifier,
+            "pages": 0,
+            "pages_seen": pages_count,
+            "summary": summarise_results([]),
+            "results": [],
+            "failures": [{"page": "<process>", "error": reason}],
+        }
 
     with tempfile.TemporaryDirectory(prefix="ocr-bench-iso-") as tmp_dir:
         single_out = Path(tmp_dir) / "single-engine.json"
@@ -771,12 +786,22 @@ def _run_isolated_engine_subprocess(
             cmd.extend(["--pages", str(args.pages)])
         if args.models:
             cmd.extend(["--models", str(args.models)])
-        proc = subprocess.run(cmd, check=False)
+        try:
+            proc = subprocess.run(cmd, check=False, timeout=child_timeout)
+        except subprocess.TimeoutExpired:
+            msg = (
+                f"Isolated benchmark child process timed out after "
+                f"{child_timeout}s for {identifier}"
+            )
+            print(f"warning: {msg}", file=sys.stderr, flush=True)
+            return _failed_entry(msg)
         if proc.returncode != 0 or not single_out.is_file():
-            raise RuntimeError(
+            msg = (
                 f"Isolated benchmark child process failed for {identifier} "
                 f"(exit code {proc.returncode})"
             )
+            print(f"warning: {msg}", file=sys.stderr, flush=True)
+            return _failed_entry(msg)
         return json.loads(single_out.read_text(encoding="utf-8"))
 
 
@@ -1012,7 +1037,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"=== the engine {identifier} (isolated process) ===", flush=True)
             report["engines"].append(
                 _run_isolated_engine_subprocess(
-                    identifier, args, dataset_root=pinkas_ds_root
+                    identifier,
+                    args,
+                    dataset_root=pinkas_ds_root,
+                    pages_count=len(pages),
                 )
             )
     else:

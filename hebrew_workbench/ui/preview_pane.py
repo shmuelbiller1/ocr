@@ -6,10 +6,13 @@ import io
 import json
 import subprocess
 import tempfile
+import threading
+import time
+from collections import OrderedDict
 from pathlib import Path
 
 from PIL import Image
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QCoreApplication, QEventLoop, Qt, QThread, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QTransform
 from PySide6.QtWidgets import (
     QComboBox,
@@ -24,17 +27,25 @@ from PySide6.QtWidgets import (
 )
 
 from ..engine.photocraft_audit import (
+    encode_preview_png,
     prepare_page_for_ocr,
     resolve_page_enhancement_enabled,
 )
 from ..preview.loader import DocumentPreview, PreviewError
 
-__all__ = ["PreviewPane", "pil_to_qimage", "VIEW_MODES"]
+__all__ = [
+    "PreviewPane",
+    "pil_to_qimage",
+    "VIEW_MODES",
+    "MAX_LIVE_PREVIEW_CACHE_ENTRIES",
+]
 
 BASE_RENDER_WIDTH = 1600
 MINIMUM_ZOOM = 0.02
 MAXIMUM_ZOOM = 8.0
 VIEW_MODES = ("original", "processed", "compare")
+MAX_LIVE_PREVIEW_CACHE_ENTRIES = 4
+WORKER_PREVIEW_TIMEOUT_SECONDS = 25.0
 
 
 def pil_to_qimage(image) -> QImage:
@@ -45,23 +56,209 @@ def pil_to_qimage(image) -> QImage:
     return qimage.copy()
 
 
+def _compute_live_preview_payload(
+    orig_image: Image.Image,
+    *,
+    cancel_event: threading.Event | None = None,
+    proc_holder: dict[str, object] | None = None,
+    proc_lock: threading.Lock | None = None,
+    worker_timeout: float = WORKER_PREVIEW_TIMEOUT_SECONDS,
+) -> tuple[bytes | None, bool, str]:
+    """Compute ``(png_bytes_or_none, was_enhanced, detail_note)`` off the GUI thread.
+
+    Clean pages and fallbacks return ``png_bytes=None`` so the caller reuses the
+    already-rendered original pixmap without duplicating uncompressed pixels in RAM.
+    """
+    if cancel_event is not None and cancel_event.is_set():
+        return None, False, "העיבוד המקדים בוטל"
+
+    # 1. Fast in-process evaluation when vision packages (numpy/cv2) are present
+    try:
+        prepared, audit = prepare_page_for_ocr(orig_image, enabled=True)
+        if audit is not None:
+            was_enh = bool(audit.needs_adjustment)
+            if was_enh:
+                png_bytes = encode_preview_png(prepared.convert("RGB"))
+                return png_bytes, True, "בוצע שיפור סלקטיבי"
+            return None, False, "הדף נקי — נשמר ללא שינוי פיקסלים"
+    except Exception:
+        pass
+
+    if cancel_event is not None and cancel_event.is_set():
+        return None, False, "העיבוד המקדים בוטל"
+
+    # 2. Packaged Windows fallback via ocr-worker.exe when cv2 lives in worker
+    from ..engine.worker import worker_path
+
+    w_exe = worker_path()
+    if w_exe is not None and w_exe.is_file():
+        try:
+            with tempfile.TemporaryDirectory(prefix="ocr-prev-") as td:
+                in_png = Path(td) / "in.png"
+                out_png = Path(td) / "out.png"
+                orig_image.convert("RGB").save(in_png, format="PNG")
+                if cancel_event is not None and cancel_event.is_set():
+                    return None, False, "העיבוד המקדים בוטל"
+                proc = subprocess.Popen(
+                    [
+                        str(w_exe),
+                        "--enhance-preview",
+                        str(in_png),
+                        "--output-preview",
+                        str(out_png),
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                if proc_holder is not None and proc_lock is not None:
+                    with proc_lock:
+                        proc_holder["proc"] = proc
+                        if cancel_event is not None and cancel_event.is_set():
+                            try:
+                                proc.kill()
+                            except OSError:
+                                pass
+                try:
+                    proc.communicate(timeout=worker_timeout)
+                except subprocess.TimeoutExpired:
+                    try:
+                        proc.kill()
+                    except OSError:
+                        pass
+                    proc.wait()
+                    return (
+                        None,
+                        False,
+                        "חריגה מזמן הקצוב להכנת התצוגה המעובדת — מוצג המקור",
+                    )
+                finally:
+                    if proc_holder is not None and proc_lock is not None:
+                        with proc_lock:
+                            proc_holder["proc"] = None
+
+                if cancel_event is not None and cancel_event.is_set():
+                    return None, False, "העיבוד המקדים בוטל"
+
+                if proc.returncode == 0 and out_png.is_file():
+                    meta_path = out_png.with_suffix(".json")
+                    was_enh = False
+                    if meta_path.is_file():
+                        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                        was_enh = bool(meta.get("enhanced", False))
+                    if was_enh:
+                        png_bytes = out_png.read_bytes()
+                        # Validate readable image before caching
+                        im = Image.open(io.BytesIO(png_bytes))
+                        im.load()
+                        return png_bytes, True, "בוצע שיפור סלקטיבי"
+                    return None, False, "הדף נקי — נשמר ללא שינוי פיקסלים"
+                return (
+                    None,
+                    False,
+                    "לא ניתן להפיק תצוגה מעובדת לעמוד זה — מוצג המקור",
+                )
+        except Exception:
+            return (
+                None,
+                False,
+                "לא ניתן להפיק תצוגה מעובדת לעמוד זה — מוצג המקור",
+            )
+
+    return (
+        None,
+        False,
+        "תצוגת העיבוד המקדים תהיה זמינה לאחר התקנת רכיב הזיהוי",
+    )
+
+
+class _PreviewEnhanceThread(QThread):
+    """Background worker that resolves processed-page previews off the GUI thread."""
+
+    result_ready = Signal(int, int, bool, object, bool, str)
+
+    def __init__(
+        self,
+        doc_token: int,
+        page_number: int,
+        eff_on: bool,
+        orig_image: Image.Image,
+        worker_timeout: float = WORKER_PREVIEW_TIMEOUT_SECONDS,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self.doc_token = doc_token
+        self.page_number = page_number
+        self.eff_on = eff_on
+        self._orig_image = orig_image
+        self._worker_timeout = worker_timeout
+        self._cancel_event = threading.Event()
+        self._proc_lock = threading.Lock()
+        self._proc_holder: dict[str, object] = {"proc": None}
+
+    def cancel(self) -> None:
+        self._cancel_event.set()
+        with self._proc_lock:
+            proc = self._proc_holder.get("proc")
+            if isinstance(proc, subprocess.Popen):
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancel_event.is_set()
+
+    def run(self) -> None:
+        png_bytes, was_enh, note = _compute_live_preview_payload(
+            self._orig_image,
+            cancel_event=self._cancel_event,
+            proc_holder=self._proc_holder,
+            proc_lock=self._proc_lock,
+            worker_timeout=self._worker_timeout,
+        )
+        if not self._cancel_event.is_set():
+            self.result_ready.emit(
+                self.doc_token,
+                self.page_number,
+                self.eff_on,
+                png_bytes,
+                was_enh,
+                note,
+            )
+
+
 class PreviewPane(QWidget):
     """Shows one document, one page at a time, completely offline."""
 
     view_mode_changed = Signal(str)
+    preview_enhancement_finished = Signal(int, bool)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        max_cache_entries: int = MAX_LIVE_PREVIEW_CACHE_ENTRIES,
+        worker_timeout: float = WORKER_PREVIEW_TIMEOUT_SECONDS,
+    ) -> None:
         super().__init__(parent)
         self._preview: DocumentPreview | None = None
+        self._doc_token = 0
         self._page = 1
         self._zoom = 1.0
         self._rotation = 0
         self._view_mode = "original"
         self._page_enhancement_enabled = True
+        self._max_cache_entries = max(1, int(max_cache_entries))
+        self._worker_timeout = float(worker_timeout)
         # Optional OCR-produced per-page cache: page_num -> (png_bytes|None, enhanced, enh_enabled)
         self._ocr_processed_pages: dict[int, tuple[bytes | None, bool, bool]] = {}
-        # On-demand preview cache invalidated when document or enhancement setting changes
-        self._live_processed_cache: dict[tuple[int, bool], tuple[Image.Image, bool, str]] = {}
+        # Bounded LRU on-demand preview cache: (page_num, eff_on) -> (png_bytes|None, was_enh, note)
+        self._live_processed_cache: OrderedDict[
+            tuple[int, bool], tuple[bytes | None, bool, str]
+        ] = OrderedDict()
+        self._enhance_thread: _PreviewEnhanceThread | None = None
+        self._retired_threads: list[_PreviewEnhanceThread] = []
 
         self.view = QGraphicsView(self)
         self.view.setRenderHints(self.view.renderHints())
@@ -164,7 +361,12 @@ class PreviewPane(QWidget):
             self._toolbar.addWidget(widget)
 
     # -- document handling -------------------------------------------------
-    def set_document(self, path: str | None) -> None:
+    def set_document(
+        self,
+        path: str | None,
+        *,
+        processed_pages: dict[int, tuple[bytes | None, bool, bool]] | None = None,
+    ) -> None:
         """Show a different document (or clear the pane with ``None``)."""
         self.close_document()
         if not path:
@@ -175,16 +377,85 @@ class PreviewPane(QWidget):
         except PreviewError as exc:
             self._show_message(str(exc))
             return
+        self._ocr_processed_pages = dict(processed_pages or {})
         self._page = 1
         self._rotation = 0
         self._render_page()
 
     def close_document(self) -> None:
+        self._doc_token += 1
+        self._cancel_pending_enhancement(wait_ms=1500)
         self._ocr_processed_pages = {}
-        self._live_processed_cache = {}
+        self._live_processed_cache.clear()
         if self._preview is not None:
             self._preview.close()
             self._preview = None
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self._cancel_pending_enhancement(wait_ms=2000)
+        super().closeEvent(event)
+
+    @property
+    def is_enhancing_preview(self) -> bool:
+        return self._enhance_thread is not None and self._enhance_thread.isRunning()
+
+    def wait_for_pending_enhancement(self, timeout_ms: int = 5000) -> bool:
+        """Pump Qt events until any active preview-enhancement thread finishes."""
+        deadline = time.monotonic() + max(0.01, timeout_ms / 1000.0)
+        while True:
+            thread = self._enhance_thread
+            if thread is None or not thread.isRunning():
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            QCoreApplication.processEvents(QEventLoop.AllEvents, 25)
+            thread = self._enhance_thread
+            if thread is not None and thread.isRunning():
+                thread.wait(min(25, max(1, int(remaining * 1000))))
+        QCoreApplication.processEvents(QEventLoop.AllEvents, 25)
+        return self._enhance_thread is None or not self._enhance_thread.isRunning()
+
+    def _cancel_pending_enhancement(self, *, wait_ms: int = 0) -> None:
+        thread = self._enhance_thread
+        if thread is None:
+            return
+        self._enhance_thread = None
+        thread.cancel()
+        if thread.isRunning():
+            if wait_ms > 0 and thread.wait(wait_ms):
+                thread.deleteLater()
+            else:
+                self._retired_threads.append(thread)
+                thread.finished.connect(
+                    lambda t=thread: self._cleanup_retired_thread(t)
+                )
+        else:
+            thread.deleteLater()
+
+    def _cleanup_retired_thread(self, thread: _PreviewEnhanceThread) -> None:
+        if thread in self._retired_threads:
+            self._retired_threads.remove(thread)
+        thread.deleteLater()
+
+    def _cache_put(
+        self,
+        key: tuple[int, bool],
+        value: tuple[bytes | None, bool, str],
+    ) -> None:
+        if key in self._live_processed_cache:
+            self._live_processed_cache.move_to_end(key)
+        self._live_processed_cache[key] = value
+        while len(self._live_processed_cache) > self._max_cache_entries:
+            self._live_processed_cache.popitem(last=False)
+
+    def _cache_get(
+        self, key: tuple[int, bool]
+    ) -> tuple[bytes | None, bool, str] | None:
+        val = self._live_processed_cache.get(key)
+        if val is not None:
+            self._live_processed_cache.move_to_end(key)
+        return val
 
     @property
     def view_mode(self) -> str:
@@ -197,6 +468,8 @@ class PreviewPane(QWidget):
         if mode == self._view_mode:
             return
         self._view_mode = mode
+        if mode == "original":
+            self._cancel_pending_enhancement()
         idx = self.view_mode_box.findData(mode)
         if idx >= 0 and self.view_mode_box.currentIndex() != idx:
             self.view_mode_box.blockSignals(True)
@@ -210,6 +483,8 @@ class PreviewPane(QWidget):
         chosen = str(self.view_mode_box.currentData() or "original")
         if chosen in VIEW_MODES and chosen != self._view_mode:
             self._view_mode = chosen
+            if chosen == "original":
+                self._cancel_pending_enhancement()
             if self._preview is not None:
                 self._render_page()
             self.view_mode_changed.emit(self._view_mode)
@@ -219,6 +494,8 @@ class PreviewPane(QWidget):
         new_val = bool(enabled)
         if new_val != self._page_enhancement_enabled:
             self._page_enhancement_enabled = new_val
+            if not new_val:
+                self._cancel_pending_enhancement()
             if self._preview is not None and self._view_mode != "original":
                 self._render_page()
 
@@ -231,99 +508,116 @@ class PreviewPane(QWidget):
         if self._preview is not None and self._view_mode != "original":
             self._render_page()
 
-    def _resolve_processed_image(
-        self, orig_image: Image.Image
-    ) -> tuple[Image.Image, bool, str]:
-        """Return ``(processed_pil, was_enhanced, detail_note)`` for ``self._page``."""
+    @staticmethod
+    def _decode_png_to_pixmap(
+        png_bytes: bytes | None, fallback_pixmap: QPixmap, rotation: int
+    ) -> QPixmap:
+        if not png_bytes:
+            return fallback_pixmap
+        try:
+            im = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+            im.load()
+            px = QPixmap.fromImage(pil_to_qimage(im))
+            if rotation:
+                px = px.transformed(QTransform().rotate(rotation))
+            return px
+        except Exception:
+            return fallback_pixmap
+
+    def _resolve_cached_or_schedule(
+        self, orig_image: Image.Image, orig_pixmap: QPixmap
+    ) -> tuple[QPixmap, str]:
+        """Return ``(proc_pixmap, detail_note)`` immediately without blocking the GUI."""
         eff_on = resolve_page_enhancement_enabled(self._page_enhancement_enabled)
         ocr_entry = self._ocr_processed_pages.get(self._page)
         if ocr_entry is not None:
             png_bytes, was_enh, ocr_eff_on = ocr_entry
             if ocr_eff_on == eff_on:
                 if was_enh and png_bytes:
-                    try:
-                        im = Image.open(io.BytesIO(png_bytes)).convert("RGB")
-                        im.load()
-                        return im, True, "בוצע שיפור סלקטיבי ב-OCR"
-                    except Exception:
-                        pass
+                    px = self._decode_png_to_pixmap(
+                        png_bytes, orig_pixmap, self._rotation
+                    )
+                    return px, "בוצע שיפור סלקטיבי ב-OCR"
                 if not eff_on:
-                    return orig_image, False, "שיפור דף אוטומטי: כבוי (ללא שינוי)"
-                return orig_image, False, "הדף נקי — נשמר ללא שינוי פיקסלים"
+                    return orig_pixmap, "שיפור דף אוטומטי: כבוי (ללא שינוי)"
+                return orig_pixmap, "הדף נקי — נשמר ללא שינוי פיקסלים"
 
         if not eff_on:
-            return orig_image, False, "שיפור דף אוטומטי: כבוי (ללא שינוי)"
+            return orig_pixmap, "שיפור דף אוטומטי: כבוי (ללא שינוי)"
 
         cache_key = (self._page, eff_on)
-        cached = self._live_processed_cache.get(cache_key)
+        cached = self._cache_get(cache_key)
         if cached is not None:
-            return cached
-
-        # 1. Fast in-process evaluation when worker vision packages are present
-        try:
-            prepared, audit = prepare_page_for_ocr(orig_image, enabled=True)
-            if audit is not None:
-                was_enh = bool(audit.needs_adjustment)
-                note = (
-                    "בוצע שיפור סלקטיבי"
-                    if was_enh
-                    else "הדף נקי — נשמר ללא שינוי פיקסלים"
+            png_bytes, was_enh, note = cached
+            if was_enh and png_bytes:
+                px = self._decode_png_to_pixmap(
+                    png_bytes, orig_pixmap, self._rotation
                 )
-                res = (prepared.convert("RGB"), was_enh, note)
-                self._live_processed_cache[cache_key] = res
-                return res
-        except Exception:
-            pass
+                return px, note
+            return orig_pixmap, note
 
-        # 2. Packaged Windows fallback via ocr-worker.exe when cv2 lives in worker
-        from ..engine.worker import worker_path
+        self._ensure_async_enhancement(self._doc_token, self._page, eff_on, orig_image)
+        return orig_pixmap, "מכין תצוגה מעובדת ברקע..."
 
-        w_exe = worker_path()
-        if w_exe is not None and w_exe.is_file():
-            try:
-                with tempfile.TemporaryDirectory(prefix="ocr-prev-") as td:
-                    in_png = Path(td) / "in.png"
-                    out_png = Path(td) / "out.png"
-                    orig_image.convert("RGB").save(in_png, format="PNG")
-                    proc = subprocess.run(
-                        [
-                            str(w_exe),
-                            "--enhance-preview",
-                            str(in_png),
-                            "--output-preview",
-                            str(out_png),
-                        ],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        timeout=25,
-                        check=False,
-                    )
-                    if proc.returncode == 0 and out_png.is_file():
-                        im = Image.open(out_png).convert("RGB")
-                        im.load()
-                        meta_path = out_png.with_suffix(".json")
-                        was_enh = False
-                        if meta_path.is_file():
-                            meta = json.loads(
-                                meta_path.read_text(encoding="utf-8")
-                            )
-                            was_enh = bool(meta.get("enhanced", False))
-                        note = (
-                            "בוצע שיפור סלקטיבי"
-                            if was_enh
-                            else "הדף נקי — נשמר ללא שינוי פיקסלים"
-                        )
-                        res = (im, was_enh, note)
-                        self._live_processed_cache[cache_key] = res
-                        return res
-            except Exception:
-                pass
-
-        return (
-            orig_image,
-            False,
-            "תצוגת העיבוד המקדים תהיה זמינה לאחר התקנת רכיב הזיהוי",
+    def _ensure_async_enhancement(
+        self,
+        doc_token: int,
+        page_number: int,
+        eff_on: bool,
+        orig_image: Image.Image,
+    ) -> None:
+        cur = self._enhance_thread
+        if (
+            cur is not None
+            and cur.isRunning()
+            and not cur.cancelled
+            and cur.doc_token == doc_token
+            and cur.page_number == page_number
+            and cur.eff_on == eff_on
+        ):
+            return
+        self._cancel_pending_enhancement()
+        thread = _PreviewEnhanceThread(
+            doc_token=doc_token,
+            page_number=page_number,
+            eff_on=eff_on,
+            orig_image=orig_image.copy(),
+            worker_timeout=self._worker_timeout,
+            parent=self,
         )
+        thread.result_ready.connect(self._on_async_enhancement_ready)
+        thread.finished.connect(
+            lambda t=thread: self._on_async_thread_finished(t)
+        )
+        self._enhance_thread = thread
+        thread.start()
+
+    def _on_async_thread_finished(self, thread: _PreviewEnhanceThread) -> None:
+        if self._enhance_thread is thread:
+            self._enhance_thread = None
+            thread.deleteLater()
+
+    def _on_async_enhancement_ready(
+        self,
+        doc_token: int,
+        page_number: int,
+        eff_on: bool,
+        png_bytes: object,
+        was_enh: bool,
+        note: str,
+    ) -> None:
+        if doc_token != self._doc_token or self._preview is None:
+            return
+        payload_bytes = png_bytes if isinstance(png_bytes, bytes) else None
+        self._cache_put((page_number, eff_on), (payload_bytes, bool(was_enh), note))
+        if (
+            self._page == page_number
+            and self._view_mode != "original"
+            and resolve_page_enhancement_enabled(self._page_enhancement_enabled)
+            == eff_on
+        ):
+            self._render_page()
+        self.preview_enhancement_finished.emit(page_number, bool(was_enh))
 
     @staticmethod
     def _compose_side_by_side(
@@ -370,11 +664,6 @@ class PreviewPane(QWidget):
         self._render_page()
 
     def set_zoom(self, factor: float) -> None:
-        # The smallest zoom is small enough for a page that was fitted to
-        # a small window, so that zooming out always makes the page
-        # smaller.  A long page that was fitted to the window can be
-        # smaller than that, and then the zoom may go further down, so
-        # that zooming out does not make the page bigger.
         lowest = MINIMUM_ZOOM
         if self._zoom < MINIMUM_ZOOM:
             lowest = self._zoom
@@ -393,8 +682,6 @@ class PreviewPane(QWidget):
         self.view.fitInView(
             self.scene.itemsBoundingRect(), Qt.KeepAspectRatio
         )
-        # The buttons of the zoom continue from the size that is shown
-        # now, and not from the size of the original page.
         self._zoom = self._view_scale()
 
     def _view_scale(self) -> float:
@@ -431,12 +718,9 @@ class PreviewPane(QWidget):
             pixmap = orig_pixmap
             status_text = base_status
         else:
-            proc_im, _was_enh, note = self._resolve_processed_image(page.image)
-            proc_pixmap = QPixmap.fromImage(pil_to_qimage(proc_im))
-            if self._rotation:
-                proc_pixmap = proc_pixmap.transformed(
-                    QTransform().rotate(self._rotation)
-                )
+            proc_pixmap, note = self._resolve_cached_or_schedule(
+                page.image, orig_pixmap
+            )
             if self._view_mode == "processed":
                 pixmap = proc_pixmap
                 status_text = f"{base_status} | לאחר עיבוד ({note})"

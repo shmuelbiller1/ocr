@@ -1,0 +1,99 @@
+name: Exhaustive OCR Research Benchmarks
+
+# Heavy multi-regime neural sweeps (15-suite PhotoCraft before/after OCR and
+# full 192-cell 8-regime x 6-variant x 2-enhancement x 2-engine stroke-width
+# matrix). Triggered manually so routine PR/push CI stays fast (~20-25 min).
+on:
+  workflow_dispatch:
+    inputs:
+      run_photocraft_neural:
+        description: 'Run full 15-suite neural OCR PhotoCraft before/after sweep'
+        required: false
+        default: true
+        type: boolean
+      run_full_stroke_width:
+        description: 'Run full 192-cell stroke-width & segmentation sweep (no --ci-fast)'
+        required: false
+        default: true
+        type: boolean
+      fetch_public_scans:
+        description: 'Fetch 3 public HeOCR/hash archival scans for non-GT Experiment C'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exhaustive-benchmarks:
+    name: Exhaustive PhotoCraft & Stroke-Width Sweeps
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore recognition model cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/models
+          key: engine-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ github.sha }}
+          restore-keys: engine-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install recognition engines
+        run: |
+          set -o pipefail
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
+          python -m pip install "opencv-python-headless==4.12.0.88" "pypdfium2==4.30.0"
+          python tools/check_engine.py
+      - name: Download recognition models
+        run: |
+          set -o pipefail
+          for model in kraken-ppocrv6-small kraken-ppocrv6-medium mishkefet-v1 mishkefet-char-lm mishkefet-word-lm; do
+            python tools/download_model.py --model "$model" --target .cache/models
+          done
+      - name: Full 15-suite PhotoCraft neural OCR benchmark
+        if: ${{ inputs.run_photocraft_neural }}
+        timeout-minutes: 75
+        run: |
+          set -o pipefail
+          python tools/benchmark_photocraft_audit.py \
+            --corpus benchmark/modern_cursive \
+            --models .cache/models \
+            --engines mishkefet-v1 kraken-ppocrv6-small \
+            --child-timeout 3600 \
+            --output photocraft-audit-full.json 2>&1 | tee photocraft-full.log
+      - name: Full 192-cell stroke-width & segmentation benchmark
+        if: ${{ inputs.run_full_stroke_width }}
+        timeout-minutes: 180
+        run: |
+          set -o pipefail
+          extra_flags=()
+          if [ "${{ inputs.fetch_public_scans }}" = "true" ]; then
+            extra_flags+=(--fetch-public-real-scans)
+          fi
+          python tools/benchmark_stroke_width.py \
+            --corpus benchmark/modern_cursive \
+            --models .cache/models \
+            --engines mishkefet-v1 kraken-ppocrv6-small \
+            --child-timeout 7200 \
+            "${extra_flags[@]}" \
+            --output stroke-width-full.json 2>&1 | tee stroke-width-full.log
+      - name: Upload exhaustive research benchmark reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exhaustive-ocr-research-benchmarks
+          path: |
+            photocraft-audit-full.json
+            photocraft-full.log
+            stroke-width-full.json
+            stroke-width-full.log
+          if-no-files-found: warn

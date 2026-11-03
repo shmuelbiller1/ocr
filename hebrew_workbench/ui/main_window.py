@@ -63,6 +63,7 @@ SUPPORTED_SUFFIXES = (".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", 
 #: Fonts that are known to carry Hebrew glyphs on Windows.  Qt silently
 #: falls back to the next family when one is missing.
 HEBREW_FONTS = ("David", "Segoe UI", "Arial", "Noto Sans Hebrew", "Times New Roman")
+MAX_PROCESSED_DOC_SNAPSHOTS = 8
 
 FILE_DIALOG_FILTER = (
     "Scanned pages (*.pdf *.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp);;"
@@ -606,9 +607,9 @@ class MainWindow(QMainWindow):
         self.suggestions = self._session_for(entry)
         self._refresh_suggestions(self.suggestions)
         self.doc_path_label.setText(entry.path)
-        self.preview.set_document(entry.path)
-        self.preview.set_processed_pages(
-            self._processed_previews.get(str(entry.path))
+        self.preview.set_document(
+            entry.path,
+            processed_pages=self._processed_previews.get(str(entry.path)),
         )
         self._show_decoding_comparison(entry)
 
@@ -861,15 +862,21 @@ class MainWindow(QMainWindow):
             entry.assisted_transcription = getattr(result, "assisted_text", None)
             entry.decoding_mode = getattr(result, "decoding_mode", "raw")
             pages = getattr(result, "pages", ()) or ()
-            if pages:
-                self._processed_previews[str(entry.path)] = {
-                    int(p.number): (
-                        getattr(p, "processed_image_png", None),
-                        bool(getattr(p, "enhanced", False)),
-                        bool(getattr(p, "enhancement_enabled", True)),
-                    )
-                    for p in pages
-                }
+            doc_key = str(entry.path)
+            self._processed_previews.pop(doc_key, None)
+            self._processed_previews[doc_key] = {
+                int(p.number): (
+                    getattr(p, "processed_image_png", None)
+                    if bool(getattr(p, "enhanced", False))
+                    else None,
+                    bool(getattr(p, "enhanced", False)),
+                    bool(getattr(p, "enhancement_enabled", True)),
+                )
+                for p in pages
+            }
+            while len(self._processed_previews) > MAX_PROCESSED_DOC_SNAPSHOTS:
+                oldest_key = next(iter(self._processed_previews))
+                self._processed_previews.pop(oldest_key, None)
             # The text of the document is new, and the corrections that
             # were made on the old text do not belong to it any more.
             # Their places are of no use, and a correction that is
@@ -1148,6 +1155,13 @@ class MainWindow(QMainWindow):
 
     def set_page_enhancement_enabled(self, enabled: bool) -> None:
         """Switch automatic pre-OCR page enhancement On or Off from UI."""
+        if self.task is not None:
+            self._sync_page_enhancement_ui()
+            self.statusBar().showMessage(
+                "לא ניתן לשנות שיפור דף אוטומטי בזמן שמשימת זיהוי פועלת.",
+                5000,
+            )
+            return
         new_state = bool(enabled)
         if new_state != self.plugins.page_enhancement:
             self.plugins.set_page_enhancement(new_state)

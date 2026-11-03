@@ -52,7 +52,10 @@ from hebrew_workbench.benchmark.metrics import (  # noqa: E402
 )
 from hebrew_workbench.engine.photocraft_audit import prepare_page_for_ocr  # noqa: E402
 from hebrew_workbench.engine.vendor.hebocr.page.segment import segment_page  # noqa: E402
-from tools.benchmark_ocr import resolve_engines  # noqa: E402
+from tools.benchmark_ocr import (  # noqa: E402
+    _filter_installed_engine_ids,
+    resolve_engines,
+)
 
 ALL_SUITES: tuple[str, ...] = (
     "unmodified",
@@ -428,8 +431,14 @@ def main() -> int:
         default=["mishkefet-v1", "kraken-ppocrv6-small"],
     )
     parser.add_argument("--segmentation-only", action="store_true")
+    parser.add_argument(
+        "--skip-neural-ocr",
+        action="store_true",
+        help="run deterministic segmentation/SNR audit only (skip multi-suite neural OCR passes)",
+    )
     parser.add_argument("--skip-segmentation", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--in-process", action="store_true")
+    parser.add_argument("--child-timeout", type=int, default=3600)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
@@ -440,9 +449,21 @@ def main() -> int:
         else run_segmentation_benchmark(args.corpus)
     )
     ocr_rows: list[dict[str, Any]] = []
-    if not args.segmentation_only and args.models is not None:
-        engine_list = list(args.engines)
-        if not args.in_process and len(engine_list) > 1:
+    warnings: list[str] = []
+    skip_neural = bool(args.segmentation_only or args.skip_neural_ocr)
+    if not skip_neural and args.models is not None:
+        engine_list, warnings = _filter_installed_engine_ids(
+            list(args.engines), args.models
+        )
+        for w in warnings:
+            print(f"[WARN] {w}", flush=True)
+        if not engine_list:
+            print(
+                f"[WARN] No requested OCR models ({args.engines}) installed in {args.models}; "
+                "skipping neural OCR suites.",
+                flush=True,
+            )
+        elif not args.in_process and len(engine_list) > 1:
             import subprocess
             import tempfile
 
@@ -463,7 +484,9 @@ def main() -> int:
                         "--output",
                         str(tmp_out),
                     ]
-                    proc = subprocess.run(cmd, check=False)
+                    proc = subprocess.run(
+                        cmd, check=False, timeout=args.child_timeout
+                    )
                     if proc.returncode != 0 or not tmp_out.is_file():
                         raise RuntimeError(
                             f"Isolated PhotoCraft benchmark failed for {eng_id} "
@@ -478,6 +501,7 @@ def main() -> int:
 
     payload = {
         "corpus": str(args.corpus),
+        "warnings": warnings,
         "segmentation_and_snr": seg_rows,
         "neural_ocr_before_vs_after": ocr_rows,
     }

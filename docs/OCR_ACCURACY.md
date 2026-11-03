@@ -45,10 +45,16 @@ The tools that build the corpus and that measure the engines on it are ready: se
 
 While `benchmark/modern_school` awaits consented school notebook pages, the
 repository includes six real, independently human-verified public-domain
-(`PDM-1.0`) 20th-century modern Hebrew cursive manuscript pages in
-`benchmark/modern_cursive/` (three hands across graph paper, aged lined paper,
-cross-outs, and faint scans: Rachel Bluwstein, N. H. Imber, and H. N. Bialik,
-62 reference lines total; GPT-4o unverified pages excluded).
+(`PDM-1.0`) late-19th and early-20th-century modern Hebrew cursive manuscript
+pages in `benchmark/modern_cursive/` (three hands across graph paper, aged
+lined paper, cross-outs, and faint scans: Rachel Bluwstein, N. H. Imber, and
+H. N. Bialik, 62 reference lines total; GPT-4o unverified pages excluded).
+Reproducible CI provenance: measured on GitHub Actions `ubuntu-latest` CPU
+(`Windows desktop build` / job `ocr-engine`, Python 3.12, PyTorch 2.14.0+cpu,
+Kraken 7.1.1, isolated child process per engine via `tools/benchmark_ocr.py`,
+baseline run `41483720777` on commit `ea65682` / PR #23, JSON reports
+`ocr-accuracy-cursive.json`, `ocr-accuracy-modern.json`, and
+`ocr-accuracy.json`).
 
 <!-- CURSIVE:BEGIN -->
 
@@ -58,8 +64,8 @@ Measured with kraken PP-OCRv6 (Apache-2.0) on 6 pages of Public-Domain Modern Cu
 | --- | --- |
 | Character error rate | **80.5%** |
 | Word error rate | **95.1%** |
-| Seconds per page | 14.21 |
-| Peak RSS (MB) | 2631.62 |
+| Seconds per page | 14.37 |
+| Peak RSS (MB) | 2631.6 |
 | Pages measured | 6 |
 | Pages seen | 6 |
 | Characters of the ground truth | 1112 |
@@ -73,22 +79,22 @@ The rate of the errors is what decides which engine is the better one; the time 
 
 | Engine | Character error rate | Word error rate | Seconds per page | Peak RSS (MB) | Pages |
 | --- | --- | --- | --- | --- | --- |
-| kraken-ppocrv6-small | 80.5% | 95.1% | 14.21 | 2631.6 | 6 |
-| kraken-ppocrv6-medium | 81.6% | 94.6% | 15.46 | 2647.7 | 6 |
-| mishkefet-v1 | 38.2% | 89.7% | 5.25 | 1429.8 | 6 |
-| mishkefet-v1:beam | 39.4% | 88.4% | 12.88 | 1526.3 | 6 |
-| mishkefet-v1:assisted | 39.7% | 91.1% | 13.54 | 1818.6 | 6 |
+| kraken-ppocrv6-small | 80.5% | 95.1% | 14.37 | 2631.6 | 6 |
+| kraken-ppocrv6-medium | 81.6% | 94.6% | 15.9 | 2642.4 | 6 |
+| mishkefet-v1 | 38.2% | 89.7% | 5.36 | 1430.0 | 6 |
+| mishkefet-v1:beam | 39.4% | 88.4% | 13.12 | 1533.1 | 6 |
+| mishkefet-v1:assisted | 39.7% | 91.1% | 13.7 | 1777.3 | 6 |
 
 | Page | Characters in the ground truth | Character error rate | Word error rate | Seconds | Ground truth |
 | --- | --- | --- | --- | --- | --- |
-| pages/commons__begani_netatikha__p0001.jpg | 153 | 86.9% | 96.9% | 16.28 | complete |
-| pages/commons__bialik_el_hazippor__p0001.jpg | 106 | 88.7% | 100.0% | 20.94 | complete |
-| pages/commons__hatikvah_imber_manuscript__p0001.jpg | 167 | 96.4% | 100.0% | 17.07 | complete |
-| pages/commons__rachel_aqara_1928__p0001.jpg | 240 | 64.2% | 83.3% | 10.21 | complete |
-| pages/commons__rachel_gan_naul__p0001.jpg | 181 | 77.3% | 97.5% | 10.34 | complete |
-| pages/commons__rachel_rak_al_atzmi__p0001.jpg | 265 | 80.4% | 98.2% | 10.44 | complete |
+| pages/commons__begani_netatikha__p0001.jpg | 153 | 86.9% | 96.9% | 16.52 | complete |
+| pages/commons__bialik_el_hazippor__p0001.jpg | 106 | 88.7% | 100.0% | 21.1 | complete |
+| pages/commons__hatikvah_imber_manuscript__p0001.jpg | 167 | 96.4% | 100.0% | 17.1 | complete |
+| pages/commons__rachel_aqara_1928__p0001.jpg | 240 | 64.2% | 83.3% | 10.35 | complete |
+| pages/commons__rachel_gan_naul__p0001.jpg | 181 | 77.3% | 97.5% | 10.56 | complete |
+| pages/commons__rachel_rak_al_atzmi__p0001.jpg | 265 | 80.4% | 98.2% | 10.56 | complete |
 
-These pages are verified 20th-century modern Hebrew cursive manuscripts (`PDM-1.0`).  They measure modern cursive handwriting in isolated per-engine processes while `benchmark/modern_school` awaits consented contemporary school notebook pages.
+These pages are verified late-19th and early-20th-century modern Hebrew cursive manuscripts (`PDM-1.0`).  They measure modern cursive handwriting in isolated per-engine processes while `benchmark/modern_school` awaits consented contemporary school notebook pages.
 
 The numbers were produced by `tools/benchmark_ocr.py` in the `ocr-engine` job of the build, and the report they come from is uploaded as the artefact `modern-cursive-and-suggestions-benchmarks`.
 
@@ -128,7 +134,9 @@ of the recognition on modern school handwriting therefore stays
 
 The readings are published so that the engines can be compared on real
 material, and so that a person can look at what the program reads on a
-page and judge it.
+page and judge it.  A line-by-line provisional verification worksheet with
+explicit uncertainty labels (`HIGH` / `MEDIUM` / `PROVISIONAL [?]`) is
+maintained in `docs/BAVA_BATRA_PROVISIONAL_WORKSHEET.md`.
 
 ## The diagnostic corpus: the old handwriting
 
@@ -199,8 +207,8 @@ Measured with kraken PP-OCRv6 (Apache-2.0) on 4 pages of The Pinkas Dataset:
 | --- | --- |
 | Character error rate | **57.6%** |
 | Word error rate | **93.8%** |
-| Seconds per page | 23.59 |
-| Peak RSS (MB) | 1771.08 |
+| Seconds per page | 23.87 |
+| Peak RSS (MB) | 1782.95 |
 | Pages measured | 4 |
 | Pages seen | 4 |
 | Characters of the ground truth | 10798 |
@@ -218,16 +226,16 @@ The rate of the errors is what decides which engine is the better one; the time 
 
 | Engine | Character error rate | Word error rate | Seconds per page | Peak RSS (MB) | Pages |
 | --- | --- | --- | --- | --- | --- |
-| kraken-ppocrv6-small | 57.6% | 93.8% | 23.59 | 1771.1 | 4 |
-| kraken-ppocrv6-medium | 55.7% | 90.3% | 40.73 | 1936.0 | 4 |
-| mishkefet-v1 | 62.3% | 100.9% | 45.56 | 3268.2 | 4 |
+| kraken-ppocrv6-small | 57.6% | 93.8% | 23.87 | 1783.0 | 4 |
+| kraken-ppocrv6-medium | 55.7% | 90.3% | 41.56 | 1834.6 | 4 |
+| mishkefet-v1 | 62.3% | 100.9% | 46.23 | 3268.4 | 4 |
 
 | Page | Characters in the ground truth | Character error rate | Word error rate | Seconds | Ground truth |
 | --- | --- | --- | --- | --- | --- |
-| Page 105_1.jpg | 2862 | 64.6% | 98.6% | 29.32 | complete |
-| Page 105_2.jpg | 3008 | 75.6% | 100.3% | 24.74 | complete |
-| Page 107_1.jpg | 2287 | 35.2% | 82.2% | 19.25 | complete |
-| Page 112_1.jpg | 2641 | 48.8% | 90.9% | 21.05 | complete |
+| Page 105_1.jpg | 2862 | 64.6% | 98.6% | 29.63 | complete |
+| Page 105_2.jpg | 3008 | 75.6% | 100.3% | 24.85 | complete |
+| Page 107_1.jpg | 2287 | 35.2% | 82.2% | 19.47 | complete |
+| Page 112_1.jpg | 2641 | 48.8% | 90.9% | 21.52 | complete |
 
 These pages are the *diagnostic* corpus of the old handwriting. They are not the material the program is made for, and they do not decide which engine is the better one.
 

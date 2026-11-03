@@ -595,6 +595,9 @@ class SelectedAndMeasuredTests(unittest.TestCase):
                 "pages_measured": 6,
                 "verified": True,
             },
+            "measurement": {
+                "memory_measurement": "isolated_process_per_engine",
+            },
             "pages_read": 6,
             "measured_corpus_pages": 6,
             "engines": [
@@ -614,15 +617,64 @@ class SelectedAndMeasuredTests(unittest.TestCase):
                         "measured": True,
                     },
                     "failures": [],
-                }
+                },
+                {
+                    "engine": "kraken PP-OCRv6 (small)",
+                    "model": "kraken-ppocrv6-small",
+                    "pages": 6,
+                    "pages_seen": 6,
+                    "summary": {
+                        "cer": 0.8049,
+                        "wer": 0.9509,
+                        "seconds_per_page": 8.21,
+                        "peak_rss_mb": 2631.6,
+                        "characters_reference": 1112,
+                        "words_reference": 224,
+                        "pages_measured": 6,
+                        "measured": True,
+                    },
+                    "failures": [],
+                },
             ],
+            "comparison": {
+                "pages": ["p1", "p2", "p3", "p4", "p5", "p6"],
+                "engines": [
+                    {
+                        "model": "mishkefet-v1",
+                        "summary": {
+                            "cer": 0.3822,
+                            "wer": 0.8973,
+                            "seconds_per_page": 5.25,
+                            "pages_measured": 6,
+                        },
+                    },
+                    {
+                        "model": "kraken-ppocrv6-small",
+                        "summary": {
+                            "cer": 0.8049,
+                            "wer": 0.9509,
+                            "seconds_per_page": 8.21,
+                            "pages_measured": 6,
+                        },
+                    },
+                ],
+            },
         }
         text = writer.build_section(report)
         self.assertIn("Peak RSS (MB)", text)
         self.assertIn("1429.8", text)
+        self.assertIn("2631.6", text)
+        self.assertIn("late-19th and early-20th-century", text)
         self.assertIn("20th-century modern Hebrew cursive manuscripts", text)
+        self.assertIn("in isolated per-engine processes", text)
         self.assertIn("modern-cursive-and-suggestions-benchmarks", text)
         self.assertNotIn("pages of the school", text)
+
+        in_proc = json.loads(json.dumps(report))
+        in_proc["measurement"]["memory_measurement"] = "in_process"
+        self.assertNotIn(
+            "in isolated per-engine processes", writer.build_section(in_proc)
+        )
 
 
 if __name__ == "__main__":

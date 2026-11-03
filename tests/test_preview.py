@@ -208,10 +208,17 @@ class PreviewPaneTests(unittest.TestCase):
             self.assertGreater(orig_w, 0.0)
 
             pane.set_view_mode("processed")
+            self.assertTrue(pane.wait_for_pending_enhancement(5000))
+            self.app.processEvents()
             self.assertEqual(pane.view_mode, "processed")
-            self.assertIn("לאחר עיבוד", pane.status.text())
+            self.assertTrue(
+                "לאחר עיבוד" in pane.status.text()
+                or "תצוגת העיבוד המקדים" in pane.status.text()
+            )
 
             pane.set_view_mode("compare")
+            self.assertTrue(pane.wait_for_pending_enhancement(5000))
+            self.app.processEvents()
             self.assertEqual(pane.view_mode, "compare")
             comp_w = pane.scene.sceneRect().width()
             # Side-by-side comparison canvas is 2x width + 16px separator
@@ -220,6 +227,52 @@ class PreviewPaneTests(unittest.TestCase):
 
             pane.set_page_enhancement_enabled(False)
             self.assertIn("כבוי", pane.status.text())
+            pane.close_document()
+
+    def test_async_preview_bounded_lru_cache_and_preloaded_snapshot(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from hebrew_workbench.engine.photocraft_audit import encode_preview_png
+        from hebrew_workbench.ui.preview_pane import (
+            MAX_LIVE_PREVIEW_CACHE_ENTRIES,
+            PreviewPane,
+        )
+
+        with tempfile.TemporaryDirectory() as folder:
+            tiff_path = Path(folder) / "multipage.tiff"
+            frames = []
+            for idx in range(6):
+                im = Image.new("RGB", (240, 160), (235, 212, 178))
+                d = ImageDraw.Draw(im)
+                d.line([(20, 40 + idx * 10), (220, 40 + idx * 10)], fill=(185, 30, 30), width=4)
+                frames.append(im)
+            frames[0].save(tiff_path, save_all=True, append_images=frames[1:])
+
+            pane = PreviewPane()
+            pane.set_view_mode("processed")
+            pane.set_document(str(tiff_path))
+            for page_no in range(1, 7):
+                pane.go_to_page(page_no)
+                self.assertTrue(pane.wait_for_pending_enhancement(5000))
+                self.app.processEvents()
+                self.assertLessEqual(
+                    len(pane._live_processed_cache),
+                    MAX_LIVE_PREVIEW_CACHE_ENTRIES,
+                )
+            self.assertEqual(
+                len(pane._live_processed_cache), MAX_LIVE_PREVIEW_CACHE_ENTRIES
+            )
+            # Oldest pages (1, 2) must be evicted in favour of pages 3..6
+            self.assertEqual(
+                list(pane._live_processed_cache.keys()),
+                [(3, True), (4, True), (5, True), (6, True)],
+            )
+
+            # Pre-populated OCR snapshot renders immediately without spawning async work
+            snap_png = encode_preview_png(Image.new("RGB", (240, 160), (250, 250, 250)))
+            pane.set_document(str(tiff_path), processed_pages={1: (snap_png, True, True)})
+            self.assertIsNone(pane._enhance_thread)
+            self.assertIn("OCR", pane.status.text())
             pane.close_document()
 
 

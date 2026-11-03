@@ -116,7 +116,7 @@ class PluginRegistry:
         """
         options = dict(manifest.options or {})
         options.update(self.settings.options.get(manifest.id, {}))
-        if manifest.kind == KIND_OCR and "page_enhancement" not in options:
+        if manifest.kind == KIND_OCR:
             options["page_enhancement"] = bool(self.settings.page_enhancement)
         return options
 

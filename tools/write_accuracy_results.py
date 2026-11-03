@@ -243,8 +243,18 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
                 "",
             ]
         rows_source = compared or engines
+        full_rss_by_name = {
+            (e.get("model") or e.get("engine", "the engine")): (
+                e.get("summary") or {}
+            ).get("peak_rss_mb")
+            for e in engines
+        }
         has_rss = any(
             (e.get("summary") or {}).get("peak_rss_mb") is not None
+            or full_rss_by_name.get(
+                e.get("model") or e.get("engine", "the engine")
+            )
+            is not None
             for e in rows_source
         )
         lines += [
@@ -265,13 +275,16 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
                 "| --- | --- | --- | --- | --- |",
             ]
         for engine in rows_source:
+            engine_name = engine.get("model") or engine.get("engine", "the engine")
             engine_summary = engine.get("summary", {})
             if has_rss:
-                rss = engine_summary.get("peak_rss_mb")
+                rss = full_rss_by_name.get(engine_name)
+                if rss is None:
+                    rss = engine_summary.get("peak_rss_mb")
                 rss_str = f"{rss:.1f}" if isinstance(rss, (int, float)) else "?"
                 lines.append(
                     "| {name} | {cer} | {wer} | {seconds} | {rss} | {pages} |".format(
-                        name=engine.get("model") or engine.get("engine", "the engine"),
+                        name=engine_name,
                         cer=percent(engine_summary.get("cer", 0.0)),
                         wer=percent(engine_summary.get("wer", 0.0)),
                         seconds=engine_summary.get("seconds_per_page", "?"),
@@ -284,7 +297,7 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
             else:
                 lines.append(
                     "| {name} | {cer} | {wer} | {seconds} | {pages} |".format(
-                        name=engine.get("model") or engine.get("engine", "the engine"),
+                        name=engine_name,
                         cer=percent(engine_summary.get("cer", 0.0)),
                         wer=percent(engine_summary.get("wer", 0.0)),
                         seconds=engine_summary.get("seconds_per_page", "?"),
@@ -374,10 +387,16 @@ def build_section(report: dict, begin: str = BEGIN, end: str = END) -> str:
             "",
         ]
     elif target == "modern_cursive":
+        mem_mode = (report.get("measurement") or {}).get("memory_measurement")
+        mem_clause = (
+            " in isolated per-engine processes"
+            if mem_mode == "isolated_process_per_engine"
+            else ""
+        )
         lines += [
-            "These pages are verified 20th-century modern Hebrew cursive"
-            " manuscripts (`PDM-1.0`).  They measure modern cursive handwriting"
-            " in isolated per-engine processes while `benchmark/modern_school`"
+            "These pages are verified late-19th and early-20th-century modern"
+            f" Hebrew cursive manuscripts (`PDM-1.0`).  They measure modern"
+            f" cursive handwriting{mem_clause} while `benchmark/modern_school`"
             " awaits consented contemporary school notebook pages.",
             "",
         ]

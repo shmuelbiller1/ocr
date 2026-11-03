@@ -450,18 +450,100 @@ def prepare_page_for_ocr(
         full_u8 = np.asarray(rgb_im, dtype=np.uint8).copy()
         inv_ps = w / float(max(pw, 1))
         pad_x = max(3, int(round(2.5 * inv_ps)))
-        bg_u8 = np.clip(np.round(bg_rgb_arr * 255.0), 0, 255).astype(np.uint8)
-        bright_thr = int(round(0.78 * float(np.max(bg_rgb_arr)) * 255.0))
+        flank_w = max(4, int(round(4.0 * inv_ps)))
+        bg_f = np.clip(bg_rgb_arr * 255.0, 0.0, 255.0).astype(np.float32)
+        bg_u8 = np.round(bg_f).astype(np.uint8)
+        bright_thr = 0.78 * float(np.max(bg_f))
+
+        # Group contiguous proxy columns so each physical margin rule is handled once
+        col_groups: list[tuple[int, int]] = []
         for pc in margin_proxy_cols:
-            cx = int(round(float(pc) * inv_ps))
-            x0 = max(0, cx - pad_x)
-            x1 = min(w, cx + pad_x + 1)
+            pc_i = int(pc)
+            if col_groups and pc_i <= col_groups[-1][1] + 1:
+                col_groups[-1] = (col_groups[-1][0], pc_i)
+            else:
+                col_groups.append((pc_i, pc_i))
+
+        for pc0, pc1 in col_groups:
+            x0 = max(0, int(round(float(pc0) * inv_ps)) - pad_x)
+            x1 = min(w, int(round(float(pc1) * inv_ps)) + pad_x + 1)
             strip = full_u8[:, x0:x1, :]
-            s_max = strip.max(axis=2)
-            s_min = strip.min(axis=2)
-            m_rule = ((s_max.astype(np.int16) - s_min.astype(np.int16)) > 18) & (
-                s_max > bright_thr
+            strip_f = strip.astype(np.float32)
+            s_max = strip_f.max(axis=2)
+            s_min = strip_f.min(axis=2)
+            s_chroma = s_max - s_min
+
+            # Estimate the printed rule's own RGB signature from bright chromatic
+            # pixels in this column strip (sparse crossing ink is <10% of rows, so
+            # the median isolates the true margin-rule color, e.g. pastel pink).
+            cand_seed = (s_chroma > 18.0) & (s_max > bright_thr)
+            if int(cand_seed.sum()) < max(16, h // 12):
+                continue
+            seed_rgb = strip_f[cand_seed]
+            # Filter seed to the upper-luminance half so dark blue/red ink cannot skew median
+            seed_luma = (
+                0.299 * seed_rgb[:, 0]
+                + 0.587 * seed_rgb[:, 1]
+                + 0.114 * seed_rgb[:, 2]
             )
+            bright_seed = seed_rgb[seed_luma >= np.percentile(seed_luma, 35)]
+            if bright_seed.shape[0] < 8:
+                continue
+            rule_rgb = np.median(bright_seed, axis=0)
+            rule_delta = rule_rgb - bg_f
+            rule_delta_norm = float(np.linalg.norm(rule_delta))
+            if rule_delta_norm < 12.0:
+                continue
+            rule_dir = rule_delta / rule_delta_norm
+            rule_luma = float(
+                0.299 * rule_rgb[0] + 0.587 * rule_rgb[1] + 0.114 * rule_rgb[2]
+            )
+
+            # 1. Color & luminance match strictly to THIS margin rule's hue/lightness
+            # (preserves blue/green/black/purple/dark-red handwriting inside the strip).
+            px_delta = strip_f - bg_f[None, None, :]
+            px_delta_norm = np.linalg.norm(px_delta, axis=2)
+            cos_sim = np.sum(px_delta * rule_dir[None, None, :], axis=2) / np.maximum(
+                px_delta_norm, 1e-4
+            )
+            dist_to_rule = np.linalg.norm(
+                strip_f - rule_rgb[None, None, :], axis=2
+            )
+            px_luma = (
+                0.299 * strip_f[:, :, 0]
+                + 0.587 * strip_f[:, :, 1]
+                + 0.114 * strip_f[:, :, 2]
+            )
+            color_matches_rule = (
+                cand_seed
+                & (cos_sim >= 0.85)
+                & (dist_to_rule <= 38.0)
+                & (px_luma >= rule_luma - 22.0)
+            )
+
+            # 2. Protect horizontal/diagonal handwriting strokes crossing the margin rule
+            # (even if written in a similar hue) by checking flanking columns just outside [x0, x1).
+            fx0 = max(0, x0 - flank_w)
+            fx1 = min(w, x1 + flank_w)
+            left_flank = full_u8[:, fx0:x0, :].astype(np.float32)
+            right_flank = full_u8[:, x1:fx1, :].astype(np.float32)
+            crossing_rows = np.zeros(h, dtype=bool)
+            if left_flank.shape[1] > 0:
+                ld = np.linalg.norm(left_flank - bg_f[None, None, :], axis=2)
+                crossing_rows |= (ld > 26.0).any(axis=1)
+            if right_flank.shape[1] > 0:
+                rd = np.linalg.norm(right_flank - bg_f[None, None, :], axis=2)
+                crossing_rows |= (rd > 26.0).any(axis=1)
+            if crossing_rows.any():
+                crossing_rows = (
+                    cv2.dilate(
+                        crossing_rows.astype(np.uint8)[:, None],
+                        np.ones((3, 1), dtype=np.uint8),
+                    )[:, 0]
+                    > 0
+                )
+
+            m_rule = color_matches_rule & (~crossing_rows[:, None])
             strip[m_rule] = bg_u8
         return Image.fromarray(full_u8), audit
 

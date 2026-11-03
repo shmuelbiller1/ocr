@@ -59,6 +59,7 @@ from hebrew_workbench.benchmark.metrics import (  # noqa: E402
     character_error_rate,
     levenshtein,
     line_alignment_metrics,
+    normalise,
     process_memory_mb,
     word_error_rate,
 )
@@ -272,8 +273,10 @@ def _evaluate_predictions(
     for (page_id, ref_text), (hyp_text, hyp_lines, line_confs, page_sw) in zip(
         pages_gt, preds
     ):
-        cer = character_error_rate(ref_text, hyp_text)
-        wer = word_error_rate(ref_text, hyp_text)
+        ref_norm = normalise(ref_text)
+        hyp_norm = normalise(hyp_text)
+        cer = character_error_rate(ref_norm, hyp_norm)
+        wer = word_error_rate(ref_norm, hyp_norm)
         clean_hyp_lines = [ln for ln in hyp_lines if ln.strip()]
         line_stats = line_alignment_metrics(ref_text, hyp_text)
         miss = int(line_stats["missing_lines"])
@@ -336,87 +339,103 @@ def _run_mishkefet_experiments(
     }
 
     # Experiment A: Line-crop recognition at H=64 with fixed segmentation
-    for pc_enabled, pc_key in (
-        (True, "with_photocraft"),
-        (False, "without_photocraft"),
-    ):
-        regimes_for_pass = (
-            REGIME_SPECS[:4]
-            if (ci_fast and not pc_enabled)
-            else REGIME_SPECS
-        )
-        for reg_idx, (regime, reg_desc) in enumerate(regimes_for_pass):
-            segmented_pages: list[tuple[str, str, list[Image.Image], float]] = []
-            for p_idx, (page_id, orig_im, ref_text) in enumerate(corpus_pages):
-                reg_im = _synthesize_regime(orig_im, regime, seed=100 * reg_idx + p_idx)
-                prep_im, _ = prepare_page_for_ocr(reg_im, enabled=pc_enabled)
-                crops, _boxes, _skew = segment_page(prep_im)
-                sw_vals = [
-                    measure_stroke_width(c, normalize_height=64).median_sw_px
-                    for c in crops
-                    if c.size[0] >= 16 and c.size[1] >= 8
-                ]
-                sw_vals = [v for v in sw_vals if v > 0.0]
-                med_sw = float(np.median(sw_vals)) if sw_vals else 0.0
-                segmented_pages.append((page_id, ref_text, crops, med_sw))
+    if corpus_pages:
+        for pc_enabled, pc_key in (
+            (True, "with_photocraft"),
+            (False, "without_photocraft"),
+        ):
+            if ci_fast:
+                regimes_for_pass = (
+                    (
+                        REGIME_SPECS[0],  # verified_native_300dpi
+                        REGIME_SPECS[1],  # pen_fine_nib
+                        REGIME_SPECS[3],  # pen_faint_broken
+                        REGIME_SPECS[6],  # dpi_150_lowres
+                    )
+                    if pc_enabled
+                    else (REGIME_SPECS[0],)
+                )
+            else:
+                regimes_for_pass = REGIME_SPECS
+            for reg_idx, (regime, reg_desc) in enumerate(regimes_for_pass):
+                segmented_pages: list[tuple[str, str, list[Image.Image], float]] = []
+                for p_idx, (page_id, orig_im, ref_text) in enumerate(corpus_pages):
+                    reg_im = _synthesize_regime(
+                        orig_im, regime, seed=100 * reg_idx + p_idx
+                    )
+                    prep_im, _ = prepare_page_for_ocr(reg_im, enabled=pc_enabled)
+                    crops, _boxes, _skew = segment_page(prep_im)
+                    sw_vals = [
+                        measure_stroke_width(c, normalize_height=64).median_sw_px
+                        for c in crops
+                        if c.size[0] >= 16 and c.size[1] >= 8
+                    ]
+                    sw_vals = [v for v in sw_vals if v > 0.0]
+                    med_sw = float(np.median(sw_vals)) if sw_vals else 0.0
+                    segmented_pages.append((page_id, ref_text, crops, med_sw))
 
-            variant_out: dict[str, object] = {}
-            pages_gt = [(pid, ref) for pid, ref, _, _ in segmented_pages]
-            orig_cer = 0.0
-            orig_wer = 0.0
-            for variant in STROKE_VARIANTS:
-                t0 = time.perf_counter()
-                preds: list[tuple[str, list[str], list[float], float]] = []
-                with inference_stroke_variant(variant):
-                    for _pid, _ref, crops, med_sw in segmented_pages:
-                        if not crops:
-                            preds.append(("", [], [], med_sw))
-                            continue
-                        raw_texts, raw_confs = recognizer.read(
-                            crops, return_confidence=True
-                        )
-                        lines = [
-                            (txt or "").strip()
-                            for txt in raw_texts
-                            if (txt or "").strip()
-                        ]
-                        confs = [
-                            float(c)
-                            for txt, c in zip(raw_texts, raw_confs)
-                            if (txt or "").strip() and c is not None
-                        ]
-                        preds.append(("\n".join(lines), lines, confs, med_sw))
-                wall_ms = (time.perf_counter() - t0) * 1000.0
-                metrics = _evaluate_predictions(pages_gt, preds)
-                metrics["wall_ms"] = round(wall_ms, 1)
-                metrics["ms_per_page"] = round(
-                    wall_ms / max(1, len(segmented_pages)), 1
-                )
-                if variant == "original":
-                    orig_cer = float(metrics["macro_cer"])
-                    orig_wer = float(metrics["macro_wer"])
-                metrics["delta_cer_pp_vs_original"] = round(
-                    (float(metrics["macro_cer"]) - orig_cer) * 100.0, 2
-                )
-                metrics["delta_wer_pp_vs_original"] = round(
-                    (float(metrics["macro_wer"]) - orig_wer) * 100.0, 2
-                )
-                variant_out[variant] = metrics
-                print(
-                    f"[CROP][mishkefet-v1][{pc_key}][{regime}][{variant}] "
-                    f"CER={metrics['macro_cer']*100:.2f}% ({metrics['delta_cer_pp_vs_original']:+.2f}pp) "
-                    f"conf={metrics['mean_confidence']} sw={metrics['mean_measured_sw_px']:.2f} "
-                    f"{wall_ms:.0f}ms",
-                    flush=True,
-                )
-            line_crop_results[pc_key][regime] = {
-                "description": reg_desc,
-                "variants": variant_out,
-            }
+                variant_out: dict[str, object] = {}
+                pages_gt = [(pid, ref) for pid, ref, _, _ in segmented_pages]
+                orig_cer = 0.0
+                orig_wer = 0.0
+                for variant in STROKE_VARIANTS:
+                    t0 = time.perf_counter()
+                    preds: list[tuple[str, list[str], list[float], float]] = []
+                    with inference_stroke_variant(variant):
+                        for _pid, _ref, crops, med_sw in segmented_pages:
+                            if not crops:
+                                preds.append(("", [], [], med_sw))
+                                continue
+                            raw_texts, raw_confs = recognizer.read(
+                                crops, return_confidence=True
+                            )
+                            lines = [
+                                (txt or "").strip()
+                                for txt in raw_texts
+                                if (txt or "").strip()
+                            ]
+                            confs = [
+                                float(c)
+                                for txt, c in zip(raw_texts, raw_confs)
+                                if (txt or "").strip() and c is not None
+                            ]
+                            preds.append(("\n".join(lines), lines, confs, med_sw))
+                    wall_ms = (time.perf_counter() - t0) * 1000.0
+                    metrics = _evaluate_predictions(pages_gt, preds)
+                    metrics["model_input_height_px"] = 64
+                    metrics["wall_ms"] = round(wall_ms, 1)
+                    metrics["ms_per_page"] = round(
+                        wall_ms / max(1, len(segmented_pages)), 1
+                    )
+                    if variant == "original":
+                        orig_cer = float(metrics["macro_cer"])
+                        orig_wer = float(metrics["macro_wer"])
+                    metrics["delta_cer_pp_vs_original"] = round(
+                        (float(metrics["macro_cer"]) - orig_cer) * 100.0, 2
+                    )
+                    metrics["delta_wer_pp_vs_original"] = round(
+                        (float(metrics["macro_wer"]) - orig_wer) * 100.0, 2
+                    )
+                    variant_out[variant] = metrics
+                    print(
+                        f"[CROP][mishkefet-v1][{pc_key}][{regime}][{variant}] "
+                        f"CER={metrics['macro_cer']*100:.2f}% ({metrics['delta_cer_pp_vs_original']:+.2f}pp) "
+                        f"conf={metrics['mean_confidence']} sw={metrics['mean_measured_sw_px']:.2f} "
+                        f"{wall_ms:.0f}ms",
+                        flush=True,
+                    )
+                line_crop_results[pc_key][regime] = {
+                    "description": reg_desc,
+                    "variants": variant_out,
+                }
 
     # Experiment B: Page-level stroke variant BEFORE line segmentation
     seg_results: dict[str, object] = {}
-    seg_regimes = SEGMENTATION_REGIMES[:2] if ci_fast else SEGMENTATION_REGIMES
+    seg_regimes = (
+        SEGMENTATION_REGIMES[:1] if ci_fast else SEGMENTATION_REGIMES
+    )
+    if not corpus_pages:
+        seg_regimes = ()
     for reg_idx, regime in enumerate(seg_regimes):
         base_pages = [
             (
@@ -440,7 +459,7 @@ def _run_mishkefet_experiments(
                 page_var = (
                     prep_im
                     if variant == "original"
-                    else apply_stroke_variant(prep_im, variant)
+                    else apply_stroke_variant(prep_im, variant, page_scale=True)
                 )
                 crops, _boxes, _skew = segment_page(page_var)
                 det_total += len(crops)
@@ -477,31 +496,41 @@ def _run_mishkefet_experiments(
     real_scan_results: list[dict[str, object]] = []
     for scan_id, scan_desc, scan_im in real_scans:
         raw_audit = audit_document_page(scan_im)
-        _, raw_boxes, _ = segment_page(scan_im)
-        prep_im, enh_audit = prepare_page_for_ocr(scan_im, enabled=True)
-        enh_crops, enh_boxes, enh_skew = segment_page(prep_im)
 
-        raw_margin_snaps = sum(1 for b in raw_boxes if b.x <= 220)
-        enh_margin_snaps = sum(1 for b in enh_boxes if b.x <= 220)
-
+        # Time identical end-to-end workloads:
+        # without_photocraft = segment_page(scan_im) + recognizer.read(...)
+        # with_photocraft    = prepare_page_for_ocr(scan_im) + segment_page(prep_im) + recognizer.read(...)
         t_raw = time.perf_counter()
-        raw_crops, _, _ = segment_page(scan_im)
+        raw_crops, raw_boxes, _ = segment_page(scan_im)
+        t_raw_seg = time.perf_counter()
         raw_texts, _ = (
             recognizer.read(raw_crops, return_confidence=True)
             if raw_crops
             else ([], [])
         )
         raw_ms = (time.perf_counter() - t_raw) * 1000.0
+        raw_seg_ms = (t_raw_seg - t_raw) * 1000.0
+        raw_rec_ms = raw_ms - raw_seg_ms
         raw_nonempty = [(t or "").strip() for t in raw_texts if (t or "").strip()]
         raw_text = "\n".join(raw_nonempty)
 
         t_enh = time.perf_counter()
+        prep_im, enh_audit = prepare_page_for_ocr(scan_im, enabled=True)
+        t_enh_prep = time.perf_counter()
+        enh_crops, enh_boxes, enh_skew = segment_page(prep_im)
+        t_enh_seg = time.perf_counter()
         enh_texts, enh_raw_confs = (
             recognizer.read(enh_crops, return_confidence=True)
             if enh_crops
             else ([], [])
         )
         enh_ms = (time.perf_counter() - t_enh) * 1000.0
+        enh_prep_ms = (t_enh_prep - t_enh) * 1000.0
+        enh_seg_ms = (t_enh_seg - t_enh_prep) * 1000.0
+        enh_rec_ms = enh_ms - enh_prep_ms - enh_seg_ms
+
+        raw_margin_snaps = sum(1 for b in raw_boxes if b.x <= 220)
+        enh_margin_snaps = sum(1 for b in enh_boxes if b.x <= 220)
         enh_nonempty = [(t or "").strip() for t in enh_texts if (t or "").strip()]
         enh_text = "\n".join(enh_nonempty)
         enh_confs = [
@@ -545,6 +574,8 @@ def _run_mishkefet_experiments(
                     "nonempty_recognized_lines": len(raw_nonempty),
                     "char_count": len(raw_text),
                     "wall_ms": round(raw_ms, 1),
+                    "segmentation_ms": round(raw_seg_ms, 1),
+                    "recognition_ms": round(raw_rec_ms, 1),
                 },
                 "with_photocraft": {
                     "segmented_lines": len(enh_boxes),
@@ -556,6 +587,9 @@ def _run_mishkefet_experiments(
                     if enh_confs
                     else None,
                     "wall_ms": round(enh_ms, 1),
+                    "enhancement_ms": round(enh_prep_ms, 1),
+                    "segmentation_ms": round(enh_seg_ms, 1),
+                    "recognition_ms": round(enh_rec_ms, 1),
                     "char_diff_enh_vs_unenh": levenshtein(raw_text, enh_text),
                     "char_diff_adaptive_vs_original": levenshtein(
                         enh_text, adapt_text
@@ -570,6 +604,8 @@ def _run_mishkefet_experiments(
     return {
         "engine_id": "mishkefet-v1",
         "engine_name": engine.name,
+        "measured": bool(corpus_pages),
+        "pages_measured": len(corpus_pages),
         "peak_rss_mb": round(process_memory_mb() or 0.0, 2),
         "line_crop_recognition": line_crop_results,
         "line_segmentation_effect": seg_results,
@@ -610,76 +646,79 @@ def _run_kraken_experiments(
     }
 
     # Experiment A: Fixed blla segmentation, 6 stroke variants at exact Kraken model height
-    for pc_enabled, pc_key in (
-        (True, "with_photocraft"),
-        (False, "without_photocraft"),
-    ):
-        if ci_fast:
-            regimes_for_pass = REGIME_SPECS[:3] if pc_enabled else REGIME_SPECS[:1]
-        else:
-            regimes_for_pass = REGIME_SPECS
-        for reg_idx, (regime, reg_desc) in enumerate(regimes_for_pass):
-            segmented_pages = []
-            for p_idx, (page_id, orig_im, ref_text) in enumerate(corpus_pages):
-                reg_im = _synthesize_regime(orig_im, regime, seed=100 * reg_idx + p_idx)
-                prep_im, _ = prepare_page_for_ocr(reg_im, enabled=pc_enabled)
-                seg = engine._segmentation_model.predict(im=prep_im, config=seg_cfg)
-                segmented_pages.append((page_id, ref_text, prep_im, seg))
+    if corpus_pages:
+        for pc_enabled, pc_key in (
+            (True, "with_photocraft"),
+            (False, "without_photocraft"),
+        ):
+            if ci_fast:
+                regimes_for_pass = REGIME_SPECS[:2] if pc_enabled else ()
+            else:
+                regimes_for_pass = REGIME_SPECS
+            for reg_idx, (regime, reg_desc) in enumerate(regimes_for_pass):
+                segmented_pages = []
+                for p_idx, (page_id, orig_im, ref_text) in enumerate(corpus_pages):
+                    reg_im = _synthesize_regime(
+                        orig_im, regime, seed=100 * reg_idx + p_idx
+                    )
+                    prep_im, _ = prepare_page_for_ocr(reg_im, enabled=pc_enabled)
+                    seg = engine._segmentation_model.predict(im=prep_im, config=seg_cfg)
+                    segmented_pages.append((page_id, ref_text, prep_im, seg))
 
-            variant_out: dict[str, object] = {}
-            pages_gt = [(pid, ref) for pid, ref, _, _ in segmented_pages]
-            orig_cer = 0.0
-            orig_wer = 0.0
-            for variant in STROKE_VARIANTS:
-                t0 = time.perf_counter()
-                preds: list[tuple[str, list[str], list[float], float]] = []
-                with _kraken_model_input_stroke_hook(variant):
-                    for _pid, _ref, prep_im, seg in segmented_pages:
-                        recs = list(
-                            engine._recognition_model.predict(
-                                im=prep_im, segmentation=seg, config=rec_cfg
+                variant_out: dict[str, object] = {}
+                pages_gt = [(pid, ref) for pid, ref, _, _ in segmented_pages]
+                orig_cer = 0.0
+                orig_wer = 0.0
+                for variant in STROKE_VARIANTS:
+                    t0 = time.perf_counter()
+                    preds: list[tuple[str, list[str], list[float], float]] = []
+                    with _kraken_model_input_stroke_hook(variant):
+                        for _pid, _ref, prep_im, seg in segmented_pages:
+                            recs = list(
+                                engine._recognition_model.predict(
+                                    im=prep_im, segmentation=seg, config=rec_cfg
+                                )
                             )
-                        )
-                        lines = [
-                            (getattr(r, "prediction", "") or "").strip()
-                            for r in recs
-                            if (getattr(r, "prediction", "") or "").strip()
-                        ]
-                        confs = [
-                            float(c)
-                            for r in recs
-                            if (getattr(r, "prediction", "") or "").strip()
-                            for c in [_mean_confidence(r)]
-                            if c is not None
-                        ]
-                        preds.append(("\n".join(lines), lines, confs, 0.0))
-                wall_ms = (time.perf_counter() - t0) * 1000.0
-                metrics = _evaluate_predictions(pages_gt, preds)
-                metrics["model_input_height_px"] = model_h
-                metrics["wall_ms"] = round(wall_ms, 1)
-                metrics["ms_per_page"] = round(
-                    wall_ms / max(1, len(segmented_pages)), 1
-                )
-                if variant == "original":
-                    orig_cer = float(metrics["macro_cer"])
-                    orig_wer = float(metrics["macro_wer"])
-                metrics["delta_cer_pp_vs_original"] = round(
-                    (float(metrics["macro_cer"]) - orig_cer) * 100.0, 2
-                )
-                metrics["delta_wer_pp_vs_original"] = round(
-                    (float(metrics["macro_wer"]) - orig_wer) * 100.0, 2
-                )
-                variant_out[variant] = metrics
-                print(
-                    f"[CROP][{engine.artifact_id}][{pc_key}][{regime}][{variant}] "
-                    f"CER={metrics['macro_cer']*100:.2f}% ({metrics['delta_cer_pp_vs_original']:+.2f}pp) "
-                    f"conf={metrics['mean_confidence']} {wall_ms:.0f}ms",
-                    flush=True,
-                )
-            line_crop_results[pc_key][regime] = {
-                "description": reg_desc,
-                "variants": variant_out,
-            }
+                            lines = [
+                                (getattr(r, "prediction", "") or "").strip()
+                                for r in recs
+                                if (getattr(r, "prediction", "") or "").strip()
+                            ]
+                            confs = [
+                                float(c)
+                                for r in recs
+                                if (getattr(r, "prediction", "") or "").strip()
+                                for c in [_mean_confidence(r)]
+                                if c is not None
+                            ]
+                            preds.append(("\n".join(lines), lines, confs, 0.0))
+                    wall_ms = (time.perf_counter() - t0) * 1000.0
+                    metrics = _evaluate_predictions(pages_gt, preds)
+                    metrics["model_input_height_px"] = model_h
+                    metrics["wall_ms"] = round(wall_ms, 1)
+                    metrics["ms_per_page"] = round(
+                        wall_ms / max(1, len(segmented_pages)), 1
+                    )
+                    if variant == "original":
+                        orig_cer = float(metrics["macro_cer"])
+                        orig_wer = float(metrics["macro_wer"])
+                    metrics["delta_cer_pp_vs_original"] = round(
+                        (float(metrics["macro_cer"]) - orig_cer) * 100.0, 2
+                    )
+                    metrics["delta_wer_pp_vs_original"] = round(
+                        (float(metrics["macro_wer"]) - orig_wer) * 100.0, 2
+                    )
+                    variant_out[variant] = metrics
+                    print(
+                        f"[CROP][{engine.artifact_id}][{pc_key}][{regime}][{variant}] "
+                        f"CER={metrics['macro_cer']*100:.2f}% ({metrics['delta_cer_pp_vs_original']:+.2f}pp) "
+                        f"conf={metrics['mean_confidence']} {wall_ms:.0f}ms",
+                        flush=True,
+                    )
+                line_crop_results[pc_key][regime] = {
+                    "description": reg_desc,
+                    "variants": variant_out,
+                }
 
     # Experiment B: Page-level stroke variant BEFORE Kraken blla segmentation
     # Evaluate on verified_native_300dpi and pen_fine_nib to keep CPU time bounded
@@ -689,6 +728,8 @@ def _run_kraken_experiments(
         if ci_fast
         else ("verified_native_300dpi", "pen_fine_nib")
     )
+    if not corpus_pages:
+        kraken_seg_regimes = ()
     for reg_idx, regime in enumerate(kraken_seg_regimes):
         base_pages = [
             (
@@ -712,7 +753,7 @@ def _run_kraken_experiments(
                 page_var = (
                     prep_im
                     if variant == "original"
-                    else apply_stroke_variant(prep_im, variant)
+                    else apply_stroke_variant(prep_im, variant, page_scale=True)
                 )
                 seg = engine._segmentation_model.predict(im=page_var, config=seg_cfg)
                 det_total += len(getattr(seg, "lines", []))
@@ -781,6 +822,8 @@ def _run_kraken_experiments(
     return {
         "engine_id": engine.artifact_id,
         "engine_name": engine.name,
+        "measured": bool(corpus_pages),
+        "pages_measured": len(corpus_pages),
         "peak_rss_mb": round(process_memory_mb() or 0.0, 2),
         "line_crop_recognition": line_crop_results,
         "line_segmentation_effect": seg_results,
@@ -843,6 +886,21 @@ def _load_real_scans(
     return scans
 
 
+def _load_verified_corpus_pages(
+    corpus_dir: Path,
+) -> tuple[list[tuple[str, Image.Image, str]], int, int]:
+    """Load only verified, ground-truth-complete pages for CER/WER measurement."""
+    corpus = load_corpus(corpus_dir)
+    total_pages = len(corpus.pages)
+    measured = corpus.measured_pages
+    loaded: list[tuple[str, Image.Image, str]] = []
+    for page in measured:
+        im = Image.open(page.image).convert("RGB")
+        im.load()
+        loaded.append((page.image.stem, im, page.text))
+    return loaded, total_pages, len(measured)
+
+
 def _run_child_engine(
     engine_id: str,
     corpus_dir: Path,
@@ -850,6 +908,7 @@ def _run_child_engine(
     extra_scans: list[str],
     fetch_public: bool,
     ci_fast: bool = False,
+    child_timeout: int = 3600,
 ) -> dict[str, object]:
     cmd = [
         sys.executable,
@@ -875,7 +934,7 @@ def _run_child_engine(
         out_path = Path(tmp.name)
     cmd.extend(["--single-engine-output", str(out_path)])
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, timeout=child_timeout)
         return json.loads(out_path.read_text(encoding="utf-8"))
     finally:
         out_path.unlink(missing_ok=True)
@@ -918,6 +977,12 @@ def main(argv: list[str] | None = None) -> int:
         help="run representative regime subset on Kraken/unenhanced passes for fast CI turnaround",
     )
     parser.add_argument(
+        "--child-timeout",
+        type=int,
+        default=3600,
+        help="timeout in seconds per isolated engine child process (default: 3600)",
+    )
+    parser.add_argument(
         "--in-process",
         action="store_true",
         help="run inside current process (used internally by isolated child-process runner)",
@@ -942,12 +1007,7 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(
                 f"Expected 1 installed engine for child run, got {installed_ids}"
             )
-        corpus = load_corpus(corpus_dir)
-        corpus_pages: list[tuple[str, Image.Image, str]] = []
-        for page in corpus.pages:
-            im = Image.open(page.image).convert("RGB")
-            im.load()
-            corpus_pages.append((page.image.stem, im, page.text))
+        corpus_pages, _total_p, _meas_p = _load_verified_corpus_pages(corpus_dir)
 
         with tempfile.TemporaryDirectory(prefix="real-scans-") as td:
             real_scans = _load_real_scans(
@@ -970,8 +1030,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    corpus_meta_pages, total_corpus_pages, measured_corpus_pages = (
+        _load_verified_corpus_pages(corpus_dir)
+    )
     report: dict[str, object] = {
         "benchmark": "stroke_width_and_real_scans",
+        "evaluation_normalization": "hebrew_workbench.benchmark.metrics.normalise",
+        "corpus": {
+            "path": str(corpus_dir),
+            "pages_total": total_corpus_pages,
+            "pages_measured": measured_corpus_pages,
+            "accuracy_available": measured_corpus_pages > 0,
+        },
         "memory_measurement": (
             "in_process" if args.in_process else "isolated_process_per_engine"
         ),
@@ -985,7 +1055,13 @@ def main(argv: list[str] | None = None) -> int:
         ],
         "warnings": warnings,
         "engines": {},
+        "engine_failures": {},
     }
+    if measured_corpus_pages == 0:
+        report["accuracy_note"] = (
+            "Corpus contains 0 verified ground-truth-complete pages; "
+            "CER/WER experiments skipped."
+        )
 
     if not installed_ids:
         report["note"] = (
@@ -993,12 +1069,6 @@ def main(argv: list[str] | None = None) -> int:
             "deterministic stroke-width operators verified."
         )
     elif args.in_process:
-        corpus = load_corpus(corpus_dir)
-        corpus_pages = []
-        for page in corpus.pages:
-            im = Image.open(page.image).convert("RGB")
-            im.load()
-            corpus_pages.append((page.image.stem, im, page.text))
         with tempfile.TemporaryDirectory(prefix="real-scans-") as td:
             real_scans = _load_real_scans(
                 args.extra_scan, args.fetch_public_real_scans, Path(td)
@@ -1008,22 +1078,33 @@ def main(argv: list[str] | None = None) -> int:
                 eid = getattr(eng, "artifact_id", label)
                 if eid == "mishkefet-v1":
                     report["engines"][eid] = _run_mishkefet_experiments(  # type: ignore[index]
-                        eng, corpus_pages, real_scans, ci_fast=args.ci_fast
+                        eng, corpus_meta_pages, real_scans, ci_fast=args.ci_fast
                     )
                 else:
                     report["engines"][eid] = _run_kraken_experiments(  # type: ignore[index]
-                        eng, corpus_pages, real_scans, ci_fast=args.ci_fast
+                        eng, corpus_meta_pages, real_scans, ci_fast=args.ci_fast
                     )
     else:
+        del corpus_meta_pages
         for eid in installed_ids:
-            report["engines"][eid] = _run_child_engine(  # type: ignore[index]
-                eid,
-                corpus_dir,
-                models_folder,
-                args.extra_scan,
-                args.fetch_public_real_scans,
-                ci_fast=args.ci_fast,
-            )
+            try:
+                report["engines"][eid] = _run_child_engine(  # type: ignore[index]
+                    eid,
+                    corpus_dir,
+                    models_folder,
+                    args.extra_scan,
+                    args.fetch_public_real_scans,
+                    ci_fast=args.ci_fast,
+                    child_timeout=args.child_timeout,
+                )
+            except subprocess.TimeoutExpired:
+                msg = f"Isolated benchmark child timed out after {args.child_timeout}s"
+                print(f"[ERROR] {eid}: {msg}", file=sys.stderr, flush=True)
+                report["engine_failures"][eid] = msg  # type: ignore[index]
+            except Exception as exc:
+                msg = f"Isolated benchmark child failed: {exc}"
+                print(f"[ERROR] {eid}: {msg}", file=sys.stderr, flush=True)
+                report["engine_failures"][eid] = msg  # type: ignore[index]
 
     text = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:

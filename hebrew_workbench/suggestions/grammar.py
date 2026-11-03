@@ -71,18 +71,129 @@ def space_before_comma(text: str) -> list[Suggestion]:
     return proposals
 
 
+# Unambiguous Hebrew acronyms commonly mistyped with ',' on the Hebrew keyboard
+# (where '"' and ',' sit nearby or Shift is missed). Sequential list letters
+# (א,ב / ב,ג / ד,ה) and ordinary words are intentionally excluded so two-item
+# Hebrew lists always receive a missing-space suggestion rather than gershayim.
+_KNOWN_COMMA_ACRONYMS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("ע", "ש"),
+        ("ס", "ל"),
+        ("צ", "ל"),
+        ("אע", "פ"),
+        ("ע", "כ"),
+        ("ע", "י"),
+        ("בע", "ה"),
+        ("ז", "ל"),
+        ("זצ", "ל"),
+        ("חו", "ל"),
+        ("ח", "ו"),
+        ("יו", "ט"),
+        ("כ", "כ"),
+        ("כ", "ש"),
+        ("מ", "מ"),
+        ("מ", "ש"),
+        ("נ", "ל"),
+        ("נפ", "מ"),
+        ("נפק", "מ"),
+        ("עכ", "ל"),
+        ("ק", "ו"),
+        ("קיי", "ל"),
+        ("רא", "ש"),
+        ("ר", "ל"),
+        ("ר", "ת"),
+        ("רמב", "ם"),
+        ("רמב", "ן"),
+        ("רשב", "ם"),
+        ("רשב", "א"),
+        ("ריטב", "א"),
+        ("רש", "י"),
+        ("ש", "ס"),
+        ("שו", "ע"),
+        ("שו", "ת"),
+        ("ת", "ח"),
+        ("ת", "ל"),
+        ("ת", "ק"),
+        ("את", "ל"),
+        ("צה", "ל"),
+        ("דו", "ח"),
+        ("מנכ", "ל"),
+        ("ח", "כ"),
+        ("רה", "מ"),
+        ("אחה", "צ"),
+        ("לפנה", "צ"),
+        ("בד", "כ"),
+        ("בע", "פ"),
+        ("מו", "מ"),
+        ("ארה", "ב"),
+        ("סה", "כ"),
+        ("הנ", "ל"),
+        ("נ", "ב"),
+        ("שליט", "א"),
+    }
+)
+
+_LIST_HEADER_WORDS: frozenset[str] = frozenset(
+    {
+        "סעיף",
+        "סעיפים",
+        "בסעיף",
+        "בסעיפים",
+        "פרק",
+        "פרקים",
+        "בפרק",
+        "בפרקים",
+        "חלק",
+        "חלקים",
+        "שאלה",
+        "שאלות",
+        "אות",
+        "אותיות",
+        "עמוד",
+        "עמודים",
+        "שורה",
+        "שורות",
+        "טור",
+        "טורים",
+        "קבוצה",
+        "קבוצות",
+        "סוג",
+        "סוגים",
+    }
+)
+
+_ACRONYM_PROCLITICS: tuple[str, ...] = ("ו", "ב", "כ", "ל", "מ", "ש", "ד", "ה", "וב", "ול", "ומ", "וכ")
+
+
+def _match_comma_acronym_pair(text: str, left: str, right: str, start_idx: int) -> bool:
+    """Return True iff ``left,right`` at ``start_idx`` is a known acronym slip, not a list."""
+    # Never treat items following an explicit list header ("סעיפים ע,ש") as an acronym
+    prefix_ctx = text[:start_idx].rstrip()
+    prev_word_m = re.search(r"([א-ת]+)$", prefix_ctx)
+    if prev_word_m and prev_word_m.group(1) in _LIST_HEADER_WORDS:
+        return False
+    if (left, right) in _KNOWN_COMMA_ACRONYMS:
+        return True
+    for proc in _ACRONYM_PROCLITICS:
+        if left.startswith(proc) and len(left) > len(proc):
+            if (left[len(proc) :], right) in _KNOWN_COMMA_ACRONYMS:
+                return True
+    return False
+
+
 def space_after_comma(text: str) -> list[Suggestion]:
     """A comma or semicolon is written with a space after it."""
     proposals: list[Suggestion] = []
     for match in re.finditer(r"([,;])(?=[^\s\d\"״'׳)\]])", text):
-        # Skip single comma inside a 2-5 letter Hebrew acronym (e.g. ע,ש -> ע"ש),
-        # handled by abbreviation_punctuation; keep list sequences like א,ב,ג.
-        if (
-            match.group(1) == ","
-            and re.search(r'(?:^|[\s(\["״])[א-ת]{1,4}$', text[: match.start()])
-            and re.match(r'^[א-ת](?:$|[\s.:;!?)\]"״])', text[match.end() :])
-        ):
-            continue
+        if match.group(1) == ",":
+            left_m = re.search(r'(?:^|[\s(\["״])([א-ת]{1,5})$', text[: match.start()])
+            right_m = re.match(r'^([א-ת])(?:$|[\s.:;!?)\]"״])', text[match.end() :])
+            if left_m and right_m:
+                token_start = match.start() - len(left_m.group(1))
+                if _match_comma_acronym_pair(
+                    text, left_m.group(1), right_m.group(1), token_start
+                ):
+                    continue
         proposals.append(
             _proposal(
                 text,
@@ -98,11 +209,14 @@ def space_after_comma(text: str) -> list[Suggestion]:
 def abbreviation_punctuation(text: str) -> list[Suggestion]:
     """Propose standard gershayim (\") inside Hebrew acronyms typed with ',' or \"'\"."""
     proposals: list[Suggestion] = []
-    # 1. Keyboard slip: comma before the final letter of a Hebrew acronym (ע,ש -> ע"ש, ס,ל -> ס"ל)
+    # 1. Keyboard slip: comma inside a known Hebrew acronym (ע,ש -> ע"ש, ס,ל -> ס"ל),
+    # while leaving all ordinary comma-separated lists (א,ב / א,ב,ג / דן,טל) untouched.
     for match in re.finditer(
-        r'(?:^|(?<=[\s(\["״]))([א-ת]{1,4}),([א-ת])(?=$|[\s.:;!?)\]"״])', text
+        r'(?:^|(?<=[\s(\["״]))([א-ת]{1,5}),([א-ת])(?=$|[\s.:;!?)\]"״])', text
     ):
         left, right = match.group(1), match.group(2)
+        if not _match_comma_acronym_pair(text, left, right, match.start()):
+            continue
         proposals.append(
             _proposal(
                 text,
@@ -115,12 +229,15 @@ def abbreviation_punctuation(text: str) -> list[Suggestion]:
         )
 
     # 2. Internal single geresh before final acronym letter (רש'י -> רש"י, נפק'מ -> נפק"מ),
-    # excluding consonant-geresh loanwords after ג/ז/צ/ד/ת/ח (צ'ק, ג'ז, תאצ'ר).
+    # excluding consonant-geresh loanwords after ג/ז/צ/ד/ת/ח (צ'ק, ג'ז, תאצ'ר) and
+    # requiring either >=2 letters before the tick or a known 2-letter acronym.
     for match in re.finditer(
-        r'(?:^|(?<=[\s(\["״]))([א-ת]{1,4})[\'׳]([א-ת])(?=$|[\s.,:;!?)\]"״])', text
+        r'(?:^|(?<=[\s(\["״]))([א-ת]{1,5})[\'׳]([א-ת])(?=$|[\s.,:;!?)\]"״])', text
     ):
         left, right = match.group(1), match.group(2)
         if left[-1] in "גזצדתח":
+            continue
+        if len(left) == 1 and (left, right) not in _KNOWN_COMMA_ACRONYMS:
             continue
         proposals.append(
             _proposal(
