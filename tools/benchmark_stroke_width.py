@@ -349,7 +349,8 @@ def _run_mishkefet_experiments(
                     (
                         REGIME_SPECS[0],  # verified_native_300dpi
                         REGIME_SPECS[1],  # pen_fine_nib
-                        REGIME_SPECS[3],  # pen_faint_broken
+                        REGIME_SPECS[2],  # pen_faint_broken
+                        REGIME_SPECS[3],  # pen_heavy_marker
                         REGIME_SPECS[6],  # dpi_150_lowres
                     )
                     if pc_enabled
@@ -430,10 +431,11 @@ def _run_mishkefet_experiments(
                 }
 
     # Experiment B: Page-level stroke variant BEFORE line segmentation
+    # Full-page morphology across 36 multi-megapixel pages runs in the default
+    # research sweep (research-benchmarks.yml); --ci-fast focuses on H=64/H=96
+    # line-crop recognition + real-scan diagnostics for fast PR turnaround.
     seg_results: dict[str, object] = {}
-    seg_regimes = (
-        SEGMENTATION_REGIMES[:1] if ci_fast else SEGMENTATION_REGIMES
-    )
+    seg_regimes = () if ci_fast else SEGMENTATION_REGIMES
     if not corpus_pages:
         seg_regimes = ()
     for reg_idx, regime in enumerate(seg_regimes):
@@ -721,12 +723,10 @@ def _run_kraken_experiments(
                 }
 
     # Experiment B: Page-level stroke variant BEFORE Kraken blla segmentation
-    # Evaluate on verified_native_300dpi and pen_fine_nib to keep CPU time bounded
+    # Runs in the exhaustive research sweep (research-benchmarks.yml)
     seg_results: dict[str, object] = {}
     kraken_seg_regimes = (
-        ("verified_native_300dpi",)
-        if ci_fast
-        else ("verified_native_300dpi", "pen_fine_nib")
+        () if ci_fast else ("verified_native_300dpi", "pen_fine_nib")
     )
     if not corpus_pages:
         kraken_seg_regimes = ()

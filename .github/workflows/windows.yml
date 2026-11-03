@@ -465,7 +465,7 @@ jobs:
             --pattern 'test_*ocr*.py' \
             2>&1 | tee -a engine-unit-tests.log
       - name: Measure accuracy on verified modern Hebrew cursive corpus
-        timeout-minutes: 30
+        timeout-minutes: 40
         run: |
           set -o pipefail
           python tools/build_benchmark.py \
