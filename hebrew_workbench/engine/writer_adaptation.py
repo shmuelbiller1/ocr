@@ -33,6 +33,7 @@ from ..training.store import (
     VerifiedLineSample,
     fnv1a_32,
     is_held_out_sample,
+    split_writer_train_and_holdout,
 )
 
 __all__ = [
@@ -422,68 +423,13 @@ def load_writer_head_npz(path: str | Path):
 def _split_train_and_holdout(
     samples: list[VerifiedLineSample],
 ) -> tuple[list[VerifiedLineSample], list[VerifiedLineSample]]:
-    """Split verified lines into strictly disjoint train and held-out sets.
-
-    - Never returns an empty holdout for ``>= MIN_VERIFIED_FOR_ADAPT`` lines:
-      training examples are **never** reused as test examples.
-    - Prefers holding out whole ``(document_key, page_number)`` pages when a
-      student has verified >= 2 pages, preventing same-page style/context leakage.
-    """
-    if len(samples) < MIN_VERIFIED_FOR_ADAPT:
-        return list(samples[-MAX_TRAIN_SAMPLES:]), []
-
-    pages: dict[tuple[str, int], list[VerifiedLineSample]] = {}
-    for s in samples:
-        pages.setdefault((s.document_key, s.page_number), []).append(s)
-
-    min_train = max(6, MIN_VERIFIED_FOR_ADAPT - MIN_HELDOUT_SAMPLES)
-    if len(pages) >= 2:
-        ranked_pages = sorted(
-            pages.items(),
-            key=lambda kv: (
-                fnv1a_32(f"{kv[1][0].writer_id}:{kv[0][0]}:{kv[0][1]}") % 8,
-                len(kv[1]),
-                kv[0],
-            ),
-        )
-        held_pages: set[tuple[str, int]] = set()
-        held_count = 0
-        target_hold = max(MIN_HELDOUT_SAMPLES, int(round(0.2 * len(samples))))
-        for pg_key, pg_samples in ranked_pages:
-            if (
-                held_count < target_hold
-                and (len(samples) - (held_count + len(pg_samples))) >= min_train
-            ):
-                held_pages.add(pg_key)
-                held_count += len(pg_samples)
-        if held_count >= MIN_HELDOUT_SAMPLES:
-            held_out = [
-                s for s in samples if (s.document_key, s.page_number) in held_pages
-            ]
-            train = [
-                s
-                for s in samples
-                if (s.document_key, s.page_number) not in held_pages
-            ]
-            return train[-MAX_TRAIN_SAMPLES:], held_out
-
-    # Single-page (or imbalanced multi-page) fallback: deterministic FNV-1a holdout
-    held_out = [s for s in samples if is_held_out_sample(s.sample_id)]
-    if len(held_out) < MIN_HELDOUT_SAMPLES or (len(samples) - len(held_out)) < min_train:
-        target_hold = min(
-            len(samples) - min_train,
-            max(MIN_HELDOUT_SAMPLES, int(round(0.2 * len(samples)))),
-        )
-        ranked = sorted(
-            samples,
-            key=lambda s: (fnv1a_32(s.sample_id) % 8, fnv1a_32(s.sample_id), s.sample_id),
-        )
-        held_ids = {s.sample_id for s in ranked[:target_hold]}
-        held_out = [s for s in samples if s.sample_id in held_ids]
-
-    held_id_set = {s.sample_id for s in held_out}
-    train = [s for s in samples if s.sample_id not in held_id_set]
-    return train[-MAX_TRAIN_SAMPLES:], held_out
+    """Split verified lines into strictly disjoint train and held-out sets."""
+    return split_writer_train_and_holdout(
+        samples,
+        min_verified_for_adapt=MIN_VERIFIED_FOR_ADAPT,
+        min_heldout_samples=MIN_HELDOUT_SAMPLES,
+        max_train_samples=MAX_TRAIN_SAMPLES,
+    )
 
 
 def _scale_width(im: Image.Image, scale: float) -> Image.Image:

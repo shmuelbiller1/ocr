@@ -652,7 +652,13 @@ class AdapterHistoryDialog(QDialog):
         self.rollback_prev_btn.setEnabled(active_round > 0)
 
     def _rollback_one_step(self) -> None:
-        self.store.rollback_writer_adapter(self.writer_id, target_round=None)
+        try:
+            self.store.rollback_writer_adapter(
+                self.writer_id, target_round=None
+            )
+        except Exception as exc:
+            QMessageBox.warning(self, "שחזור מתאם", str(exc))
+            return
         self.rolled_back = True
         self._populate()
 

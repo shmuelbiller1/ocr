@@ -1274,18 +1274,40 @@ class HardeningAndEdgeCaseRegressionTests(unittest.TestCase):
 
         other_dir = Path(self._tmp.name) / "other_store"
         other_store = SchoolLearningStore(other_dir)
-        other_store.create_writer("גיבוי אחר")
+        s_other = other_store.create_writer("גיבוי אחר")
+        other_store.record_verified_lines(
+            s_other.writer_id,
+            "other.png",
+            [
+                VerifiedLineInput(
+                    crop_image=_make_line_image(seed=9),
+                    diplomatic_text="שורה בגיבוי האחר",
+                    page_number=1,
+                    line_index=0,
+                    review_status=STATUS_VERIFIED,
+                    verified_exact_as_written=True,
+                    grammar_unedited_confirmed=True,
+                )
+            ],
+        )
         backup_zip = Path(self._tmp.name) / "other_backup.zip"
         other_store.backup_database_zip(backup_zip)
 
-        real_replace = os.replace
+        import hebrew_workbench.training.store as store_mod
 
-        def _fail_stage_to_root(src, dst):
-            if Path(dst) == self.learn_dir and "staged" in str(src):
-                raise OSError("Simulated disk/swap failure during restore")
-            return real_replace(src, dst)
+        real_swap = store_mod._swap_store_entry
+        staged_moves = {"n": 0}
 
-        with mock.patch("os.replace", side_effect=_fail_stage_to_root):
+        def _fail_second_staged_move(src: Path, dst: Path) -> None:
+            if "staged" in src.parts:
+                staged_moves["n"] += 1
+                if staged_moves["n"] >= 2:
+                    raise OSError("Simulated mid-swap disk failure during restore")
+            real_swap(src, dst)
+
+        with mock.patch.object(
+            store_mod, "_swap_store_entry", side_effect=_fail_second_staged_move
+        ):
             with self.assertRaises(OSError):
                 self.store.restore_database_zip(backup_zip)
 
@@ -1341,6 +1363,75 @@ class HardeningAndEdgeCaseRegressionTests(unittest.TestCase):
 
         hist = self.store.get_line_history(saved[1].sample_id)
         self.assertEqual(hist[-1].new_status, STATUS_SKIPPED)
+
+    def test_online_export_train_split_never_leaks_into_local_holdout_and_rollback_skips_unproven(
+        self,
+    ) -> None:
+        from hebrew_workbench.training import STATUS_VERIFIED
+        from hebrew_workbench.training.store import split_writer_train_and_holdout
+
+        student = self.store.create_writer("בדיקת דליפה ושחזור")
+        self.store.record_verified_lines(
+            student.writer_id,
+            "leak_check.png",
+            [
+                VerifiedLineInput(
+                    crop_image=_make_line_image(seed=i),
+                    diplomatic_text=f"שורה מאומתת מספר {i}",
+                    page_number=(1 if i < 7 else 2),
+                    line_index=(i if i < 7 else i - 7),
+                    review_status=STATUS_VERIFIED,
+                    verified_exact_as_written=True,
+                    grammar_unedited_confirmed=True,
+                )
+                for i in range(10)
+            ],
+        )
+        samples = self.store.list_writer_samples(student.writer_id)
+        _local_train, local_held = split_writer_train_and_holdout(samples)
+        local_held_keys = {(s.page_number, s.line_index) for s in local_held}
+        self.assertGreaterEqual(len(local_held_keys), 2)
+
+        out_zip = Path(self._tmp.name) / "noleak.zip"
+        self.store.export_online_training_bundle_zip(
+            out_zip, anonymize_writers=False
+        )
+        with zipfile.ZipFile(out_zip, "r") as zf:
+            exported_train_keys = {
+                (json.loads(ln)["page_number"], json.loads(ln)["line_index"])
+                for ln in zf.read("train.jsonl").decode("utf-8").splitlines()
+                if ln.strip()
+            }
+        self.assertEqual(exported_train_keys & local_held_keys, set())
+
+        # Record proven round 1, unproven inactive round 2 (None CER), and proven round 3:
+        # one-step rollback from round 3 skips unproven round 2 and lands on round 1!
+        for rnum, active, c_before, c_after in (
+            (1, True, 0.30, 0.18),
+            (2, False, None, None),
+            (3, True, 0.18, 0.12),
+        ):
+            rel = f"writers/{student.writer_id}/heads/head-r{rnum:04d}.npz"
+            p = self.learn_dir.joinpath(*rel.split("/"))
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(b"stub")
+            self.store.record_adapter_version(
+                student.writer_id,
+                round_number=rnum,
+                head_relpath=rel,
+                model_sha256="a" * 64,
+                samples_total=10,
+                train_samples=7,
+                held_out_samples=3,
+                held_out_chars=45,
+                held_out_cer_before=c_before,
+                held_out_cer_after=c_after,
+                activate=active,
+            )
+        rolled = self.store.rollback_writer_adapter(
+            student.writer_id, target_round=None
+        )
+        self.assertEqual(rolled.active_round, 1)
 
 
 if __name__ == "__main__":

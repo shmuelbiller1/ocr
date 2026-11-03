@@ -101,6 +101,80 @@ def is_held_out_sample(sample_id: str) -> bool:
     return (fnv1a_32(sample_id) % 8) == 0
 
 
+def _swap_store_entry(src: Path, dst: Path) -> None:
+    """Same-filesystem entry move used by ``restore_database_zip``."""
+    os.replace(src, dst)
+
+
+def split_writer_train_and_holdout(
+    samples: list[VerifiedLineSample],
+    *,
+    min_verified_for_adapt: int = 8,
+    min_heldout_samples: int = 2,
+    max_train_samples: int = 240,
+) -> tuple[list[VerifiedLineSample], list[VerifiedLineSample]]:
+    """Canonical leakage-free train / held-out split shared by local training & ZIP export.
+
+    Guarantees that lines placed in ``train.jsonl`` during online export are
+    **never** part of the local ``held_out`` validation gate when re-importing
+    an externally trained ``.npz`` adapter.
+    """
+    if len(samples) < min_verified_for_adapt:
+        return list(samples[-max_train_samples:]), []
+
+    pages: dict[tuple[str, int], list[VerifiedLineSample]] = {}
+    for s in samples:
+        pages.setdefault((s.document_key, s.page_number), []).append(s)
+
+    min_train = max(6, min_verified_for_adapt - min_heldout_samples)
+    if len(pages) >= 2:
+        ranked_pages = sorted(
+            pages.items(),
+            key=lambda kv: (
+                fnv1a_32(f"{kv[1][0].writer_id}:{kv[0][0]}:{kv[0][1]}") % 8,
+                len(kv[1]),
+                kv[0],
+            ),
+        )
+        held_pages: set[tuple[str, int]] = set()
+        held_count = 0
+        target_hold = max(min_heldout_samples, int(round(0.2 * len(samples))))
+        for pg_key, pg_samples in ranked_pages:
+            if (
+                held_count < target_hold
+                and (len(samples) - (held_count + len(pg_samples))) >= min_train
+            ):
+                held_pages.add(pg_key)
+                held_count += len(pg_samples)
+        if held_count >= min_heldout_samples:
+            held_out = [
+                s for s in samples if (s.document_key, s.page_number) in held_pages
+            ]
+            train = [
+                s
+                for s in samples
+                if (s.document_key, s.page_number) not in held_pages
+            ]
+            return train[-max_train_samples:], held_out
+
+    held_out = [s for s in samples if is_held_out_sample(s.sample_id)]
+    if len(held_out) < min_heldout_samples or (len(samples) - len(held_out)) < min_train:
+        target_hold = min(
+            len(samples) - min_train,
+            max(min_heldout_samples, int(round(0.2 * len(samples)))),
+        )
+        ranked = sorted(
+            samples,
+            key=lambda s: (fnv1a_32(s.sample_id) % 8, fnv1a_32(s.sample_id), s.sample_id),
+        )
+        held_ids = {s.sample_id for s in ranked[:target_hold]}
+        held_out = [s for s in samples if s.sample_id in held_ids]
+
+    held_id_set = {s.sample_id for s in held_out}
+    train = [s for s in samples if s.sample_id not in held_id_set]
+    return train[-max_train_samples:], held_out
+
+
 def compute_document_id(document_path: str | Path) -> str:
     """Compute a stable SHA-256 identifier for a source document without loading all into RAM."""
     p = Path(document_path)
@@ -1408,9 +1482,9 @@ class SchoolLearningStore:
                 for v in versions
                 if v.round_number < prof.active_round
                 and (
-                    v.held_out_cer_before is None
-                    or v.held_out_cer_after is None
-                    or v.held_out_cer_after <= v.held_out_cer_before + 1e-6
+                    v.held_out_cer_before is not None
+                    and v.held_out_cer_after is not None
+                    and v.held_out_cer_after <= v.held_out_cer_before + 1e-6
                 )
             ]
             chosen_round = earlier[-1] if earlier else 0
@@ -1809,33 +1883,39 @@ class SchoolLearningStore:
         for idx, wid in enumerate(distinct_wids, start=1):
             anon_map[wid] = f"writer_{idx:03d}" if anonymize_writers else wid
 
-        # Page-grouped train/val split per writer so validation is leakage-free
+        # Unified page-grouped train/val split per writer matching local adaptation
+        # so exported train.jsonl never overlaps local held-out validation!
         by_writer: dict[str, list[VerifiedLineSample]] = {}
         for smp in verified:
             by_writer.setdefault(smp.writer_id, []).append(smp)
 
         val_ids: set[str] = set()
         for wid, wsamples in by_writer.items():
-            pages = sorted({(s.document_key, s.page_number) for s in wsamples})
-            if len(pages) >= 2:
-                held_pages = {
-                    pg
-                    for pg in pages
-                    if (fnv1a_32(f"{wid}:{pg[0]}:{pg[1]}") % 5) == 0
-                }
-                if not held_pages:
-                    held_pages = {pages[-1]}
-                if len(held_pages) == len(pages):
-                    held_pages.remove(pages[0])
-                for s in wsamples:
-                    if (s.document_key, s.page_number) in held_pages:
-                        val_ids.add(s.sample_id)
-            elif len(wsamples) >= 6:
-                for s in wsamples:
-                    if is_held_out_sample(s.sample_id):
-                        val_ids.add(s.sample_id)
-                if not any(s.sample_id in val_ids for s in wsamples):
-                    val_ids.add(wsamples[-1].sample_id)
+            if len(wsamples) >= 8:
+                _tr, held = split_writer_train_and_holdout(
+                    wsamples, max_train_samples=max(240, len(wsamples))
+                )
+                val_ids.update(s.sample_id for s in held)
+            else:
+                pages = sorted({(s.document_key, s.page_number) for s in wsamples})
+                if len(pages) >= 2:
+                    ranked_pages = sorted(
+                        pages,
+                        key=lambda pg: (
+                            fnv1a_32(f"{wid}:{pg[0]}:{pg[1]}") % 8,
+                            pg,
+                        ),
+                    )
+                    held_pg = ranked_pages[0]
+                    for s in wsamples:
+                        if (s.document_key, s.page_number) == held_pg:
+                            val_ids.add(s.sample_id)
+                elif len(wsamples) >= 4:
+                    for s in wsamples:
+                        if is_held_out_sample(s.sample_id):
+                            val_ids.add(s.sample_id)
+                    if not any(s.sample_id in val_ids for s in wsamples):
+                        val_ids.add(wsamples[-1].sample_id)
 
         train_rows: list[str] = []
         val_rows: list[str] = []
@@ -2139,18 +2219,29 @@ class SchoolLearningStore:
 
             (stage / "backup_manifest.json").unlink(missing_ok=True)
 
-            # Atomic same-filesystem swap with full rollback on failure so the
-            # existing store is never deleted before replacement succeeds.
-            had_existing = self.root.exists()
-            if had_existing:
-                os.replace(self.root, prev_root)
+            # Same-filesystem entry-level swap with full rollback on failure:
+            # avoids renaming self.root itself (Windows NTFS directory-handle safe)
+            # and never deletes previous data before replacement succeeds.
+            prev_root.mkdir(parents=True, exist_ok=True)
+            self.root.mkdir(parents=True, exist_ok=True)
+            moved_existing: list[str] = []
             try:
-                os.replace(stage, self.root)
+                for existing_item in list(self.root.iterdir()):
+                    _swap_store_entry(existing_item, prev_root / existing_item.name)
+                    moved_existing.append(existing_item.name)
+                for staged_item in list(stage.iterdir()):
+                    _swap_store_entry(staged_item, self.root / staged_item.name)
                 self._schema_ready = False
                 self._ensure_db()
             except Exception:
-                if self.root.exists():
-                    shutil.rmtree(self.root, ignore_errors=True)
-                if had_existing and prev_root.exists():
-                    os.replace(prev_root, self.root)
+                for partial_item in list(self.root.iterdir()):
+                    if partial_item.is_dir():
+                        shutil.rmtree(partial_item, ignore_errors=True)
+                    else:
+                        partial_item.unlink(missing_ok=True)
+                for name in moved_existing:
+                    src_prev = prev_root / name
+                    if src_prev.exists():
+                        os.replace(src_prev, self.root / name)
+                self._schema_ready = False
                 raise
