@@ -463,7 +463,7 @@ def main() -> int:
                 "skipping neural OCR suites.",
                 flush=True,
             )
-        elif not args.in_process and len(engine_list) > 1:
+        elif not args.in_process and engine_list:
             import subprocess
             import tempfile
 

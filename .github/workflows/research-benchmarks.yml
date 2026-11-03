@@ -33,7 +33,7 @@ jobs:
   exhaustive-benchmarks:
     name: Exhaustive PhotoCraft & Stroke-Width Sweeps
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v4
       - name: Restore recognition model cache
@@ -68,11 +68,12 @@ jobs:
             --corpus benchmark/modern_cursive \
             --models .cache/models \
             --engines mishkefet-v1 kraken-ppocrv6-small \
-            --child-timeout 3600 \
+            --child-timeout 2100 \
             --output photocraft-audit-full.json 2>&1 | tee photocraft-full.log
+          python -c "import json; d = json.load(open('photocraft-audit-full.json')); assert not d.get('engine_failures') and set(d.get('neural_ocr_before_vs_after', ())) >= {'mishkefet-v1', 'kraken-ppocrv6-small'}, d.get('engine_failures')"
       - name: Full 192-cell stroke-width & segmentation benchmark
         if: ${{ inputs.run_full_stroke_width }}
-        timeout-minutes: 180
+        timeout-minutes: 240
         run: |
           set -o pipefail
           extra_flags=()
@@ -83,9 +84,10 @@ jobs:
             --corpus benchmark/modern_cursive \
             --models .cache/models \
             --engines mishkefet-v1 kraken-ppocrv6-small \
-            --child-timeout 7200 \
+            --child-timeout 6600 \
             "${extra_flags[@]}" \
             --output stroke-width-full.json 2>&1 | tee stroke-width-full.log
+          python -c "import json; d = json.load(open('stroke-width-full.json')); assert not d.get('engine_failures') and set(d.get('engines', ())) >= {'mishkefet-v1', 'kraken-ppocrv6-small'}, d.get('engine_failures')"
       - name: Upload exhaustive research benchmark reports
         if: always()
         uses: actions/upload-artifact@v4

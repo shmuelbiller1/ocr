@@ -467,7 +467,7 @@ jobs:
             --pattern 'test_*ocr*.py' \
             2>&1 | tee -a engine-unit-tests.log
       - name: Measure accuracy on verified modern Hebrew cursive corpus
-        timeout-minutes: 40
+        timeout-minutes: 25
         run: |
           set -o pipefail
           python tools/build_benchmark.py \
@@ -489,6 +489,10 @@ jobs:
             --corpus benchmark/modern_cursive \
             --skip-neural-ocr \
             --output photocraft-audit-benchmark.json 2>&1 | tee benchmark-photocraft.log
+      - name: Verify stroke-width variants on modern cursive corpus
+        timeout-minutes: 25
+        run: |
+          set -o pipefail
           # Normalized, verified-only stroke-width regression check (--ci-fast);
           # full 192-cell exhaustive matrix lives in research-benchmarks.yml.
           python tools/benchmark_stroke_width.py \
@@ -498,6 +502,7 @@ jobs:
             --ci-fast \
             --child-timeout 1200 \
             --output stroke-width-benchmark.json 2>&1 | tee benchmark-stroke-width.log
+          python -c "import json, sys; d = json.load(open('stroke-width-benchmark.json')); assert not d.get('engine_failures') and set(d.get('engines', ())) >= {'mishkefet-v1', 'kraken-ppocrv6-small'}, d.get('engine_failures'); print('stroke-width CI check ok')"
       - name: Check the corpus of the modern school handwriting
         run: |
           set -o pipefail

@@ -167,8 +167,8 @@ _ACRONYM_PROCLITICS: tuple[str, ...] = ("ו", "ב", "כ", "ל", "מ", "ש", "ד"
 
 def _match_comma_acronym_pair(text: str, left: str, right: str, start_idx: int) -> bool:
     """Return True iff ``left,right`` at ``start_idx`` is a known acronym slip, not a list."""
-    # Never treat items following an explicit list header ("סעיפים ע,ש") as an acronym
-    prefix_ctx = text[:start_idx].rstrip()
+    # Never treat items following an explicit list header ("סעיפים ע,ש" / "סעיפים: ע,ש") as an acronym
+    prefix_ctx = text[:start_idx].rstrip(" \t\n\r:-–—")
     prev_word_m = re.search(r"([א-ת]+)$", prefix_ctx)
     if prev_word_m and prev_word_m.group(1) in _LIST_HEADER_WORDS:
         return False
@@ -187,7 +187,9 @@ def space_after_comma(text: str) -> list[Suggestion]:
     for match in re.finditer(r"([,;])(?=[^\s\d\"״'׳)\]])", text):
         if match.group(1) == ",":
             left_m = re.search(r'(?:^|[\s(\["״])([א-ת]{1,5})$', text[: match.start()])
-            right_m = re.match(r'^([א-ת])(?:$|[\s.:;!?)\]"״])', text[match.end() :])
+            right_m = re.match(
+                r'^([א-ת])(?:$|[\s.:;!?)\]"״]|,(?=\s))', text[match.end() :]
+            )
             if left_m and right_m:
                 token_start = match.start() - len(left_m.group(1))
                 if _match_comma_acronym_pair(
@@ -212,7 +214,7 @@ def abbreviation_punctuation(text: str) -> list[Suggestion]:
     # 1. Keyboard slip: comma inside a known Hebrew acronym (ע,ש -> ע"ש, ס,ל -> ס"ל),
     # while leaving all ordinary comma-separated lists (א,ב / א,ב,ג / דן,טל) untouched.
     for match in re.finditer(
-        r'(?:^|(?<=[\s(\["״]))([א-ת]{1,5}),([א-ת])(?=$|[\s.:;!?)\]"״])', text
+        r'(?:^|(?<=[\s(\["״]))([א-ת]{1,5}),([א-ת])(?=$|[\s.:;!?)\]"״]|,(?=\s))', text
     ):
         left, right = match.group(1), match.group(2)
         if not _match_comma_acronym_pair(text, left, right, match.start()):

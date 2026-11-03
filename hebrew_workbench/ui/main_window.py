@@ -1932,6 +1932,12 @@ class MainWindow(QMainWindow):
                 )
                 event.ignore()
                 return
+        if not self.preview.shutdown_threads(3000):
+            self.statusBar().showMessage(
+                "עיבוד התצוגה המקדימה עוד לא הסתיים. החלון נשאר פתוח.", 8000
+            )
+            event.ignore()
+            return
         self.preview.close_document()
         event.accept()
 

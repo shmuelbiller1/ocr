@@ -755,7 +755,7 @@ def _run_isolated_engine_subprocess(
             "model": identifier,
             "pages": 0,
             "pages_seen": pages_count,
-            "summary": summarise_results([]),
+            "summary": summarise([]),
             "results": [],
             "failures": [{"page": "<process>", "error": reason}],
         }

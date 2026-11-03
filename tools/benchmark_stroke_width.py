@@ -496,6 +496,10 @@ def _run_mishkefet_experiments(
 
     # Experiment C: Real unverified contemporary & archival scans (NO fabricated GT)
     real_scan_results: list[dict[str, object]] = []
+    if not corpus_pages and real_scans:
+        _warm_crops, _, _ = segment_page(real_scans[0][2])
+        if _warm_crops:
+            recognizer.read(_warm_crops[:1])
     for scan_id, scan_desc, scan_im in real_scans:
         raw_audit = audit_document_page(scan_im)
 
@@ -790,8 +794,8 @@ def _run_kraken_experiments(
     # Experiment C: Real unverified scans (first 2 to bound Kraken blla time)
     real_scan_results: list[dict[str, object]] = []
     for scan_id, scan_desc, scan_im in real_scans[:2]:
-        prep_im, enh_audit = prepare_page_for_ocr(scan_im, enabled=True)
         t0 = time.perf_counter()
+        prep_im, enh_audit = prepare_page_for_ocr(scan_im, enabled=True)
         seg = engine._segmentation_model.predict(im=prep_im, config=seg_cfg)
         recs = list(
             engine._recognition_model.predict(

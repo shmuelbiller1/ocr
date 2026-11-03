@@ -273,6 +273,7 @@ class PreviewPaneTests(unittest.TestCase):
             pane.set_document(str(tiff_path), processed_pages={1: (snap_png, True, True)})
             self.assertIsNone(pane._enhance_thread)
             self.assertIn("OCR", pane.status.text())
+            self.assertTrue(pane.shutdown_threads(2000))
             pane.close_document()
 
 

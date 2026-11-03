@@ -171,6 +171,9 @@ def _compute_live_preview_payload(
     )
 
 
+_ACTIVE_PREVIEW_THREADS: set[_PreviewEnhanceThread] = set()
+
+
 class _PreviewEnhanceThread(QThread):
     """Background worker that resolves processed-page previews off the GUI thread."""
 
@@ -384,15 +387,44 @@ class PreviewPane(QWidget):
 
     def close_document(self) -> None:
         self._doc_token += 1
-        self._cancel_pending_enhancement(wait_ms=1500)
+        self._cancel_pending_enhancement(wait_ms=250)
         self._ocr_processed_pages = {}
         self._live_processed_cache.clear()
         if self._preview is not None:
             self._preview.close()
             self._preview = None
 
+    def shutdown_threads(self, timeout_ms: int = 3000) -> bool:
+        """Cancel and wait for active and retired preview threads before shutdown."""
+        deadline = time.monotonic() + max(0.01, timeout_ms / 1000.0)
+        self._cancel_pending_enhancement(wait_ms=0)
+        for t in list(self._retired_threads):
+            t.cancel()
+        while True:
+            running = [
+                t
+                for t in list(self._retired_threads)
+                if t.isRunning()
+            ]
+            if self._enhance_thread is not None and self._enhance_thread.isRunning():
+                running.append(self._enhance_thread)
+            if not running:
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            QCoreApplication.processEvents(QEventLoop.AllEvents, 20)
+            slice_ms = min(25, max(1, int(remaining * 1000)))
+            for t in running:
+                if t.isRunning():
+                    t.wait(slice_ms)
+        for t in list(self._retired_threads):
+            if not t.isRunning():
+                self._cleanup_retired_thread(t)
+        return True
+
     def closeEvent(self, event) -> None:  # noqa: N802
-        self._cancel_pending_enhancement(wait_ms=2000)
+        self.shutdown_threads(2000)
         super().closeEvent(event)
 
     @property
@@ -424,6 +456,7 @@ class PreviewPane(QWidget):
         thread.cancel()
         if thread.isRunning():
             if wait_ms > 0 and thread.wait(wait_ms):
+                _ACTIVE_PREVIEW_THREADS.discard(thread)
                 thread.deleteLater()
             else:
                 self._retired_threads.append(thread)
@@ -431,11 +464,13 @@ class PreviewPane(QWidget):
                     lambda t=thread: self._cleanup_retired_thread(t)
                 )
         else:
+            _ACTIVE_PREVIEW_THREADS.discard(thread)
             thread.deleteLater()
 
     def _cleanup_retired_thread(self, thread: _PreviewEnhanceThread) -> None:
         if thread in self._retired_threads:
             self._retired_threads.remove(thread)
+        _ACTIVE_PREVIEW_THREADS.discard(thread)
         thread.deleteLater()
 
     def _cache_put(
@@ -583,8 +618,9 @@ class PreviewPane(QWidget):
             eff_on=eff_on,
             orig_image=orig_image.copy(),
             worker_timeout=self._worker_timeout,
-            parent=self,
+            parent=None,
         )
+        _ACTIVE_PREVIEW_THREADS.add(thread)
         thread.result_ready.connect(self._on_async_enhancement_ready)
         thread.finished.connect(
             lambda t=thread: self._on_async_thread_finished(t)
@@ -593,6 +629,7 @@ class PreviewPane(QWidget):
         thread.start()
 
     def _on_async_thread_finished(self, thread: _PreviewEnhanceThread) -> None:
+        _ACTIVE_PREVIEW_THREADS.discard(thread)
         if self._enhance_thread is thread:
             self._enhance_thread = None
             thread.deleteLater()

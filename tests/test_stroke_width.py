@@ -250,7 +250,7 @@ def _qt_available() -> bool:
         from PySide6.QtWidgets import QApplication  # noqa: F401
 
         return True
-    except Exception:
+    except (ImportError, OSError):
         return False
 
 

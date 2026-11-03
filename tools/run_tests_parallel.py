@@ -64,7 +64,10 @@ def _run_one_module(
         return module_name, proc.returncode, elapsed, proc.stdout
     except subprocess.TimeoutExpired as exc:
         elapsed = time.perf_counter() - t0
-        partial = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
+        if isinstance(exc.stdout, bytes):
+            partial = exc.stdout.decode("utf-8", errors="replace")
+        else:
+            partial = exc.stdout or ""
         msg = f"{partial}\n[TIMEOUT] {module_name} exceeded {timeout_sec}s\n"
         return module_name, 124, elapsed, msg
 

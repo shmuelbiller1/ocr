@@ -116,17 +116,23 @@ class HebrewGrammarRulesTests(unittest.TestCase):
             [(p.original, p.replacement) for p in list_words],
             [(",", ", "), (",", ", ")],
         )
-        # Explicit list header before letter pair ("סעיפים ע,ש") stays a comma list
-        header_list = self.grammar.check("ראו סעיפים ע,ש בנספח.")
+        # Explicit list header before letter pair ("סעיפים ע,ש" / "סעיפים: ע,ש") stays a comma list
+        header_list = self.grammar.check("ראו סעיפים ע,ש וגם סעיפים: ע,ש בנספח.")
         self.assertEqual(
             [(p.original, p.replacement) for p in header_list],
-            [(",", ", ")],
+            [(",", ", "), (",", ", ")],
         )
-        # Genuine keyboard-slip rabbinic acronyms (including proclitic-attached) get gershayim
-        genuine_acro = self.grammar.check("וכך כתב ע,ש וגם ס,ל ונפק,מ בפירוש.")
+        # Genuine keyboard-slip rabbinic acronyms (including proclitic-attached and clause-comma) get gershayim
+        genuine_acro = self.grammar.check("וכך כתב ע,ש, וגם ס,ל ונפק,מ בפירוש.")
         self.assertEqual(
             [(p.original, p.replacement) for p in genuine_acro],
             [("ע,ש", 'ע"ש'), ("ס,ל", 'ס"ל'), ("ונפק,מ", 'ונפק"מ')],
+        )
+        # Unspaced 3-item comma list ("ע,ש,ל") remains a comma list, not an acronym
+        three_list = self.grammar.check("נבדוק אותיות ע,ש,ל בטבלה.")
+        self.assertEqual(
+            [(p.original, p.replacement) for p in three_list],
+            [(",", ", "), (",", ", ")],
         )
 
     def test_pr22_tokenization_and_grammar_regressions(self) -> None:
