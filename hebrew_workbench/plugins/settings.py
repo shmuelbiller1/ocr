@@ -30,6 +30,7 @@ class PluginSettings:
     disabled: set[str] = field(default_factory=set)
     options: dict[str, dict] = field(default_factory=dict)
     page_enhancement: bool = True
+    active_writer_id: str = ""
 
     # -- the file ----------------------------------------------------------
     @classmethod
@@ -52,6 +53,8 @@ class PluginSettings:
         options = data.get("options", {})
         raw_enh = data.get("page_enhancement", True)
         page_enh = raw_enh if isinstance(raw_enh, bool) else True
+        raw_writer = data.get("active_writer_id", "")
+        writer_id = str(raw_writer) if isinstance(raw_writer, str) else ""
         return cls(
             active={str(k): str(v) for k, v in active.items()}
             if isinstance(active, dict)
@@ -70,6 +73,7 @@ class PluginSettings:
             if isinstance(options, dict)
             else {},
             page_enhancement=page_enh,
+            active_writer_id=writer_id,
         )
 
     def save(self, path: str | Path) -> None:
@@ -82,6 +86,7 @@ class PluginSettings:
             "disabled": sorted(self.disabled),
             "options": {key: dict(value) for key, value in self.options.items()},
             "page_enhancement": bool(self.page_enhancement),
+            "active_writer_id": str(self.active_writer_id or ""),
         }
         handle, temporary = tempfile.mkstemp(
             dir=str(file_path.parent), prefix=".settings-", suffix=".json"

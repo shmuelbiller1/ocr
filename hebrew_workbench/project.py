@@ -103,6 +103,12 @@ class DocumentEntry:
     #: the recognition would take away what was written, and it asks
     #: the user first.
     edited: bool = False
+    #: Optional recurring student/writer profile identifier.
+    writer_id: str = ""
+    #: Exact as-written diplomatic transcription verified before grammar edits.
+    diplomatic_transcription: str = ""
+    #: Per-page line bounding boxes & OCR confidences from the latest OCR run.
+    recognized_pages: list[dict] = field(default_factory=list)
 
     @property
     def file_path(self) -> Path:
@@ -128,10 +134,19 @@ class DocumentEntry:
             "notes": self.notes,
             "changes": list(self.changes),
             "edited": bool(self.edited),
+            "writer_id": self.writer_id,
+            "diplomatic_transcription": self.diplomatic_transcription,
+            "recognized_pages": list(self.recognized_pages),
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "DocumentEntry":
+        raw_pages = data.get("recognized_pages", [])
+        rec_pages = (
+            [dict(p) for p in raw_pages if isinstance(p, dict)]
+            if isinstance(raw_pages, list)
+            else []
+        )
         return cls(
             path=str(data.get("path", "")),
             added_at=str(data.get("added_at", _now())),
@@ -144,6 +159,11 @@ class DocumentEntry:
             notes=str(data.get("notes", "")),
             changes=_read_changes(data.get("changes", [])),
             edited=bool(data.get("edited", False)),
+            writer_id=str(data.get("writer_id", "") or ""),
+            diplomatic_transcription=str(
+                data.get("diplomatic_transcription", "") or ""
+            ),
+            recognized_pages=rec_pages,
         )
 
 

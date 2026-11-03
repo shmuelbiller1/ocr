@@ -89,6 +89,8 @@ def make_worker_engine(options: dict | None = None) -> "WorkerEngine":
         engine=engine,
         mode=settings.get("decoding_mode", "raw"),
         page_enhancement=page_enh,
+        writer_id=str(settings.get("writer_id") or ""),
+        learning_dir=settings.get("learning_dir"),
     )
 
 
@@ -123,6 +125,8 @@ class WorkerEngine:
         engine: str = "kraken",
         mode: str = "raw",
         page_enhancement: bool | None = None,
+        writer_id: str = "",
+        learning_dir: str | Path | None = None,
     ) -> None:
         from .models import MODEL_ARTIFACTS
 
@@ -136,6 +140,8 @@ class WorkerEngine:
         self.page_enhancement = (
             bool(page_enhancement) if page_enhancement is not None else None
         )
+        self.writer_id = str(writer_id or "").strip()
+        self.learning_dir = Path(learning_dir) if learning_dir else None
         self.worker = Path(worker)
         self.model_path = Path(model_path)
         self.timeout_seconds = timeout_seconds
@@ -149,7 +155,7 @@ class WorkerEngine:
         self.name = _display_name(engine, artifact_id)
 
     def configure(self, options: dict) -> None:
-        """Apply explicit decoding and page-enhancement profiles."""
+        """Apply explicit decoding, page-enhancement, and student-writer profiles."""
         from .mishkefet_decoding import decoding_mode
         mode = decoding_mode(options)
         if self.engine != "mishkefet" and mode != "raw":
@@ -157,6 +163,14 @@ class WorkerEngine:
         self.mode = mode
         if "page_enhancement" in options and options["page_enhancement"] is not None:
             self.page_enhancement = bool(options["page_enhancement"])
+        if "writer_id" in options and options["writer_id"] is not None:
+            self.writer_id = str(options["writer_id"] or "").strip()
+        if "learning_dir" in options and options["learning_dir"] is not None:
+            self.learning_dir = (
+                Path(options["learning_dir"])
+                if options["learning_dir"]
+                else None
+            )
 
     def manifest(self) -> EngineManifest:
         if self.engine == "mishkefet":
@@ -197,6 +211,10 @@ class WorkerEngine:
             }
             if self.page_enhancement is not None:
                 job_payload["page_enhancement"] = bool(self.page_enhancement)
+            if self.writer_id:
+                job_payload["writer_id"] = self.writer_id
+            if self.learning_dir is not None:
+                job_payload["learning_dir"] = str(self.learning_dir)
             job_path.write_text(
                 json.dumps(job_payload, ensure_ascii=False),
                 encoding="utf-8",
@@ -295,6 +313,7 @@ class WorkerEngine:
                 assisted_text=page.get("assisted_text"),
                 enhanced=bool(page.get("enhanced", False)),
                 enhancement_enabled=bool(page.get("enhancement_enabled", True)),
+                skew_degrees=float(page.get("skew_degrees", 0.0) or 0.0),
                 processed_image_png=processed_bytes_by_num.get(
                     int(page.get("number", index + 1))
                 ),

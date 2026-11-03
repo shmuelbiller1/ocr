@@ -184,14 +184,18 @@ class HTRVT(nn.Module):
         """Input pixel widths -> CTC time steps, matching the CNN's stride."""
         return torch.div(widths, self.cnn.width_stride, rounding_mode="floor").clamp(min=1)
 
-    def forward(self, images: torch.Tensor) -> torch.Tensor:
-        """(B, 1, H, W) -> log-probabilities (B, T, n_classes)."""
+    def extract_features(self, images: torch.Tensor) -> torch.Tensor:
+        """(B, 1, H, W) -> frozen encoder features (B, T, dim) prior to CTC head."""
         x = self.cnn(images)
         x = self.proj(x)
         x = self.mask(x)
         x = self.drop(self.pos(x))
         x = self.encoder(x)
-        x = self.norm(x)
+        return self.norm(x)
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        """(B, 1, H, W) -> log-probabilities (B, T, n_classes)."""
+        x = self.extract_features(images)
         return F.log_softmax(self.head(x), dim=-1)
 
 

@@ -83,6 +83,13 @@ class Recognizer:
             )
         self.model.load_state_dict(state["model"])
         self.model.to(self.device).eval()
+        self._base_head_weight = self.model.head.weight.detach().cpu().clone()
+        self._base_head_bias = (
+            self.model.head.bias.detach().cpu().clone()
+            if self.model.head.bias is not None
+            else None
+        )
+        self._active_writer_head_key: str | None = None
         # A checkpoint from a fine-tune counts steps, not epochs, and
         # export_model.py carries the missing field through as None rather than
         # dropping it. `.get(k, default)` does not help when the key is present
@@ -90,7 +97,79 @@ class Recognizer:
         epoch = state.get("epoch")
         self.trained_epochs = (epoch + 1) if isinstance(epoch, int) else 0
         self.trained_steps = state.get("step")
-        self._last_logit_cache: tuple[tuple[Image.Image, ...], list[tuple[torch.Tensor, torch.Tensor]]] | None = None
+        self._last_logit_cache: tuple[tuple[Image.Image, ...], str, list[tuple[torch.Tensor, torch.Tensor]]] | None = None
+
+    def base_head_numpy(self):
+        """Return copies of the original general ``(W0, b0)`` CTC head arrays."""
+        import numpy as np
+
+        w0 = self._base_head_weight.numpy().astype(np.float32, copy=True)
+        if self._base_head_bias is not None:
+            b0 = self._base_head_bias.numpy().astype(np.float32, copy=True)
+        else:
+            b0 = np.zeros((w0.shape[0],), dtype=np.float32)
+        return w0, b0
+
+    def reset_writer_head(self) -> None:
+        """Restore the unmodified general Mishkefet CTC head."""
+        if self._active_writer_head_key is None:
+            return
+        with torch.no_grad():
+            self.model.head.weight.copy_(self._base_head_weight.to(self.device))
+            if self.model.head.bias is not None and self._base_head_bias is not None:
+                self.model.head.bias.copy_(self._base_head_bias.to(self.device))
+        self._active_writer_head_key = None
+        self._last_logit_cache = None
+
+    def apply_writer_head_arrays(self, W, b, *, head_key: str = "custom") -> None:
+        """Install adapted ``(W, b)`` linear CTC head weights onto the frozen encoder."""
+        if self._active_writer_head_key == head_key:
+            return
+        w_t = torch.as_tensor(W, dtype=self.model.head.weight.dtype, device=self.device)
+        b_t = torch.as_tensor(b, dtype=self.model.head.weight.dtype, device=self.device)
+        if tuple(w_t.shape) != tuple(self.model.head.weight.shape):
+            raise ValueError(
+                f"Writer head shape {tuple(w_t.shape)} != expected {tuple(self.model.head.weight.shape)}"
+            )
+        if self.model.head.bias is not None and tuple(b_t.shape) != tuple(
+            self.model.head.bias.shape
+        ):
+            raise ValueError(
+                f"Writer head bias shape {tuple(b_t.shape)} != expected {tuple(self.model.head.bias.shape)}"
+            )
+        with torch.no_grad():
+            self.model.head.weight.copy_(w_t)
+            if self.model.head.bias is not None:
+                self.model.head.bias.copy_(b_t)
+        self._active_writer_head_key = head_key
+        self._last_logit_cache = None
+
+    @torch.no_grad()
+    def extract_line_features(
+        self, images: list[Image.Image], batch_size: int = 12
+    ) -> list:
+        """Extract ``(T_i, dim)`` float32 encoder features before the CTC head."""
+        if not images:
+            return []
+        order = sorted(
+            range(len(images)), key=lambda i: images[i].width / max(images[i].height, 1)
+        )
+        per_line: dict[int, object] = {}
+        for start in range(0, len(order), batch_size):
+            chunk = order[start : start + batch_size]
+            arrays = [torch.from_numpy(preprocess(images[i])) for i in chunk]
+            widths = torch.tensor([a.shape[-1] for a in arrays], dtype=torch.long)
+            padded = torch.zeros(
+                len(arrays), 1, arrays[0].shape[-2], int(widths.max())
+            )
+            for j, a in enumerate(arrays):
+                padded[j, :, :, : a.shape[-1]] = a
+            feats = self.model.extract_features(padded.to(self.device)).float().cpu()
+            lengths = self.model.output_lengths(widths).cpu()
+            for j, i in enumerate(chunk):
+                t_len = int(lengths[j].item())
+                per_line[i] = feats[j, :t_len, :].contiguous().numpy()
+        return [per_line[i] for i in range(len(images))]
 
     def _forward_lines(
         self, images: list[Image.Image], batch_size: int = 12

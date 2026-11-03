@@ -567,6 +567,13 @@ jobs:
             --document benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf \
             --model .cache/models/mishkefet-v1.pt \
             --output build/decoding-comparison 2>&1 | tee decoding-comparison.log
+      - name: Benchmark writer adaptation, shared vocabulary, reload and rollback
+        run: |
+          set -o pipefail
+          python tools/benchmark_writer_adaptation.py \
+            --models .cache/models \
+            --corpus benchmark/modern_cursive \
+            --output writer-adaptation-benchmark.json 2>&1 | tee benchmark-writer-adaptation.log
       - name: Publish decoding comparison (not raw benchmark scores)
         if: always()
         uses: actions/upload-artifact@v4
@@ -636,11 +643,12 @@ jobs:
             suggestions-benchmark.json
             photocraft-audit-benchmark.json
             stroke-width-benchmark.json
+            writer-adaptation-benchmark.json
           if-no-files-found: warn
       - name: Publish the diagnostics
         if: always()
         continue-on-error: true
-        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark-cursive-manifest.log benchmark-cursive.log ocr-accuracy-cursive.json benchmark-suggestions.log suggestions-benchmark.json benchmark-photocraft.log photocraft-audit-benchmark.json benchmark-stroke-width.log stroke-width-benchmark.json benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/smoke-small.txt build/smoke/smoke-medium.txt build/smoke/smoke-mishkefet-v1.txt build/smoke/smoke-test.json decoding-comparison.log build/decoding-comparison/decoding-comparison.json build/decoding-comparison/decoding-raw.txt build/decoding-comparison/decoding-comparison-raw.txt build/decoding-comparison/decoding-assisted.txt
+        run: python tools/publish_diagnostics.py --branch=ci/diagnostics-engine install-engine.log check-engine.log model-download.log model-download-medium.log benchmark-corpus.log benchmark-modern.log benchmark-cursive-manifest.log benchmark-cursive.log ocr-accuracy-cursive.json benchmark-suggestions.log suggestions-benchmark.json benchmark-photocraft.log photocraft-audit-benchmark.json benchmark-stroke-width.log stroke-width-benchmark.json benchmark-writer-adaptation.log writer-adaptation-benchmark.json benchmark.log corpus-structure.log ocr-accuracy.json ocr-accuracy-modern.json smoke-test.log build/smoke/smoke-small.txt build/smoke/smoke-medium.txt build/smoke/smoke-mishkefet-v1.txt build/smoke/smoke-test.json decoding-comparison.log build/decoding-comparison/decoding-comparison.json build/decoding-comparison/decoding-raw.txt build/decoding-comparison/decoding-comparison-raw.txt build/decoding-comparison/decoding-assisted.txt
 
   ocr-worker-windows:
     name: OCR worker (Windows)

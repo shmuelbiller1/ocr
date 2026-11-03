@@ -127,6 +127,8 @@ def make_engine(options: dict | None = None) -> "MishkefetEngine":
         artifact_id=artifact_id,
         mode=decoding_mode(settings),
         page_enhancement=page_enh,
+        writer_id=str(settings.get("writer_id") or ""),
+        learning_dir=settings.get("learning_dir"),
     )
 
 
@@ -148,6 +150,8 @@ class MishkefetEngine:
         timeout_seconds: float = 900.0,
         mode: str = "raw",
         page_enhancement: bool | None = None,
+        writer_id: str = "",
+        learning_dir: str | Path | None = None,
     ) -> None:
         self.model_path = Path(model_path) if model_path else None
         self.artifact_id = artifact_id
@@ -156,11 +160,14 @@ class MishkefetEngine:
         self.page_enhancement = (
             bool(page_enhancement) if page_enhancement is not None else None
         )
+        self.writer_id = str(writer_id or "").strip()
+        self.learning_dir = Path(learning_dir) if learning_dir else None
         self._recognizer = None
+        self._vocab_state_key: str = ""
         self._page_lock = threading.Lock()
 
     def configure(self, options: dict) -> None:
-        """Apply explicit decoding and page-enhancement profiles."""
+        """Apply explicit decoding, page-enhancement, and student-writer profiles."""
         mode = decoding_mode(options)
         # Do not change a live recognizer while a timed-out inference still runs.
         if not self._page_lock.acquire(blocking=False):
@@ -171,6 +178,14 @@ class MishkefetEngine:
                 self.mode = mode
             if "page_enhancement" in options and options["page_enhancement"] is not None:
                 self.page_enhancement = bool(options["page_enhancement"])
+            if "writer_id" in options and options["writer_id"] is not None:
+                self.writer_id = str(options["writer_id"] or "").strip()
+            if "learning_dir" in options and options["learning_dir"] is not None:
+                self.learning_dir = (
+                    Path(options["learning_dir"])
+                    if options["learning_dir"]
+                    else None
+                )
         finally:
             self._page_lock.release()
 
@@ -215,6 +230,10 @@ class MishkefetEngine:
             if not self.timeout_seconds
             else started + float(self.timeout_seconds)
         )
+        # Snapshot the writer & learning store context once for the whole job so
+        # multi-page documents never mix two students' adapters mid-recognition.
+        job_writer_id = self.writer_id
+        job_learning_dir = self.learning_dir
         try:
             with DocumentPreview(file_path) as preview:
                 pages: list[PageResult] = []
@@ -229,7 +248,15 @@ class MishkefetEngine:
                         if deadline is None
                         else max(0.0, deadline - time.monotonic())
                     )
-                    pages.append(self._recognize_page(number, page_image, budget))
+                    pages.append(
+                        self._recognize_page(
+                            number,
+                            page_image,
+                            budget,
+                            writer_id=job_writer_id,
+                            learning_dir=job_learning_dir,
+                        )
+                    )
         except PreviewError as exc:
             raise EngineFailure(str(exc)) from exc
 
@@ -246,31 +273,109 @@ class MishkefetEngine:
             decoding_mode=self.mode,
         )
 
-    def _load_recognizer(self):
-        if self._recognizer is not None:
-            return self._recognizer
-        if self.model_path is None:
-            raise EngineUnavailable("קובץ המודל של Mishkefet אינו מותקן.")
-        # The file is checked before the library that reads it is even
-        # loaded, so that a file that was replaced after the download
-        # never reaches the code that runs what is inside the file.
-        self._verify_checkpoint()
-        from .vendor.hebocr.recognize import Recognizer
+    def _load_recognizer(
+        self,
+        *,
+        writer_id: str | None = None,
+        learning_dir: Path | None = None,
+    ):
+        eff_writer = self.writer_id if writer_id is None else writer_id
+        eff_learn = self.learning_dir if learning_dir is None else learning_dir
+        if self._recognizer is None:
+            if self.model_path is None:
+                raise EngineUnavailable("קובץ המודל של Mishkefet אינו מותקן.")
+            # The file is checked before the library that reads it is even
+            # loaded, so that a file that was replaced after the download
+            # never reaches the code that runs what is inside the file.
+            self._verify_checkpoint()
+            from .vendor.hebocr.recognize import Recognizer
 
-        try:
-            options = {}
-            if self.mode != "raw":
-                options = {"beam_width": 12, "tta": 3}
-                if self.mode == "assisted":
-                    char_lm, word_lm = load_language_models(self.model_path.parent)
-                    options.update(lm=char_lm, lm_weight=0.4,
-                                   word_lm=word_lm, word_weight=0.2)
-            self._recognizer = Recognizer(str(self.model_path), device="cpu", **options)
-        except Exception as exc:
-            raise EngineFailure(
-                f"לא ניתן לטעון את מודל Mishkefet: {exc}"
-            ) from exc
+            try:
+                options = {}
+                if self.mode != "raw":
+                    options = {"beam_width": 12, "tta": 3}
+                    if self.mode == "assisted":
+                        char_lm, word_lm = load_language_models(
+                            self.model_path.parent, learning_dir=eff_learn
+                        )
+                        options.update(
+                            lm=char_lm,
+                            lm_weight=0.4,
+                            word_lm=word_lm,
+                            word_weight=0.2,
+                        )
+                self._recognizer = Recognizer(
+                    str(self.model_path), device="cpu", **options
+                )
+                self._vocab_state_key = self._current_vocab_state_key(eff_learn)
+            except Exception as exc:
+                raise EngineFailure(
+                    f"לא ניתן לטעון את מודל Mishkefet: {exc}"
+                ) from exc
+        elif self.mode == "assisted" and self.model_path is not None:
+            cur_vkey = self._current_vocab_state_key(eff_learn)
+            if cur_vkey != self._vocab_state_key:
+                try:
+                    _, word_lm = load_language_models(
+                        self.model_path.parent, learning_dir=eff_learn
+                    )
+                    self._recognizer.word_lm = word_lm
+                    self._recognizer._last_logit_cache = None
+                    self._vocab_state_key = cur_vkey
+                except Exception:
+                    pass
+        self._sync_writer_head(
+            self._recognizer, writer_id=eff_writer, learning_dir=eff_learn
+        )
         return self._recognizer
+
+    def _current_vocab_state_key(self, learning_dir: Path | None = None) -> str:
+        eff_learn = self.learning_dir if learning_dir is None else learning_dir
+        try:
+            from ..training.store import SchoolLearningStore
+
+            store = SchoolLearningStore(eff_learn)
+            vp = store.shared_vocab_path
+            if vp.is_file():
+                st = vp.stat()
+                return f"{vp}:{st.st_mtime_ns}:{st.st_size}"
+            return f"{vp}:absent"
+        except Exception:
+            return ""
+
+    def _sync_writer_head(
+        self,
+        recognizer,
+        *,
+        writer_id: str | None = None,
+        learning_dir: Path | None = None,
+    ) -> None:
+        """Apply the active student's adapted CTC head or reset to the base head."""
+        eff_writer = self.writer_id if writer_id is None else writer_id
+        eff_learn = self.learning_dir if learning_dir is None else learning_dir
+        if not eff_writer:
+            recognizer.reset_writer_head()
+            return
+        try:
+            from .models import MODEL_ARTIFACTS
+            from .writer_adaptation import load_writer_head_npz
+            from ..training.store import SchoolLearningStore
+
+            art = MODEL_ARTIFACTS.get(self.artifact_id)
+            expected_sha = art.sha256 if art is not None else None
+            store = SchoolLearningStore(eff_learn)
+            head_path = store.active_head_path(
+                eff_writer, model_sha256=expected_sha
+            )
+            if head_path is None:
+                recognizer.reset_writer_head()
+                return
+            stat = head_path.stat()
+            head_key = f"{head_path}:{stat.st_mtime_ns}:{stat.st_size}"
+            W, b = load_writer_head_npz(head_path)
+            recognizer.apply_writer_head_arrays(W, b, head_key=head_key)
+        except Exception:
+            recognizer.reset_writer_head()
 
     def _verify_checkpoint(self) -> None:
         """Check the checkpoint against the digest that the project pinned.
@@ -295,7 +400,13 @@ class MishkefetEngine:
             )
 
     def _recognize_page(
-        self, number: int, image, budget: float | None = None
+        self,
+        number: int,
+        image,
+        budget: float | None = None,
+        *,
+        writer_id: str | None = None,
+        learning_dir: Path | None = None,
     ) -> PageResult:
         """Recognise one page, and give up when the time is up.
 
@@ -303,9 +414,18 @@ class MishkefetEngine:
         work is done in a thread that is left behind when the time is up,
         the same way the other engine does it.
         """
+        extra_kwargs = (
+            {"writer_id": writer_id, "learning_dir": learning_dir}
+            if (writer_id is not None or learning_dir is not None)
+            else {}
+        )
         if budget is None:
             with self._page_lock:
-                return self._recognize_page_now(number, image)
+                return self._recognize_page_now(
+                    number,
+                    image,
+                    **extra_kwargs,
+                )
 
         started = time.monotonic()
         if not self._page_lock.acquire(timeout=max(0.0, budget)):
@@ -314,7 +434,11 @@ class MishkefetEngine:
 
         def work() -> None:
             try:
-                outcome["page"] = self._recognize_page_now(number, image)
+                outcome["page"] = self._recognize_page_now(
+                    number,
+                    image,
+                    **extra_kwargs,
+                )
             except BaseException as exc:  # noqa: BLE001 - reported below
                 outcome["error"] = exc
             finally:
@@ -337,10 +461,19 @@ class MishkefetEngine:
             raise outcome["error"]
         return outcome["page"]
 
-    def _recognize_page_now(self, number: int, image) -> PageResult:
+    def _recognize_page_now(
+        self,
+        number: int,
+        image,
+        *,
+        writer_id: str | None = None,
+        learning_dir: Path | None = None,
+    ) -> PageResult:
         from .vendor.hebocr.page.segment import segment_page
 
-        recognizer = self._load_recognizer()
+        recognizer = self._load_recognizer(
+            writer_id=writer_id, learning_dir=learning_dir
+        )
         eff_enh = resolve_page_enhancement_enabled(self.page_enhancement)
         prepared_image, audit = prepare_page_for_ocr(image, enabled=eff_enh)
         was_enhanced = bool(eff_enh and audit is not None and audit.needs_adjustment)
@@ -351,6 +484,7 @@ class MishkefetEngine:
             else 1.0
         )
         crops, boxes, _skew = segment_page(prepared_image)
+        skew_deg = round(float(_skew or 0.0), 4)
         if not crops:
             return PageResult(
                 number=number,
@@ -360,6 +494,7 @@ class MishkefetEngine:
                 assisted_text=None if self.mode == "raw" else "",
                 enhanced=was_enhanced,
                 enhancement_enabled=eff_enh,
+                skew_degrees=skew_deg,
                 processed_image_png=proc_png,
             )
 
@@ -413,6 +548,7 @@ class MishkefetEngine:
             assisted_text=assisted,
             enhanced=was_enhanced,
             enhancement_enabled=eff_enh,
+            skew_degrees=skew_deg,
             processed_image_png=proc_png,
         )
 

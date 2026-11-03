@@ -22,9 +22,12 @@ from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QPageLayout, QPag
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFileDialog,
+    QFrame,
     QDockWidget,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -48,6 +51,7 @@ from ..plugins import PluginRegistry
 from ..project import PROJECT_SUFFIX, Project
 from ..resources import samples_directory
 from ..suggestions import SuggestionRegistry, SuggestionSession
+from ..training import SchoolLearningStore
 from .preview_pane import PreviewPane
 from .suggestions_pane import SuggestionsPane
 from .tasks import TaskThread
@@ -82,6 +86,7 @@ class MainWindow(QMainWindow):
         self.registry = EngineRegistry()
         self.engines: list = []
         self.plugins = PluginRegistry()
+        self.learning_store = SchoolLearningStore()
         self.suggestion_modules = SuggestionRegistry()
         self.suggestions = SuggestionSession()
         # Every document has its own session of proposals, so that the
@@ -92,6 +97,8 @@ class MainWindow(QMainWindow):
         ] = {}
         self._shown_entry = None
         self._recognizing_entry = None
+        self._recognizing_writer_id: str | None = None
+        self._deferred_writer_id: str | None = None
         self._loading = False
         self.task: TaskThread | None = None
 
@@ -168,10 +175,31 @@ class MainWindow(QMainWindow):
             "הטקסט המוקלד. המקור נשמר בנפרד ולא נדרס על ידי הצעות תיקון."
         )
 
+        self.diplomatic_banner = QFrame()
+        self.diplomatic_banner.setObjectName("diplomatic-stage-banner")
+        banner_layout = QHBoxLayout(self.diplomatic_banner)
+        banner_layout.setContentsMargins(8, 5, 8, 5)
+        self.diplomatic_banner_label = QLabel("")
+        self.diplomatic_banner_label.setWordWrap(True)
+        self.diplomatic_banner_btn = QPushButton("אימות צד-לצד ולמידה...")
+        self.diplomatic_banner_btn.clicked.connect(
+            self.open_diplomatic_verification
+        )
+        banner_layout.addWidget(self.diplomatic_banner_label, 1)
+        banner_layout.addWidget(self.diplomatic_banner_btn)
+        self.diplomatic_banner.setVisible(False)
+
+        editor_panel = QWidget()
+        editor_layout = QVBoxLayout(editor_panel)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.setSpacing(4)
+        editor_layout.addWidget(self.diplomatic_banner)
+        editor_layout.addWidget(self.editor, 1)
+
         work = QSplitter(Qt.Vertical)
         work.setChildrenCollapsible(False)
         work.addWidget(self.preview)
-        work.addWidget(self.editor)
+        work.addWidget(editor_panel)
         work.setStretchFactor(0, 3)
         work.setStretchFactor(1, 2)
 
@@ -199,6 +227,31 @@ class MainWindow(QMainWindow):
         self.run_ocr_action = QAction("הרצת OCR", self)
         self.run_ocr_action.setShortcut(QKeySequence("Ctrl+R"))
         self.run_ocr_action.triggered.connect(self.run_ocr)
+
+        self.verify_and_train_action = QAction(
+            "אימות כפי שנכתב ולמידה...", self
+        )
+        self.verify_and_train_action.setShortcut(QKeySequence("Ctrl+Shift+V"))
+        self.verify_and_train_action.setToolTip(
+            "שלב 1: השוואת כתב היד שורה-מול-שורה ואימון פרופיל התלמיד והמאגר הבית-ספרי (לפני עריכת דקדוק)."
+        )
+        self.verify_and_train_action.triggered.connect(
+            self.open_diplomatic_verification
+        )
+
+        self.export_school_dataset_action = QAction(
+            "ייצוא חבילת אימון אונליין/חיצוני (ZIP)...", self
+        )
+        self.export_school_dataset_action.triggered.connect(
+            self.export_school_dataset
+        )
+
+        self.manage_school_vocab_action = QAction(
+            "מילון בית-ספרי משותף (אישור מנהל)...", self
+        )
+        self.manage_school_vocab_action.triggered.connect(
+            self.open_school_vocab_admin
+        )
 
         self.save_text_action = QAction("שמירת הטקסט...", self)
         self.save_text_action.setShortcut(QKeySequence("Ctrl+S"))
@@ -313,6 +366,9 @@ class MainWindow(QMainWindow):
 
         tools_menu = self.menuBar().addMenu("כלים")
         tools_menu.addAction(self.run_ocr_action)
+        tools_menu.addAction(self.verify_and_train_action)
+        tools_menu.addAction(self.manage_school_vocab_action)
+        tools_menu.addAction(self.export_school_dataset_action)
         tools_menu.addAction(self.cancel_action)
         tools_menu.addSeparator()
         tools_menu.addAction(self.toggle_page_enhancement_action)
@@ -355,6 +411,22 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.add_folder_action)
         toolbar.addSeparator()
         toolbar.addAction(self.run_ocr_action)
+        toolbar.addAction(self.verify_and_train_action)
+        toolbar.addSeparator()
+        toolbar.addWidget(QLabel(" תלמיד: "))
+        self.writer_combo = QComboBox(self)
+        self.writer_combo.setMinimumWidth(165)
+        self.writer_combo.setToolTip(
+            "פרופיל התלמיד/הכותב הפעיל להתאמת כתב היד האישי ולמאגר הבית-ספרי המשותף."
+        )
+        self.writer_combo.currentIndexChanged.connect(
+            self._on_toolbar_writer_changed
+        )
+        toolbar.addWidget(self.writer_combo)
+        self.new_writer_button = QPushButton("+ תלמיד", self)
+        self.new_writer_button.setToolTip("הוספת פרופיל תלמיד/כותב חדש")
+        self.new_writer_button.clicked.connect(self.create_writer_profile)
+        toolbar.addWidget(self.new_writer_button)
         toolbar.addSeparator()
         toolbar.addAction(self.save_text_action)
         toolbar.addAction(self.save_project_action)
@@ -363,12 +435,14 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         toolbar.addAction(self.engine_status_action)
         self._refresh_toolbar_icons(style)
+        self._refresh_writer_selector()
 
     def _refresh_toolbar_icons(self, style: QStyle) -> None:
         mapping = {
             self.add_files_action: QStyle.SP_DialogOpenButton,
             self.add_folder_action: QStyle.SP_DirOpenIcon,
             self.run_ocr_action: QStyle.SP_MediaPlay,
+            self.verify_and_train_action: QStyle.SP_DialogYesButton,
             self.save_text_action: QStyle.SP_DialogSaveButton,
             self.save_project_action: QStyle.SP_DriveHDIcon,
             self.print_action: QStyle.SP_DialogApplyButton,
@@ -611,6 +685,9 @@ class MainWindow(QMainWindow):
             entry.path,
             processed_pages=self._processed_previews.get(str(entry.path)),
         )
+        if entry.writer_id and entry.writer_id != self.plugins.active_writer_id:
+            self._apply_active_writer(entry.writer_id, update_entry=False)
+        self._update_diplomatic_banner(entry)
         self._show_decoding_comparison(entry)
 
     def _clear_editor(self) -> None:
@@ -628,6 +705,7 @@ class MainWindow(QMainWindow):
         self.doc_path_label.setText("לא נבחר מסמך")
         self.preview.set_document(None)
         self.preview.set_processed_pages(None)
+        self._update_diplomatic_banner(None)
         self._show_decoding_comparison(None)
 
     def _build_decoding_dock(self) -> None:
@@ -830,6 +908,12 @@ class MainWindow(QMainWindow):
         # of the recognition replaces the text of the editor, and what
         # the user writes in the meantime would be lost.
         self._recognizing_entry = entry
+        job_wid = str(entry.writer_id or self.plugins.active_writer_id or "").strip()
+        self._recognizing_writer_id = job_wid
+        self._deferred_writer_id = None
+        if hasattr(self, "writer_combo"):
+            self.writer_combo.setEnabled(False)
+        self._sync_engines_writer_context(job_wid)
         self.editor.setReadOnly(True)
 
         def work(progress, cancel):
@@ -862,6 +946,50 @@ class MainWindow(QMainWindow):
             entry.assisted_transcription = getattr(result, "assisted_text", None)
             entry.decoding_mode = getattr(result, "decoding_mode", "raw")
             pages = getattr(result, "pages", ()) or ()
+            manifest = getattr(result, "manifest", None)
+            eng_ver = str(getattr(manifest, "version", "") or "")
+            mod_id = str(getattr(manifest, "model_id", "") or "")
+            mod_sha = str(getattr(manifest, "model_sha256", "") or "")
+            dec_mode = str(getattr(result, "decoding_mode", "raw") or "raw")
+            entry.recognized_pages = [
+                {
+                    "number": int(p.number),
+                    "engine_name": str(result.engine_name or ""),
+                    "engine_version": eng_ver,
+                    "model_id": mod_id,
+                    "model_sha256": mod_sha,
+                    "decoding_mode": dec_mode,
+                    "enhanced": bool(getattr(p, "enhanced", False)),
+                    "enhancement_enabled": bool(
+                        getattr(p, "enhancement_enabled", self.plugins.page_enhancement)
+                    ),
+                    "skew_degrees": float(getattr(p, "skew_degrees", 0.0) or 0.0),
+                    "stroke_variant": "original",
+                    "lines": [
+                        {
+                            "text": str(getattr(ln, "text", "") or ""),
+                            "confidence": (
+                                float(ln.confidence)
+                                if getattr(ln, "confidence", None) is not None
+                                else None
+                            ),
+                            "box": (
+                                [float(v) for v in ln.box[:4]]
+                                if getattr(ln, "box", None) is not None
+                                and len(ln.box) == 4
+                                else None
+                            ),
+                        }
+                        for ln in (getattr(p, "lines", ()) or ())
+                    ],
+                }
+                for p in pages
+            ]
+            entry.diplomatic_transcription = ""
+            if self._recognizing_writer_id is not None:
+                entry.writer_id = self._recognizing_writer_id
+            elif not entry.writer_id and self.plugins.active_writer_id:
+                entry.writer_id = self.plugins.active_writer_id
             doc_key = str(entry.path)
             self._processed_previews.pop(doc_key, None)
             self._processed_previews[doc_key] = {
@@ -903,6 +1031,7 @@ class MainWindow(QMainWindow):
             self.preview.set_processed_pages(
                 self._processed_previews.get(str(entry.path))
             )
+            self._update_diplomatic_banner(entry)
             self._show_decoding_comparison(entry)
         self.statusBar().showMessage(
             f"הזיהוי בוצע באמצעות {result.engine_name} ב-{result.duration_seconds:.1f} שניות. "
@@ -933,10 +1062,23 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 1)
         self.cancel_action.setEnabled(False)
         self.run_ocr_action.setEnabled(True)
+        if hasattr(self, "writer_combo"):
+            self.writer_combo.setEnabled(True)
         # The editor is open again: the work is over.
         self._recognizing_entry = None
+        self._recognizing_writer_id = None
+        deferred = self._deferred_writer_id
+        self._deferred_writer_id = None
         self.editor.setReadOnly(False)
         self.task = None
+        if deferred is not None:
+            self._apply_active_writer(deferred, update_entry=False)
+        else:
+            self._sync_engines_writer_context(self.plugins.active_writer_id)
+            if self._shown_entry is not None:
+                self._refresh_writer_selector(
+                    select_id=self._shown_entry.writer_id or ""
+                )
         self._show_decoding_comparison(self._shown_entry)
 
     def cancel_task(self) -> None:
@@ -1080,14 +1222,254 @@ class MainWindow(QMainWindow):
             self.engines.append(engine)
         if self.engines and not self.plugins.without_plugin("ocr"):
             active = self.plugins.active_engine()
-            chosen = active if active in self.engines else self.engines[0]
+            chosen = (
+                active
+                if active in self.engines
+                else self._preferred_default_engine(self.engines)
+            )
             self.registry = EngineRegistry(chosen)
         else:
             # No engine, or the user chose that this program has none:
             # the program works without a recognition, and says so.
             self.registry = EngineRegistry()
+        self._sync_engines_writer_context(self.plugins.active_writer_id)
         self._update_engine_status()
         self._rebuild_engine_menu()
+
+    @staticmethod
+    def _preferred_default_engine(engines: list):
+        for eng in engines:
+            name_low = str(getattr(eng, "name", "")).lower()
+            cls_low = eng.__class__.__name__.lower()
+            if "mishkefet" in name_low or "mishkefet" in cls_low:
+                return eng
+        return engines[0]
+
+    def _sync_engines_writer_context(self, writer_id: str | None) -> None:
+        if self.task is not None and self.task.isRunning():
+            # Keep the recognizing document's writer fixed until OCR finishes;
+            # _apply_active_writer defers changes via _deferred_writer_id for _on_task_finished.
+            return
+        clean_id = (writer_id or "").strip()
+        store_dir = Path(self.learning_store.root)
+        for eng in self.engines:
+            if hasattr(eng, "writer_id"):
+                eng.writer_id = clean_id
+            if hasattr(eng, "learning_dir"):
+                eng.learning_dir = store_dir
+
+    # -- student / writer profiles & diplomatic verification ----------------
+    def _refresh_writer_selector(self, select_id: str | None = None) -> None:
+        combo = getattr(self, "writer_combo", None)
+        if combo is None:
+            return
+        wanted = (
+            select_id
+            if select_id is not None
+            else self.plugins.active_writer_id
+        )
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem("כללי (ללא פרופיל אישי)", "")
+        selected_idx = 0
+        for idx, prof in enumerate(self.learning_store.list_writers(), start=1):
+            label = (
+                f"{prof.name} ({prof.samples_count})"
+                if prof.samples_count
+                else prof.name
+            )
+            combo.addItem(label, prof.writer_id)
+            if prof.writer_id == wanted:
+                selected_idx = idx
+        combo.setCurrentIndex(selected_idx)
+        combo.blockSignals(False)
+
+    def _on_toolbar_writer_changed(self, _index: int) -> None:
+        writer_id = str(self.writer_combo.currentData() or "")
+        self._apply_active_writer(writer_id, update_entry=True)
+
+    def _apply_active_writer(
+        self, writer_id: str, *, update_entry: bool = False
+    ) -> None:
+        clean_id = writer_id.strip()
+        if clean_id and self.learning_store.get_writer(clean_id) is None:
+            clean_id = ""
+        if self.task is not None and self.task.isRunning():
+            # Never mutate the running OCR job's writer_id, plugin config, or
+            # recognizing document mid-task; queue any selection for _on_task_finished.
+            self._deferred_writer_id = clean_id
+            if (
+                update_entry
+                and self._shown_entry is not None
+                and self._shown_entry is not self._recognizing_entry
+                and self._shown_entry.writer_id != clean_id
+            ):
+                self._shown_entry.writer_id = clean_id
+                self.project.dirty = True
+            self._refresh_writer_selector(select_id=clean_id)
+            return
+        self.plugins.set_active_writer_id(clean_id or None)
+        self._sync_engines_writer_context(clean_id)
+        self._refresh_writer_selector(select_id=clean_id)
+        if update_entry and self._shown_entry is not None:
+            if self._shown_entry.writer_id != clean_id:
+                self._shown_entry.writer_id = clean_id
+                self.project.dirty = True
+        if clean_id:
+            prof = self.learning_store.get_writer(clean_id)
+            if prof is not None:
+                self.statusBar().showMessage(
+                    f"פרופיל תלמיד פעיל: {prof.name} ({prof.samples_count} שורות מאומתות, סיבוב #{prof.active_round})",
+                    5000,
+                )
+
+    def create_writer_profile(self) -> None:
+        name, ok = QInputDialog.getText(
+            self,
+            "הוספת תלמיד / כותב חדש",
+            "שם התלמיד או הכותב (למשל: יוסף כהן):",
+        )
+        if not ok or not name.strip():
+            return
+        try:
+            prof = self.learning_store.create_writer(name.strip())
+        except ValueError as exc:
+            QMessageBox.warning(self, "הוספת תלמיד", str(exc))
+            return
+        self._apply_active_writer(prof.writer_id, update_entry=True)
+
+    def _update_diplomatic_banner(self, entry) -> None:
+        banner = getattr(self, "diplomatic_banner", None)
+        if banner is None:
+            return
+        if entry is None or not getattr(entry, "recognized_pages", None):
+            banner.setVisible(False)
+            return
+        banner.setVisible(True)
+        if getattr(entry, "diplomatic_transcription", "").strip():
+            banner.setStyleSheet(
+                "QFrame#diplomatic-stage-banner { background: #eef9f0; "
+                "border: 1px solid #84c592; border-radius: 5px; }"
+            )
+            self.diplomatic_banner_label.setText(
+                "<b>✓ שלב 1 (שלב א׳) נשמר:</b> תעתיק כתב-היד נשמר בנפרד. "
+                "כעת ניתן להפעיל בעורך הצעות איות, דקדוק וסגנון (שלב ב׳) מבלי לפגוע בנתוני האימון!"
+            )
+            self.diplomatic_banner_btn.setText("פתיחת אימות שורות...")
+        else:
+            banner.setStyleSheet(
+                "QFrame#diplomatic-stage-banner { background: #fff8e6; "
+                "border: 1px solid #e0b84c; border-radius: 5px; }"
+            )
+            self.diplomatic_banner_label.setText(
+                "<b>שלב 1 (שלב א׳ — לפני עריכת דקדוק):</b> השוו צד-לצד מול הסריקה המקורית ואמתו "
+                "מה שנכתב בדיו על הדף לפני החלת תיקוני שפה (שלב ב׳)."
+            )
+            self.diplomatic_banner_btn.setText("אימות צד-לצד ולמידה...")
+
+    def open_diplomatic_verification(self) -> None:
+        entry = self._shown_entry or self._current_entry()
+        if entry is None:
+            QMessageBox.information(
+                self,
+                "אימות כתב-יד ולמידה",
+                "בחרו מסמך מהרשימה תחילה.",
+            )
+            return
+        if not entry.recognized_pages:
+            QMessageBox.information(
+                self,
+                "אימות כתב-יד ולמידה",
+                "למסמך זה עדיין אין שורות מזוהות.\nהריצו תחילה 'הרצת OCR' ואז פתחו אימות צד-לצד.",
+            )
+            return
+        self._store_editor_text()
+        from .training_dialog import DiplomaticVerificationDialog
+
+        dlg = DiplomaticVerificationDialog(
+            entry,
+            self.learning_store,
+            initial_writer_id=self.plugins.active_writer_id,
+            parent=self,
+        )
+        if dlg.exec() != DiplomaticVerificationDialog.Accepted:
+            self._refresh_writer_selector()
+            return
+
+        committed_wid = getattr(dlg, "committed_writer_id", dlg.selected_writer_id)
+        entry.writer_id = committed_wid
+        self._apply_active_writer(committed_wid, update_entry=False)
+
+        if dlg.updated_diplomatic_transcription is not None:
+            entry.diplomatic_transcription = (
+                dlg.updated_diplomatic_transcription
+            )
+            # If Stage-B grammar changes haven't been applied yet, carry the
+            # verified diplomatic fixes straight into the main editor so the
+            # user never has to fix the same OCR error twice — asking first if
+            # the user already edited the main editor manually!
+            replace_ok = not entry.changes
+            if replace_ok and entry.edited:
+                replace_ok = (
+                    QMessageBox.question(
+                        self,
+                        "העברת הטקסט המאומת",
+                        "הטקסט שבעורך הראשי נערך ידנית. להחליף אותו בתעתיק שאומת בשלב א׳?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No,
+                    )
+                    == QMessageBox.Yes
+                )
+            if replace_ok:
+                self._loading = True
+                self._replace_editor_text(dlg.updated_diplomatic_transcription)
+                self._loading = False
+                entry.transcription = dlg.updated_diplomatic_transcription
+                self._sessions.pop(str(entry.path), None)
+                self.suggestions = self._session_for(entry)
+                self._refresh_suggestions(self.suggestions)
+            self.project.dirty = True
+
+        self._update_diplomatic_banner(entry)
+        if dlg.last_report is not None:
+            self.statusBar().showMessage(dlg.last_report.message, 10000)
+
+    def export_school_dataset(self) -> None:
+        summary = self.learning_store.school_summary()
+        if summary["verified_lines_count"] == 0:
+            QMessageBox.information(
+                self,
+                "ייצוא מאגר למידה בית-ספרי",
+                "עדיין לא נשמרו שורות מאומתות במאגר הבית-ספרי.",
+            )
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "ייצוא מאגר למידה בית-ספרי (ZIP)",
+            "school-handwriting-corpus.zip",
+            "ארכיון ZIP (*.zip)",
+        )
+        if not path:
+            return
+        target = Path(path)
+        if target.suffix.lower() != ".zip":
+            target = target.with_suffix(".zip")
+        try:
+            saved = self.learning_store.export_school_dataset_zip(target)
+        except OSError as exc:
+            QMessageBox.warning(self, "ייצוא מאגר למידה בית-ספרי", str(exc))
+            return
+        self.statusBar().showMessage(
+            f"יוצאה חבילת אימון מאומתת אל {saved} ({summary['verified_lines_count']} שורות).",
+            8000,
+        )
+
+    def open_school_vocab_admin(self) -> None:
+        from .training_dialog import SchoolVocabularyDialog
+
+        dlg = SchoolVocabularyDialog(self.learning_store, self)
+        dlg.exec()
+        self._clear_the_proposals()
 
     def _rebuild_engine_menu(self) -> None:
         menu = getattr(self, "engine_menu", None)
@@ -1939,6 +2321,8 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self.preview.close_document()
+        if hasattr(self.preview, "shutdown_threads"):
+            self.preview.shutdown_threads()
         event.accept()
 
     def _there_is_text_that_is_not_in_the_project(self) -> bool:

@@ -9,9 +9,15 @@ It was written on 2026-10-28 and it says what was checked and when.
 The search/benchmark observations below remain a dated research record.
 Distribution now depends on edition: Lite bundles Kraken small; All Models —
 Noncommercial bundles Kraken small/medium, Mishkefet and both optional language
-models. The regular ZIP uses explicit downloads. All bundled assets retain
-their own licences, attribution and pinned integrity checks; no cloud OCR is
-introduced. See [RELEASE_NOTES.md](RELEASE_NOTES.md) for download choices.
+models (and defaults to Mishkefet automatically when no active engine was
+previously chosen, because Mishkefet scores 61.78% vs Kraken small's 19.51% on
+the verified modern cursive corpus). The regular ZIP uses explicit downloads.
+In addition, users can verify lines side-by-side *as written* (before grammar
+edits) to adapt a lightweight offline CPU CTC head per student/writer while
+accumulating a shared verified school corpus and vocabulary across ~50 students.
+All bundled assets retain their own licences, attribution and pinned integrity
+checks; no cloud OCR is introduced. See [RELEASE_NOTES.md](RELEASE_NOTES.md)
+for download choices.
 
 ## What the program needs
 
@@ -24,7 +30,9 @@ Three rules follow from that, and they decide what is acceptable:
 
 1. **No cloud.** A model that runs on somebody else's server is not an
    option, however good it is.
-2. **No training.** The program uses models that somebody else trained.
+2. **No base-model retraining.** Shipped base checkpoints stay frozen and
+   checksum-verified; only an optional lightweight local per-student head
+   (~405 KB) may be adapted offline from lines explicitly confirmed by the user.
 3. **The licence has to be checked.** A model whose licence forbids the
    use that the user makes of it, or that nobody wrote down, is not used.
    A model that is not bundled and is fetched by the user, with its

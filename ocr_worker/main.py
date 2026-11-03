@@ -45,6 +45,8 @@ def _engine_of(job: dict):
             artifact_id="mishkefet-v1",
             mode=job.get("decoding_mode", "raw"),
             page_enhancement=page_enh,
+            writer_id=str(job.get("writer_id") or ""),
+            learning_dir=job.get("learning_dir"),
         )
     if name == "kraken":
         from hebrew_workbench.engine.kraken_local import KrakenEngine
@@ -114,10 +116,117 @@ def _run_enhance_preview(input_path: Path, output_path: Path, enabled: bool) -> 
     return 0
 
 
+def _confine_worker_path(raw: str | Path, *allowed_bases: str) -> Path:
+    import os
+
+    real = os.path.realpath(str(raw))
+    for base in allowed_bases:
+        prefix = base if base.endswith(os.sep) else base + os.sep
+        if real == base:
+            return Path(real)
+        if real.startswith(prefix):
+            return Path(real)
+    raise ValueError("Worker path is outside allowed directories")
+
+
+def _run_train_writer(job_path: Path, result_path: Path) -> int:
+    """Adapt or validate an imported student's Mishkefet CTC head inside the worker."""
+    import os
+    import re
+    import tempfile
+
+    tmp_base = os.path.realpath(tempfile.gettempdir())
+    tmp_prefix = tmp_base if tmp_base.endswith(os.sep) else tmp_base + os.sep
+    real_job = os.path.realpath(str(job_path))
+    if not real_job.startswith(tmp_prefix):
+        print(
+            "Worker --train-writer IPC files must reside in temporary directory",
+            file=sys.stderr,
+        )
+        return 1
+    real_res = os.path.realpath(str(result_path))
+    if not real_res.startswith(tmp_prefix):
+        print(
+            "Worker --train-writer IPC files must reside in temporary directory",
+            file=sys.stderr,
+        )
+        return 1
+    if not real_job.endswith(".json") or not real_res.endswith(".json"):
+        print("Worker --train-writer IPC files must be .json", file=sys.stderr)
+        return 1
+
+    safe_job_path = Path(real_job)
+    safe_res_path = Path(real_res)
+
+    try:
+        from hebrew_workbench.engine.models import models_directory
+        from hebrew_workbench.training.store import default_learning_directory
+
+        job = json.loads(safe_job_path.read_text(encoding="utf-8"))
+        if job.get("offline_check") is True:
+            _install_offline_guard([])
+
+        writer_id = str(job.get("writer_id") or "")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", writer_id):
+            raise ValueError("Invalid writer_id in worker job")
+
+        models_base = os.path.realpath(str(models_directory()))
+        app_base = os.path.realpath(str(default_learning_directory().parent))
+        repo_base = os.path.realpath(str(Path(__file__).resolve().parents[1]))
+        allowed = (models_base, app_base, repo_base, tmp_base)
+
+        safe_model = _confine_worker_path(job["model_path"], *allowed)
+        raw_store = job.get("learning_dir")
+        safe_store = (
+            _confine_worker_path(raw_store, app_base, repo_base, tmp_base)
+            if raw_store
+            else None
+        )
+
+        if job.get("mode") == "import_npz":
+            from hebrew_workbench.engine.writer_adaptation import (
+                import_external_adapter_in_process,
+            )
+
+            staged_npz = Path(
+                os.path.join(os.path.dirname(real_job), "candidate.npz")
+            )
+            report = import_external_adapter_in_process(
+                writer_id=writer_id,
+                npz_path=staged_npz,
+                store_root=safe_store,
+                model_path=safe_model,
+            )
+        else:
+            from hebrew_workbench.engine.writer_adaptation import (
+                train_writer_profile_in_process,
+            )
+
+            report = train_writer_profile_in_process(
+                writer_id=writer_id,
+                model_path=safe_model,
+                store_root=safe_store,
+            )
+        payload = report.to_dict()
+    except Exception as exc:
+        message = str(exc) or type(exc).__name__
+        print(message, file=sys.stderr)
+        payload = {"error": message, "traceback": traceback.format_exc()}
+
+    safe_res_path.parent.mkdir(parents=True, exist_ok=True)
+    safe_res_path.write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+    return 0 if "error" not in payload else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Hebrew Notes Workbench OCR worker")
     parser.add_argument("--job", help="path of the job description")
     parser.add_argument("--result", help="path of the result file")
+    parser.add_argument(
+        "--train-writer", help="path of a student CTC-head adaptation job JSON"
+    )
     parser.add_argument("--enhance-preview", help="input image for processed preview")
     parser.add_argument("--output-preview", help="output PNG for processed preview")
     parser.add_argument(
@@ -133,6 +242,8 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.output_preview),
             enabled=not args.disable_enhancement,
         )
+    if args.train_writer and args.result:
+        return _run_train_writer(Path(args.train_writer), Path(args.result))
     if not args.job or not args.result:
         parser.error("--job and --result are required unless --enhance-preview is used")
 
@@ -169,6 +280,7 @@ def main(argv: list[str] | None = None) -> int:
                     "enhancement_enabled": bool(
                         getattr(page, "enhancement_enabled", True)
                     ),
+                    "skew_degrees": float(getattr(page, "skew_degrees", 0.0) or 0.0),
                     "processed_image_file": proc_name,
                     "lines": [
                         {
