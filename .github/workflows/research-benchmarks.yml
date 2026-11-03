@@ -70,7 +70,7 @@ jobs:
             --engines mishkefet-v1 kraken-ppocrv6-small \
             --child-timeout 2100 \
             --output photocraft-audit-full.json 2>&1 | tee photocraft-full.log
-          python -c "import json; d = json.load(open('photocraft-audit-full.json')); assert not d.get('engine_failures') and set(d.get('neural_ocr_before_vs_after', ())) >= {'mishkefet-v1', 'kraken-ppocrv6-small'}, d.get('engine_failures')"
+          python -c "import json; d = json.load(open('photocraft-audit-full.json')); assert not d.get('engine_failures') and {r['engine'] for r in d.get('neural_ocr_before_vs_after', ())} >= {'mishkefet-v1', 'kraken-ppocrv6-small'}, d"
       - name: Full 192-cell stroke-width & segmentation benchmark
         if: ${{ inputs.run_full_stroke_width }}
         timeout-minutes: 240
