@@ -204,6 +204,7 @@ def main(argv: list[str] | None = None) -> int:
                     "enhancement_enabled": bool(
                         getattr(page, "enhancement_enabled", True)
                     ),
+                    "skew_degrees": float(getattr(page, "skew_degrees", 0.0) or 0.0),
                     "processed_image_file": proc_name,
                     "lines": [
                         {

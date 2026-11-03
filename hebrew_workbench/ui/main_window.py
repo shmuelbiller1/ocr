@@ -238,10 +238,17 @@ class MainWindow(QMainWindow):
         )
 
         self.export_school_dataset_action = QAction(
-            "ייצוא מאגר למידה בית-ספרי (ZIP)...", self
+            "ייצוא חבילת אימון אונליין/חיצוני (ZIP)...", self
         )
         self.export_school_dataset_action.triggered.connect(
             self.export_school_dataset
+        )
+
+        self.manage_school_vocab_action = QAction(
+            "מילון בית-ספרי משותף (אישור מנהל)...", self
+        )
+        self.manage_school_vocab_action.triggered.connect(
+            self.open_school_vocab_admin
         )
 
         self.save_text_action = QAction("שמירת הטקסט...", self)
@@ -358,6 +365,7 @@ class MainWindow(QMainWindow):
         tools_menu = self.menuBar().addMenu("כלים")
         tools_menu.addAction(self.run_ocr_action)
         tools_menu.addAction(self.verify_and_train_action)
+        tools_menu.addAction(self.manage_school_vocab_action)
         tools_menu.addAction(self.export_school_dataset_action)
         tools_menu.addAction(self.cancel_action)
         tools_menu.addSeparator()
@@ -930,9 +938,25 @@ class MainWindow(QMainWindow):
             entry.assisted_transcription = getattr(result, "assisted_text", None)
             entry.decoding_mode = getattr(result, "decoding_mode", "raw")
             pages = getattr(result, "pages", ()) or ()
+            manifest = getattr(result, "manifest", None)
+            eng_ver = str(getattr(manifest, "version", "") or "")
+            mod_id = str(getattr(manifest, "model_id", "") or "")
+            mod_sha = str(getattr(manifest, "model_sha256", "") or "")
+            dec_mode = str(getattr(result, "decoding_mode", "raw") or "raw")
             entry.recognized_pages = [
                 {
                     "number": int(p.number),
+                    "engine_name": str(result.engine_name or ""),
+                    "engine_version": eng_ver,
+                    "model_id": mod_id,
+                    "model_sha256": mod_sha,
+                    "decoding_mode": dec_mode,
+                    "enhanced": bool(getattr(p, "enhanced", False)),
+                    "enhancement_enabled": bool(
+                        getattr(p, "enhancement_enabled", self.plugins.page_enhancement)
+                    ),
+                    "skew_degrees": float(getattr(p, "skew_degrees", 0.0) or 0.0),
+                    "stroke_variant": "original",
                     "lines": [
                         {
                             "text": str(getattr(ln, "text", "") or ""),
@@ -1199,13 +1223,13 @@ class MainWindow(QMainWindow):
         return engines[0]
 
     def _sync_engines_writer_context(self, writer_id: str | None) -> None:
-        clean_id = (writer_id or "").strip() or None
-        store_dir = str(self.learning_store.root)
+        clean_id = (writer_id or "").strip()
+        store_dir = Path(self.learning_store.root)
         for eng in self.engines:
-            if hasattr(eng, "_writer_id"):
-                eng._writer_id = clean_id
-            if hasattr(eng, "_learning_dir"):
-                eng._learning_dir = store_dir
+            if hasattr(eng, "writer_id"):
+                eng.writer_id = clean_id
+            if hasattr(eng, "learning_dir"):
+                eng.learning_dir = store_dir
 
     # -- student / writer profiles & diplomatic verification ----------------
     def _refresh_writer_selector(self, select_id: str | None = None) -> None:
@@ -1287,8 +1311,8 @@ class MainWindow(QMainWindow):
                 "border: 1px solid #84c592; border-radius: 5px; }"
             )
             self.diplomatic_banner_label.setText(
-                "<b>✓ שלב 1 הושלם:</b> כתב היד בדף אומת כפי שנכתב ונשמר במאגר הלמידה. "
-                "כעת ניתן להפעיל בביטחון הצעות דקדוק ואיות (שלב 2)!"
+                "<b>✓ שלב 1 (שלב א׳) נשמר:</b> תעתיק כתב-היד נשמר בנפרד. "
+                "כעת ניתן להפעיל בעורך הצעות איות, דקדוק וסגנון (שלב ב׳) מבלי לפגוע בנתוני האימון!"
             )
             self.diplomatic_banner_btn.setText("פתיחת אימות שורות...")
         else:
@@ -1297,8 +1321,8 @@ class MainWindow(QMainWindow):
                 "border: 1px solid #e0b84c; border-radius: 5px; }"
             )
             self.diplomatic_banner_label.setText(
-                "<b>שלב 1 (מומלץ לפני עריכת דקדוק):</b> השוו צד-לצד מול כתב היד ותקנו רק שגיאות קריאה "
-                "כפי שנכתב בדף — כך המערכת תלמד את כתב היד ותחסוך זמן בדפים הבאים!"
+                "<b>שלב 1 (שלב א׳ — לפני עריכת דקדוק):</b> השוו צד-לצד מול הסריקה המקורית ואמתו "
+                "מה שנכתב בדיו על הדף לפני החלת תיקוני שפה (שלב ב׳)."
             )
             self.diplomatic_banner_btn.setText("אימות צד-לצד ולמידה...")
 
@@ -1331,18 +1355,31 @@ class MainWindow(QMainWindow):
             self._refresh_writer_selector()
             return
 
-        if dlg.selected_writer_id:
-            entry.writer_id = dlg.selected_writer_id
-            self._apply_active_writer(dlg.selected_writer_id, update_entry=False)
+        committed_wid = getattr(dlg, "committed_writer_id", dlg.selected_writer_id)
+        entry.writer_id = committed_wid
+        self._apply_active_writer(committed_wid, update_entry=False)
 
         if dlg.updated_diplomatic_transcription is not None:
             entry.diplomatic_transcription = (
                 dlg.updated_diplomatic_transcription
             )
-            # If Stage-2 grammar changes haven't been applied yet, carry the
+            # If Stage-B grammar changes haven't been applied yet, carry the
             # verified diplomatic fixes straight into the main editor so the
-            # user never has to fix the same OCR error twice!
-            if not entry.changes:
+            # user never has to fix the same OCR error twice — asking first if
+            # the user already edited the main editor manually!
+            replace_ok = not entry.changes
+            if replace_ok and entry.edited:
+                replace_ok = (
+                    QMessageBox.question(
+                        self,
+                        "העברת הטקסט המאומת",
+                        "הטקסט שבעורך הראשי נערך ידנית. להחליף אותו בתעתיק שאומת בשלב א׳?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No,
+                    )
+                    == QMessageBox.Yes
+                )
+            if replace_ok:
                 self._loading = True
                 self._replace_editor_text(dlg.updated_diplomatic_transcription)
                 self._loading = False
@@ -1382,9 +1419,16 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "ייצוא מאגר למידה בית-ספרי", str(exc))
             return
         self.statusBar().showMessage(
-            f"יוצא מאגר למידה בית-ספרי אל {saved} ({summary['verified_lines_count']} שורות).",
+            f"יוצאה חבילת אימון מאומתת אל {saved} ({summary['verified_lines_count']} שורות).",
             8000,
         )
+
+    def open_school_vocab_admin(self) -> None:
+        from .training_dialog import SchoolVocabularyDialog
+
+        dlg = SchoolVocabularyDialog(self.learning_store, self)
+        dlg.exec()
+        self._clear_the_proposals()
 
     def _rebuild_engine_menu(self) -> None:
         menu = getattr(self, "engine_menu", None)

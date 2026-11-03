@@ -48,6 +48,9 @@ __all__ = [
 
 NEG_INF = -1e30
 MAX_TRAIN_SAMPLES = 240
+MIN_VERIFIED_FOR_ADAPT = 8
+MIN_HELDOUT_SAMPLES = 2
+MIN_HELDOUT_CHARS = 12
 
 
 @dataclass(frozen=True)
@@ -80,18 +83,26 @@ class AdaptationReport:
     train_cer_before: float
     train_cer_after: float
     message: str
+    status: str = "kept_previous"
+    held_out_chars: int = 0
+    held_out_wer_before: float | None = None
+    held_out_wer_after: float | None = None
 
     def to_dict(self) -> dict:
         return {
             "writer_id": self.writer_id,
             "writer_name": self.writer_name,
             "accepted": bool(self.accepted),
+            "status": self.status,
             "active_round": int(self.active_round),
             "samples_total": int(self.samples_total),
             "train_samples": int(self.train_samples),
             "held_out_samples": int(self.held_out_samples),
+            "held_out_chars": int(self.held_out_chars),
             "held_out_cer_before": self.held_out_cer_before,
             "held_out_cer_after": self.held_out_cer_after,
+            "held_out_wer_before": self.held_out_wer_before,
+            "held_out_wer_after": self.held_out_wer_after,
             "train_cer_before": round(float(self.train_cer_before), 4),
             "train_cer_after": round(float(self.train_cer_after), 4),
             "message": self.message,
@@ -103,10 +114,17 @@ class AdaptationReport:
             writer_id=str(data["writer_id"]),
             writer_name=str(data.get("writer_name", "")),
             accepted=bool(data["accepted"]),
+            status=str(
+                data.get(
+                    "status",
+                    "accepted" if data.get("accepted") else "kept_previous",
+                )
+            ),
             active_round=int(data.get("active_round", 0)),
             samples_total=int(data.get("samples_total", 0)),
             train_samples=int(data.get("train_samples", 0)),
             held_out_samples=int(data.get("held_out_samples", 0)),
+            held_out_chars=int(data.get("held_out_chars", 0)),
             held_out_cer_before=(
                 float(data["held_out_cer_before"])
                 if data.get("held_out_cer_before") is not None
@@ -115,6 +133,16 @@ class AdaptationReport:
             held_out_cer_after=(
                 float(data["held_out_cer_after"])
                 if data.get("held_out_cer_after") is not None
+                else None
+            ),
+            held_out_wer_before=(
+                float(data["held_out_wer_before"])
+                if data.get("held_out_wer_before") is not None
+                else None
+            ),
+            held_out_wer_after=(
+                float(data["held_out_wer_after"])
+                if data.get("held_out_wer_after") is not None
                 else None
             ),
             train_cer_before=float(data.get("train_cer_before", 0.0)),
@@ -263,6 +291,44 @@ def evaluate_head_cer(W, b, eval_pairs: list[tuple[object, list[int]]]) -> float
     return (total_ed / total_len) if total_len > 0 else 0.0
 
 
+def evaluate_head_detailed(
+    W,
+    b,
+    eval_pairs: list[tuple[object, list[int]]],
+    charset=None,
+) -> dict[str, float | int]:
+    """Compute CER, WER, character count, and mean normalized CTC NLL on ``eval_pairs``."""
+    total_char_ed = 0
+    total_chars = 0
+    total_word_ed = 0
+    total_words = 0
+    total_nll = 0.0
+    n_valid = 0
+    for feat, target in eval_pairs:
+        if not target:
+            continue
+        logits = feat @ W.T + b
+        hyp = greedy_decode_logits(logits)
+        total_char_ed += _levenshtein(hyp, target)
+        total_chars += len(target)
+        loss, _ = ctc_loss_grad(logits, target)
+        total_nll += loss / max(1, len(target))
+        n_valid += 1
+        if charset is not None:
+            ref_words = charset.decode(target).split()
+            hyp_words = charset.decode(hyp).split()
+            if ref_words:
+                total_word_ed += _levenshtein(hyp_words, ref_words)
+                total_words += len(ref_words)
+    return {
+        "cer": (total_char_ed / total_chars) if total_chars > 0 else 0.0,
+        "wer": (total_word_ed / total_words) if total_words > 0 else 0.0,
+        "chars": total_chars,
+        "words": total_words,
+        "nll": (total_nll / n_valid) if n_valid > 0 else 0.0,
+    }
+
+
 def train_ctc_head(
     W0,
     b0,
@@ -355,18 +421,67 @@ def load_writer_head_npz(path: str | Path):
 def _split_train_and_holdout(
     samples: list[VerifiedLineSample],
 ) -> tuple[list[VerifiedLineSample], list[VerifiedLineSample]]:
-    """Split verified lines deterministically into training and held-out sets."""
-    if len(samples) < 6:
+    """Split verified lines into strictly disjoint train and held-out sets.
+
+    - Never returns an empty holdout for ``>= MIN_VERIFIED_FOR_ADAPT`` lines:
+      training examples are **never** reused as test examples.
+    - Prefers holding out whole ``(document_key, page_number)`` pages when a
+      student has verified >= 2 pages, preventing same-page style/context leakage.
+    """
+    if len(samples) < MIN_VERIFIED_FOR_ADAPT:
         return list(samples[-MAX_TRAIN_SAMPLES:]), []
+
+    pages: dict[tuple[str, int], list[VerifiedLineSample]] = {}
+    for s in samples:
+        pages.setdefault((s.document_key, s.page_number), []).append(s)
+
+    min_train = max(6, MIN_VERIFIED_FOR_ADAPT - MIN_HELDOUT_SAMPLES)
+    if len(pages) >= 2:
+        ranked_pages = sorted(
+            pages.items(),
+            key=lambda kv: (
+                fnv1a_32(f"{kv[1][0].writer_id}:{kv[0][0]}:{kv[0][1]}") % 8,
+                len(kv[1]),
+                kv[0],
+            ),
+        )
+        held_pages: set[tuple[str, int]] = set()
+        held_count = 0
+        target_hold = max(MIN_HELDOUT_SAMPLES, int(round(0.2 * len(samples))))
+        for pg_key, pg_samples in ranked_pages:
+            if (
+                held_count < target_hold
+                and (len(samples) - (held_count + len(pg_samples))) >= min_train
+            ):
+                held_pages.add(pg_key)
+                held_count += len(pg_samples)
+        if held_count >= MIN_HELDOUT_SAMPLES:
+            held_out = [
+                s for s in samples if (s.document_key, s.page_number) in held_pages
+            ]
+            train = [
+                s
+                for s in samples
+                if (s.document_key, s.page_number) not in held_pages
+            ]
+            return train[-MAX_TRAIN_SAMPLES:], held_out
+
+    # Single-page (or imbalanced multi-page) fallback: deterministic FNV-1a holdout
     held_out = [s for s in samples if is_held_out_sample(s.sample_id)]
-    train = [s for s in samples if not is_held_out_sample(s.sample_id)]
-    if not held_out:
-        # Deterministic fallback when none of >=6 samples hit hash % 8 == 0
-        chosen = min(samples, key=lambda s: (fnv1a_32(s.sample_id) % 8, s.sample_id))
-        held_out = [chosen]
-        train = [s for s in samples if s.sample_id != chosen.sample_id]
-    if not train and held_out:
-        train = [held_out.pop(0)]
+    if len(held_out) < MIN_HELDOUT_SAMPLES or (len(samples) - len(held_out)) < min_train:
+        target_hold = min(
+            len(samples) - min_train,
+            max(MIN_HELDOUT_SAMPLES, int(round(0.2 * len(samples)))),
+        )
+        ranked = sorted(
+            samples,
+            key=lambda s: (fnv1a_32(s.sample_id) % 8, fnv1a_32(s.sample_id), s.sample_id),
+        )
+        held_ids = {s.sample_id for s in ranked[:target_hold]}
+        held_out = [s for s in samples if s.sample_id in held_ids]
+
+    held_id_set = {s.sample_id for s in held_out}
+    train = [s for s in samples if s.sample_id not in held_id_set]
     return train[-MAX_TRAIN_SAMPLES:], held_out
 
 
@@ -456,6 +571,7 @@ def train_writer_profile_in_process(
             writer_id=profile.writer_id,
             writer_name=profile.name,
             accepted=False,
+            status="no_samples",
             active_round=profile.active_round,
             samples_total=0,
             train_samples=0,
@@ -465,6 +581,29 @@ def train_writer_profile_in_process(
             train_cer_before=0.0,
             train_cer_after=0.0,
             message="אין עדיין שורות מאומתות עבור תלמיד זה.",
+        )
+
+    if len(samples) < MIN_VERIFIED_FOR_ADAPT:
+        needed = MIN_VERIFIED_FOR_ADAPT - len(samples)
+        return AdaptationReport(
+            writer_id=profile.writer_id,
+            writer_name=profile.name,
+            accepted=False,
+            status="insufficient_evidence",
+            active_round=profile.active_round,
+            samples_total=len(samples),
+            train_samples=len(samples),
+            held_out_samples=0,
+            held_out_cer_before=None,
+            held_out_cer_after=None,
+            train_cer_before=0.0,
+            train_cer_after=0.0,
+            message=(
+                f"נשמרו {len(samples)} שורות מאומתות עבור {profile.name}. "
+                f"עדיין אין מספיק דוגמאות להוכחת שיפור מובהק (נדרשות עוד {needed} שורות "
+                f"מאומתות כדי להגיע ל-{MIN_VERIFIED_FOR_ADAPT} שורות כולל קבוצת בקרה נפרדת). "
+                "מודל הבסיס/הקודם נשאר פעיל."
+            ),
         )
 
     recognizer = recognizer_factory(model_file)
@@ -506,51 +645,64 @@ def train_writer_profile_in_process(
         )
         held_out_pairs.append((plain_f, label))
 
-    if not train_fit_pairs:
+    held_chars = sum(len(lbl) for _, lbl in held_out_pairs)
+    if (
+        not train_fit_pairs
+        or len(held_out_pairs) < MIN_HELDOUT_SAMPLES
+        or held_chars < MIN_HELDOUT_CHARS
+    ):
         return AdaptationReport(
             writer_id=profile.writer_id,
             writer_name=profile.name,
             accepted=False,
+            status="insufficient_evidence",
             active_round=profile.active_round,
             samples_total=len(samples),
-            train_samples=0,
+            train_samples=len(train_plain_pairs),
             held_out_samples=len(held_out_pairs),
+            held_out_chars=held_chars,
             held_out_cer_before=None,
             held_out_cer_after=None,
             train_cer_before=0.0,
             train_cer_after=0.0,
-            message="לא נמצאו תווים ברי-אימון בשורות שאומתו.",
+            message=(
+                f"נשמרו {len(samples)} שורות מאומתות, אך קבוצת הבקרה הנפרדת עדיין קטנה מדי "
+                "להוכחת שיפור מהימנה. הוסיפו עוד מספר שורות מאומתות."
+            ),
         )
 
+    charset = getattr(recognizer, "charset", None)
     train_cer_before = evaluate_head_cer(W_prev, b_prev, train_plain_pairs)
-    held_cer_before = (
-        evaluate_head_cer(W_prev, b_prev, held_out_pairs)
-        if held_out_pairs
-        else None
-    )
+    prev_held = evaluate_head_detailed(W_prev, b_prev, held_out_pairs, charset)
+    base_held = evaluate_head_detailed(W0, b0, held_out_pairs, charset)
+    held_cer_before = float(prev_held["cer"])
+    held_wer_before = float(prev_held["wer"])
 
     W_new, b_new = train_ctc_head(W0, b0, train_fit_pairs, cfg=cfg)
     train_cer_after = evaluate_head_cer(W_new, b_new, train_plain_pairs)
-    held_cer_after = (
-        evaluate_head_cer(W_new, b_new, held_out_pairs)
-        if held_out_pairs
-        else None
-    )
+    cand_held = evaluate_head_detailed(W_new, b_new, held_out_pairs, charset)
+    held_cer_after = float(cand_held["cer"])
+    held_wer_after = float(cand_held["wer"])
 
-    if held_out_pairs:
-        # Regression gate: accept iff held-out CER does not worsen (vs previous OR general)
-        base_held_cer = evaluate_head_cer(W0, b0, held_out_pairs)
-        ref_cer = min(held_cer_before, base_held_cer)  # type: ignore[type-var]
-        accepted = held_cer_after <= ref_cer + 1e-6  # type: ignore[operator]
-    else:
-        base_train_cer = evaluate_head_cer(W0, b0, train_plain_pairs)
-        ref_train_cer = min(train_cer_before, base_train_cer)
-        accepted = train_cer_after <= ref_train_cer + 1e-6
+    ref_cer = min(held_cer_before, float(base_held["cer"]))
+    ref_nll = min(float(prev_held["nll"]), float(base_held["nll"]))
+    # Accept ONLY when independent held-out evaluation proves improvement
+    cer_improved = held_cer_after < (ref_cer - 1e-6)
+    tied_better_calibrated = (
+        abs(held_cer_after - ref_cer) <= 1e-6
+        and held_cer_after < (float(base_held["cer"]) - 1e-6)
+        and float(cand_held["nll"]) < (ref_nll - 0.02)
+        and held_wer_after <= (held_wer_before + 1e-6)
+    )
+    accepted = bool(cer_improved or tied_better_calibrated)
 
     if accepted:
-        new_round = int(profile.active_round) + 1
-        heads_dir = store.writer_dir(profile.writer_id) / "heads"
-        round_path = heads_dir / f"head-r{new_round:04d}.npz"
+        existing_rounds = [
+            v.round_number for v in store.list_adapter_versions(profile.writer_id)
+        ]
+        new_round = max([int(profile.active_round), *existing_rounds], default=0) + 1
+        rel_head = f"writers/{profile.writer_id}/heads/head-r{new_round:04d}.npz"
+        round_path = store.root.joinpath(*rel_head.split("/"))
         save_writer_head_npz(round_path, W_new, b_new)
         save_writer_head_npz(store.writer_head_path(profile.writer_id), W_new, b_new)
         meta = {
@@ -561,66 +713,75 @@ def train_writer_profile_in_process(
             "samples_total": len(samples),
             "train_samples": len(train_plain_pairs),
             "held_out_samples": len(held_out_pairs),
-            "held_out_cer_before": (
-                round(held_cer_before, 4) if held_cer_before is not None else None
-            ),
-            "held_out_cer_after": (
-                round(held_cer_after, 4) if held_cer_after is not None else None
-            ),
+            "held_out_chars": held_chars,
+            "held_out_cer_before": round(held_cer_before, 4),
+            "held_out_cer_after": round(held_cer_after, 4),
+            "held_out_wer_before": round(held_wer_before, 4),
+            "held_out_wer_after": round(held_wer_after, 4),
             "train_cer_before": round(train_cer_before, 4),
             "train_cer_after": round(train_cer_after, 4),
         }
         store.writer_head_meta_path(profile.writer_id).write_text(
             json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
-        store.update_writer_training_metadata(
+        store.record_adapter_version(
             profile.writer_id,
-            active_round=new_round,
+            round_number=new_round,
+            head_relpath=rel_head,
             model_sha256=model_sha256,
+            samples_total=len(samples),
+            train_samples=len(train_plain_pairs),
+            held_out_samples=len(held_out_pairs),
+            held_out_chars=held_chars,
             held_out_cer_before=meta["held_out_cer_before"],
             held_out_cer_after=meta["held_out_cer_after"],
+            held_out_wer_before=meta["held_out_wer_before"],
+            held_out_wer_after=meta["held_out_wer_after"],
+            activate=True,
         )
         msg = (
-            f"פרופיל כתב-היד של {profile.name} עודכן (סיבוב #{new_round}, "
-            f"{len(samples)} שורות מאומתות)."
+            f"הוכח שיפור בשורות הבקרה הנפרדות עבור {profile.name} "
+            f"(שגיאת תווים ירדה מ-{held_cer_before * 100:.1f}% ל-{held_cer_after * 100:.1f}% "
+            f"על {len(held_out_pairs)} שורות בקרה) — הופעלה גרסה #{new_round}."
         )
         return AdaptationReport(
             writer_id=profile.writer_id,
             writer_name=profile.name,
             accepted=True,
+            status="accepted",
             active_round=new_round,
             samples_total=len(samples),
             train_samples=len(train_plain_pairs),
             held_out_samples=len(held_out_pairs),
+            held_out_chars=held_chars,
             held_out_cer_before=held_cer_before,
             held_out_cer_after=held_cer_after,
+            held_out_wer_before=held_wer_before,
+            held_out_wer_after=held_wer_after,
             train_cer_before=train_cer_before,
             train_cer_after=train_cer_after,
             message=msg,
         )
 
-    # Keep previous head intact when regression gate rejects update; still sync sample count
-    store.update_writer_training_metadata(
-        profile.writer_id,
-        active_round=profile.active_round,
-        model_sha256=model_sha256,
-        held_out_cer_before=profile.held_out_cer_before,
-        held_out_cer_after=profile.held_out_cer_after,
-    )
     msg = (
-        f"השורות נשמרו במאגר ({len(samples)} שורות), אך המודל הקודם נשמר "
-        "כדי למנוע ירידה בדיוק על שורות הבקרה. הוסיפו עוד כמה שורות מאומתות ונסו שוב."
+        f"השורות המאומתות נשמרו ({len(samples)} שורות), אך העדכון לא שיפר את הדיוק "
+        f"על שורות הבקרה העצמאיות ({held_cer_before * 100:.1f}% לפני לעומת "
+        f"{held_cer_after * 100:.1f}% בניסיון) — לכן נשמר המודל הקודם ללא שינוי."
     )
     return AdaptationReport(
         writer_id=profile.writer_id,
         writer_name=profile.name,
         accepted=False,
+        status="kept_previous",
         active_round=profile.active_round,
         samples_total=len(samples),
         train_samples=len(train_plain_pairs),
         held_out_samples=len(held_out_pairs),
+        held_out_chars=held_chars,
         held_out_cer_before=held_cer_before,
         held_out_cer_after=held_cer_after,
+        held_out_wer_before=held_wer_before,
+        held_out_wer_after=held_wer_after,
         train_cer_before=train_cer_before,
         train_cer_after=train_cer_after,
         message=msg,
@@ -639,6 +800,54 @@ def run_writer_training(
     from .models import MODEL_ARTIFACTS, models_directory
     from .worker import worker_path
 
+    clean_wid = (writer_id or "").strip()
+    store = SchoolLearningStore(store_root)
+    if not clean_wid:
+        gen_n = len(store.list_writer_samples(""))
+        return AdaptationReport(
+            writer_id="",
+            writer_name="כללי / לא ידוע",
+            accepted=False,
+            status="general_profile",
+            active_round=0,
+            samples_total=gen_n,
+            train_samples=0,
+            held_out_samples=0,
+            held_out_cer_before=None,
+            held_out_cer_after=None,
+            train_cer_before=0.0,
+            train_cer_after=0.0,
+            message=(
+                f"השורות נשמרו תחת 'כללי / לא ידוע' ({gen_n} שורות מאומתות) וזמינות לייצוא. "
+                "להתאמה אישית בחרו פרופיל תלמיד ספציפי."
+            ),
+        )
+
+    prof = store.get_writer(clean_wid)
+    samples_n = len(store.list_writer_samples(clean_wid)) if prof else 0
+    if prof is not None and samples_n < MIN_VERIFIED_FOR_ADAPT:
+        needed = MIN_VERIFIED_FOR_ADAPT - samples_n
+        return AdaptationReport(
+            writer_id=clean_wid,
+            writer_name=prof.name,
+            accepted=False,
+            status="insufficient_evidence",
+            active_round=prof.active_round,
+            samples_total=samples_n,
+            train_samples=samples_n,
+            held_out_samples=0,
+            held_out_cer_before=None,
+            held_out_cer_after=None,
+            train_cer_before=0.0,
+            train_cer_after=0.0,
+            message=(
+                f"נשמרו {samples_n} שורות מאומתות עבור {prof.name}. "
+                f"עדיין אין מספיק דוגמאות להוכחת שיפור מובהק (נדרשות עוד {needed} שורות "
+                f"מאומתות כדי להגיע ל-{MIN_VERIFIED_FOR_ADAPT} שורות כולל קבוצת בקרה נפרדת). "
+                "מודל הבסיס/הקודם נשאר פעיל."
+            ),
+        )
+
     resolved_model = Path(model_path) if model_path is not None else None
     if resolved_model is None:
         art = MODEL_ARTIFACTS.get("mishkefet-v1")
@@ -647,13 +856,11 @@ def run_writer_training(
             if cand.is_file():
                 resolved_model = cand
     if resolved_model is None or not resolved_model.is_file():
-        store = SchoolLearningStore(store_root)
-        prof = store.get_writer(writer_id)
-        samples_n = len(store.list_writer_samples(writer_id)) if prof else 0
         return AdaptationReport(
-            writer_id=writer_id,
-            writer_name=prof.name if prof else writer_id,
+            writer_id=clean_wid,
+            writer_name=prof.name if prof else clean_wid,
             accepted=False,
+            status="unavailable",
             active_round=prof.active_round if prof else 0,
             samples_total=samples_n,
             train_samples=0,
@@ -670,18 +877,16 @@ def run_writer_training(
 
     if mishkefet_importable():
         return train_writer_profile_in_process(
-            writer_id, resolved_model, store_root=store_root
+            clean_wid, resolved_model, store_root=store_root
         )
 
     w_exe = worker_path()
     if w_exe is None or not w_exe.is_file():
-        store = SchoolLearningStore(store_root)
-        prof = store.get_writer(writer_id)
-        samples_n = len(store.list_writer_samples(writer_id)) if prof else 0
         return AdaptationReport(
-            writer_id=writer_id,
-            writer_name=prof.name if prof else writer_id,
+            writer_id=clean_wid,
+            writer_name=prof.name if prof else clean_wid,
             accepted=False,
+            status="unavailable",
             active_round=prof.active_round if prof else 0,
             samples_total=samples_n,
             train_samples=0,

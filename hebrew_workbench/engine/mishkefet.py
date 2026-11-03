@@ -163,6 +163,7 @@ class MishkefetEngine:
         self.writer_id = str(writer_id or "").strip()
         self.learning_dir = Path(learning_dir) if learning_dir else None
         self._recognizer = None
+        self._vocab_state_key: str = ""
         self._page_lock = threading.Lock()
 
     def configure(self, options: dict) -> None:
@@ -287,12 +288,38 @@ class MishkefetEngine:
                 self._recognizer = Recognizer(
                     str(self.model_path), device="cpu", **options
                 )
+                self._vocab_state_key = self._current_vocab_state_key()
             except Exception as exc:
                 raise EngineFailure(
                     f"לא ניתן לטעון את מודל Mishkefet: {exc}"
                 ) from exc
+        elif self.mode == "assisted" and self.model_path is not None:
+            cur_vkey = self._current_vocab_state_key()
+            if cur_vkey != self._vocab_state_key:
+                try:
+                    _, word_lm = load_language_models(
+                        self.model_path.parent, learning_dir=self.learning_dir
+                    )
+                    self._recognizer.word_lm = word_lm
+                    self._recognizer._last_logit_cache = None
+                    self._vocab_state_key = cur_vkey
+                except Exception:
+                    pass
         self._sync_writer_head(self._recognizer)
         return self._recognizer
+
+    def _current_vocab_state_key(self) -> str:
+        try:
+            from ..training.store import SchoolLearningStore
+
+            store = SchoolLearningStore(self.learning_dir)
+            vp = store.shared_vocab_path
+            if vp.is_file():
+                st = vp.stat()
+                return f"{vp}:{st.st_mtime_ns}:{st.st_size}"
+            return f"{vp}:absent"
+        except Exception:
+            return ""
 
     def _sync_writer_head(self, recognizer) -> None:
         """Apply the active student's adapted CTC head or reset to the base head."""
@@ -399,6 +426,7 @@ class MishkefetEngine:
             else 1.0
         )
         crops, boxes, _skew = segment_page(prepared_image)
+        skew_deg = round(float(_skew or 0.0), 4)
         if not crops:
             return PageResult(
                 number=number,
@@ -408,6 +436,7 @@ class MishkefetEngine:
                 assisted_text=None if self.mode == "raw" else "",
                 enhanced=was_enhanced,
                 enhancement_enabled=eff_enh,
+                skew_degrees=skew_deg,
                 processed_image_png=proc_png,
             )
 
@@ -461,6 +490,7 @@ class MishkefetEngine:
             assisted_text=assisted,
             enhanced=was_enhanced,
             enhancement_enabled=eff_enh,
+            skew_degrees=skew_deg,
             processed_image_png=proc_png,
         )
 

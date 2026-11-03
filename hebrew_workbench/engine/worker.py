@@ -313,6 +313,7 @@ class WorkerEngine:
                 assisted_text=page.get("assisted_text"),
                 enhanced=bool(page.get("enhanced", False)),
                 enhancement_enabled=bool(page.get("enhancement_enabled", True)),
+                skew_degrees=float(page.get("skew_degrees", 0.0) or 0.0),
                 processed_image_png=processed_bytes_by_num.get(
                     int(page.get("number", index + 1))
                 ),

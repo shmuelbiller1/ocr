@@ -30,7 +30,9 @@ Three rules follow from that, and they decide what is acceptable:
 
 1. **No cloud.** A model that runs on somebody else's server is not an
    option, however good it is.
-2. **No training.** The program uses models that somebody else trained.
+2. **No base-model retraining.** Shipped base checkpoints stay frozen and
+   checksum-verified; only an optional lightweight local per-student head
+   (~405 KB) may be adapted offline from lines explicitly confirmed by the user.
 3. **The licence has to be checked.** A model whose licence forbids the
    use that the user makes of it, or that nobody wrote down, is not used.
    A model that is not bundled and is fetched by the user, with its

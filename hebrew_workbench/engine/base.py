@@ -84,6 +84,7 @@ class PageResult:
     assisted_text: str | None = None
     enhanced: bool = field(default=False, compare=False)
     enhancement_enabled: bool = field(default=True, compare=False)
+    skew_degrees: float = field(default=0.0, compare=False)
     processed_image_png: bytes | None = field(
         default=None, repr=False, compare=False
     )

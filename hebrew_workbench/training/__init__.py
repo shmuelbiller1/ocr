@@ -1,13 +1,26 @@
-"""Offline student handwriting profiles & shared school corpus management."""
+"""Offline student handwriting profiles, SQLite store & shared school corpus."""
 
 from __future__ import annotations
 
 from .store import (
     DEFAULT_LEARNING_DIR_ENV,
+    GENERAL_BUCKET,
+    STATUS_NOT_REVIEWED,
+    STATUS_SKIPPED,
+    STATUS_UNCERTAIN,
+    STATUS_VERIFIED,
+    VALID_REVIEW_STATUSES,
+    VOCAB_APPROVED,
+    VOCAB_PENDING,
+    VOCAB_REJECTED,
+    AdapterVersion,
+    LineRevision,
     SchoolLearningStore,
     VerifiedLineInput,
     VerifiedLineSample,
+    VocabTermEntry,
     WriterProfile,
+    compute_document_id,
     crop_line_from_page,
     default_learning_directory,
     extract_school_vocab_tokens,
@@ -16,11 +29,24 @@ from .store import (
 )
 
 __all__ = [
+    "AdapterVersion",
     "DEFAULT_LEARNING_DIR_ENV",
+    "GENERAL_BUCKET",
+    "LineRevision",
+    "STATUS_NOT_REVIEWED",
+    "STATUS_SKIPPED",
+    "STATUS_UNCERTAIN",
+    "STATUS_VERIFIED",
     "SchoolLearningStore",
+    "VALID_REVIEW_STATUSES",
+    "VOCAB_APPROVED",
+    "VOCAB_PENDING",
+    "VOCAB_REJECTED",
     "VerifiedLineInput",
     "VerifiedLineSample",
+    "VocabTermEntry",
     "WriterProfile",
+    "compute_document_id",
     "crop_line_from_page",
     "default_learning_directory",
     "extract_school_vocab_tokens",

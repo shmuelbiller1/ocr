@@ -1,4 +1,4 @@
-"""Headless Qt UI tests for the side-by-side Stage-1 diplomatic verification dialog."""
+"""Headless Qt UI tests for Stage-A verification, draft non-verification, LRU & admin dialogs."""
 
 from __future__ import annotations
 
@@ -105,8 +105,15 @@ class DiplomaticVerificationUITests(unittest.TestCase):
         self.window._on_ocr_done(res, self.window._shown_entry)
         self.app.processEvents()
 
-    def test_stage1_banner_double_confirmation_gate_and_editor_transfer(self) -> None:
+    def test_editing_or_saving_draft_never_marks_line_verified_until_explicitly_confirmed(
+        self,
+    ) -> None:
         from hebrew_workbench.engine.writer_adaptation import AdaptationReport
+        from hebrew_workbench.training import (
+            STATUS_NOT_REVIEWED,
+            STATUS_UNCERTAIN,
+            STATUS_VERIFIED,
+        )
         from hebrew_workbench.ui.training_dialog import DiplomaticVerificationDialog
 
         entry = self.window._shown_entry
@@ -115,9 +122,6 @@ class DiplomaticVerificationUITests(unittest.TestCase):
 
         self._simulate_ocr_result()
         self.assertFalse(self.window.diplomatic_banner.isHidden())
-        self.assertIn("שלב 1", self.window.diplomatic_banner_label.text())
-        self.assertEqual(len(entry.recognized_pages), 1)
-        self.assertEqual(len(entry.recognized_pages[0]["lines"]), 3)
 
         student = self.window.learning_store.create_writer("אברהם מזרחי")
         self.window._apply_active_writer(student.writer_id, update_entry=True)
@@ -130,86 +134,105 @@ class DiplomaticVerificationUITests(unittest.TestCase):
         )
         cards = dlg._all_cards()
         self.assertEqual(len(cards), 3)
-
-        # Unverified raw OCR lines are NEVER checked by default, and Save is disabled
         self.assertEqual(dlg.verified_cards(), [])
         self.assertFalse(dlg.save_and_train_btn.isEnabled())
 
-        # Editing line 0 to fix an OCR misread ('רכא' -> 'רבא') auto-checks line 0
+        # CRITICAL INVARIANT: Editing line 0 does NOT mark it verified!
         cards[0].text_edit.setText("אמר רבא הלכתא כוותיה")
         cards[0].text_edit.textEdited.emit("אמר רבא הלכתא כוותיה")
-        self.assertTrue(cards[0].verified_check.isChecked())
-        # Still disabled until explicit bottom confirmation checkbox is ticked!
+        self.assertEqual(cards[0].review_status, STATUS_NOT_REVIEWED)
+        self.assertEqual(dlg.verified_cards(), [])
         self.assertFalse(dlg.save_and_train_btn.isEnabled())
 
-        # Visually verify line 1 as written (keeping student's unedited 'בגלל ש...')
-        cards[1].verified_check.setChecked(True)
-        # Skip crossed-out line 2
-        cards[2].skip_check.setChecked(True)
-        self.assertFalse(cards[2].verified_check.isChecked())
+        # Saving draft progress persists the edit locally WITHOUT turning it into training data!
+        dlg._on_save_draft_clicked()
+        self.assertEqual(
+            self.window.learning_store.list_writer_samples(student.writer_id), []
+        )
+        saved_drafts = self.window.learning_store.list_document_lines(
+            student.writer_id, entry.file_path
+        )
+        self.assertEqual(saved_drafts[(1, 0)].diplomatic_text, "אמר רבא הלכתא כוותיה")
+        self.assertEqual(saved_drafts[(1, 0)].review_status, STATUS_NOT_REVIEWED)
+        dlg.close()
 
-        # Tick confirmation gate -> Save & Train unlocks
-        dlg.confirm_exact_checkbox.setChecked(True)
-        self.assertTrue(dlg.save_and_train_btn.isEnabled())
+        # Reopen dialog -> draft edit is restored! Now explicitly confirm line 0 (Ctrl+Enter),
+        # mark line 1 uncertain (Alt+U), and skip line 2:
+        dlg2 = DiplomaticVerificationDialog(
+            entry,
+            self.window.learning_store,
+            initial_writer_id=student.writer_id,
+            parent=self.window,
+        )
+        cards2 = dlg2._all_cards()
+        self.assertEqual(cards2[0].diplomatic_text, "אמר רבא הלכתא כוותיה")
+        self.assertEqual(cards2[0].review_status, STATUS_NOT_REVIEWED)
+
+        # Quick confirm line 0 (verify_and_advance) + uncertain line 1 + skip line 2
+        dlg2._on_verify_and_advance(0)
+        self.assertEqual(cards2[0].review_status, STATUS_VERIFIED)
+        dlg2._on_uncertain_and_advance(1)
+        self.assertEqual(cards2[1].review_status, STATUS_UNCERTAIN)
+        cards2[2].skip_check.setChecked(True)
+
+        dlg2.confirm_exact_checkbox.setChecked(True)
+        self.assertTrue(dlg2.save_and_train_btn.isEnabled())
 
         fake_report = AdaptationReport(
             writer_id=student.writer_id,
             writer_name=student.name,
-            accepted=True,
-            active_round=1,
-            samples_total=2,
-            train_samples=2,
+            accepted=False,
+            status="insufficient_evidence",
+            active_round=0,
+            samples_total=1,
+            train_samples=1,
             held_out_samples=0,
             held_out_cer_before=None,
             held_out_cer_after=None,
-            train_cer_before=0.18,
+            train_cer_before=0.0,
             train_cer_after=0.0,
-            message="עודכן פרופיל התלמיד בהצלחה",
+            message="נשמרה שורה מאומתת 1 (נדרשות לפחות 8 להוכחת שיפור)",
         )
         with mock.patch(
             "hebrew_workbench.ui.training_dialog.run_writer_training",
             return_value=fake_report,
         ):
-            dlg._on_save_and_train_clicked()
+            dlg2._on_save_and_train_clicked()
             deadline = time.monotonic() + 5.0
-            while dlg._train_task is not None and time.monotonic() < deadline:
+            while dlg2._train_task is not None and time.monotonic() < deadline:
                 self.app.processEvents()
                 time.sleep(0.02)
             self.app.processEvents()
 
-        self.assertEqual(dlg.result(), DiplomaticVerificationDialog.Accepted)
-        # Strictly the 2 verified non-skipped lines were saved!
-        saved = self.window.learning_store.list_writer_samples(student.writer_id)
-        self.assertEqual(len(saved), 2)
-        self.assertEqual(saved[0].diplomatic_text, "אמר רבא הלכתא כוותיה")
-        self.assertEqual(saved[1].diplomatic_text, "בגלל שהסוגיא מפורשת בגמרא")
+        # ONLY line 0 (explicitly verified) is in training samples; uncertain & skipped are excluded!
+        verified_samples = self.window.learning_store.list_writer_samples(
+            student.writer_id
+        )
+        self.assertEqual(len(verified_samples), 1)
+        self.assertEqual(verified_samples[0].diplomatic_text, "אמר רבא הלכתא כוותיה")
 
-        # Simulate MainWindow receiving the accepted dialog result
+        # MainWindow receives non-skipped diplomatic text so user doesn't retype fixes
         with mock.patch(
             "hebrew_workbench.ui.training_dialog.DiplomaticVerificationDialog"
         ) as mock_dlg_cls:
             mock_dlg_cls.Accepted = DiplomaticVerificationDialog.Accepted
-            mock_dlg_cls.return_value = dlg
-            dlg.exec = mock.Mock(return_value=DiplomaticVerificationDialog.Accepted)
+            mock_dlg_cls.return_value = dlg2
+            dlg2.exec = mock.Mock(return_value=DiplomaticVerificationDialog.Accepted)
             self.window.open_diplomatic_verification()
 
-        # Verified diplomatic text was carried into the main editor without retyping
         self.assertEqual(
             self.window.editor.toPlainText(),
             "אמר רבא הלכתא כוותיה\nבגלל שהסוגיא מפורשת בגמרא",
         )
-        self.assertIn("שלב 1 הושלם", self.window.diplomatic_banner_label.text())
-        dlg.close()
+        dlg2.close()
 
-    def test_stage2_grammar_edits_never_poison_diplomatic_training_lines(self) -> None:
+    def test_stage2_grammar_edits_never_overwrite_stage1_training_labels(self) -> None:
         from hebrew_workbench.ui.training_dialog import DiplomaticVerificationDialog
 
         entry = self.window._shown_entry
         assert entry is not None
         self._simulate_ocr_result()
 
-        # Suppose Stage-1 diplomatic text had student's original phrasing ("בגלל ש..."),
-        # and then in Stage 2 the user accepted a style/grammar edit ("משום ש...") in the editor!
         entry.diplomatic_transcription = (
             "אמר רבא הלכתא כוותיה\nבגלל שהסוגיא מפורשת בגמרא\nשורה שלישית"
         )
@@ -230,9 +253,56 @@ class DiplomaticVerificationUITests(unittest.TestCase):
 
         dlg = DiplomaticVerificationDialog(entry, self.window.learning_store)
         cards = dlg._all_cards()
-        # Dialog loads the pre-grammar diplomatic text ("בגלל..."), NOT the Stage-2 rewrite ("משום...")!
         self.assertEqual(cards[1].diplomatic_text, "בגלל שהסוגיא מפורשת בגמרא")
         dlg.close()
+
+    def test_admin_vocab_dialog_and_adapter_rollback_dialog(self) -> None:
+        from hebrew_workbench.ui.training_dialog import (
+            AdapterHistoryDialog,
+            SchoolVocabularyDialog,
+        )
+
+        # Admin vocabulary dialog
+        vdlg = SchoolVocabularyDialog(self.window.learning_store, self.window)
+        self.assertFalse(vdlg.sharing_check.isChecked())
+        vdlg.sharing_check.setChecked(True)
+        self.assertTrue(self.window.learning_store.vocab_sharing_enabled())
+        self.window.learning_store.approve_vocab_term("שמעתתין")
+        vdlg._refresh_lists()
+        self.assertEqual(vdlg.approved_list.count(), 1)
+        vdlg.approved_list.setCurrentRow(0)
+        vdlg._remove_selected_approved()
+        self.assertEqual(vdlg.approved_list.count(), 0)
+        vdlg.close()
+
+        # Adapter history & one-click rollback dialog
+        student = self.window.learning_store.create_writer("בדיקת שחזור")
+        rel_h = f"writers/{student.writer_id}/heads/head-r0001.npz"
+        abs_h = self.learn_dir.joinpath(*rel_h.split("/"))
+        abs_h.parent.mkdir(parents=True, exist_ok=True)
+        abs_h.write_bytes(b"stub")
+        self.window.learning_store.record_adapter_version(
+            student.writer_id,
+            round_number=1,
+            head_relpath=rel_h,
+            model_sha256="a" * 64,
+            samples_total=10,
+            train_samples=8,
+            held_out_samples=2,
+            held_out_chars=40,
+            held_out_cer_before=0.25,
+            held_out_cer_after=0.14,
+            activate=True,
+        )
+        hdlg = AdapterHistoryDialog(
+            self.window.learning_store, student.writer_id, self.window
+        )
+        self.assertEqual(hdlg.version_list.count(), 2)
+        hdlg._rollback_one_step()
+        prof_after = self.window.learning_store.get_writer(student.writer_id)
+        assert prof_after is not None
+        self.assertEqual(prof_after.active_round, 0)
+        hdlg.close()
 
 
 if __name__ == "__main__":
