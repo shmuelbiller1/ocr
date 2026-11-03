@@ -2286,7 +2286,6 @@ class SchoolLearningStore:
             prefix=".hw-restore-", dir=str(self.root.parent)
         ) as td:
             stage = Path(td) / "staged"
-            prev_root = Path(td) / "previous"
             stage.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(src, "r") as zf:
                 names = zf.namelist()
@@ -2346,10 +2345,17 @@ class SchoolLearningStore:
             (stage / "backup_manifest.json").unlink(missing_ok=True)
 
             # Same-filesystem entry-level swap with full rollback on failure:
-            # avoids renaming self.root itself (Windows NTFS directory-handle safe)
-            # and never deletes untouched original entries before replacement succeeds.
-            prev_root.mkdir(parents=True, exist_ok=True)
+            # avoids renaming self.root itself (Windows NTFS directory-handle safe),
+            # never deletes untouched original entries before replacement succeeds,
+            # and keeps prev_root outside TemporaryDirectory so even a double-fault
+            # rollback failure leaves original entries intact at rescue_path.
             self.root.mkdir(parents=True, exist_ok=True)
+            prev_root = Path(
+                tempfile.mkdtemp(
+                    prefix=f".hw-restore-rescue-{os.getpid()}-",
+                    dir=str(self.root.parent),
+                )
+            )
             original_names = {p.name for p in self.root.iterdir()}
             moved_existing: list[str] = []
             try:
@@ -2360,7 +2366,7 @@ class SchoolLearningStore:
                     _swap_store_entry(staged_item, self.root / staged_item.name)
                 self._schema_ready = False
                 self._ensure_db()
-            except Exception:
+            except Exception as original_exc:
                 untouched = original_names - set(moved_existing)
                 try:
                     for partial_item in list(self.root.iterdir()):
@@ -2373,17 +2379,19 @@ class SchoolLearningStore:
                     for name in moved_existing:
                         src_prev = prev_root / name
                         if src_prev.exists():
-                            os.replace(src_prev, self.root / name)
-                except Exception:
-                    rescue = (
-                        self.root.parent
-                        / f".hw-restore-rescue-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-                    )
-                    try:
-                        os.replace(prev_root, rescue)
-                    except OSError:
-                        shutil.copytree(prev_root, rescue, dirs_exist_ok=True)
+                            _swap_store_entry(src_prev, self.root / name)
+                except Exception as rollback_exc:
                     self._schema_ready = False
-                    raise
+                    original_exc.rescue_path = prev_root  # type: ignore[attr-defined]
+                    original_exc.rollback_error = rollback_exc  # type: ignore[attr-defined]
+                    if hasattr(original_exc, "add_note"):
+                        original_exc.add_note(
+                            f"Restore rollback failed ({rollback_exc!r}). "
+                            f"Original store data is preserved at: {prev_root}"
+                        )
+                    raise original_exc
+                shutil.rmtree(prev_root, ignore_errors=True)
                 self._schema_ready = False
                 raise
+            else:
+                shutil.rmtree(prev_root, ignore_errors=True)

@@ -1247,8 +1247,8 @@ class MainWindow(QMainWindow):
 
     def _sync_engines_writer_context(self, writer_id: str | None) -> None:
         if self.task is not None and self.task.isRunning():
-            # Never overwrite an active OCR job's writer context mid-run;
-            # _on_task_finished applies the latest selection once the job completes.
+            # Keep the recognizing document's writer fixed until OCR finishes;
+            # _apply_active_writer defers changes via _deferred_writer_id for _on_task_finished.
             return
         clean_id = (writer_id or "").strip()
         store_dir = Path(self.learning_store.root)

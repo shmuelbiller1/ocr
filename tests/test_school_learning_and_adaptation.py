@@ -1620,23 +1620,27 @@ class HardeningAndEdgeCaseRegressionTests(unittest.TestCase):
             "מידע מקורי שאסור למחוק",
         )
 
-        # 2) If rollback's own os.replace fails, prev_root is rescued outside temp dir!
+        # 2) If rollback's own os.replace fails, original restore exception is raised
+        # with exc.rescue_path preserved outside TemporaryDirectory!
         real_replace = os.replace
 
         def _fail_staged_and_rollback(src, dst):
             src_p, dst_p = Path(src), Path(dst)
             if "staged" in src_p.parts:
                 raise OSError("Simulated staged move failure")
-            if "previous" in src_p.parts and dst_p.parent == self.store.root:
+            if src_p.parent.name.startswith(".hw-restore-rescue-") and dst_p.parent == self.store.root:
                 raise PermissionError("Simulated rollback replace failure")
             return real_replace(src, dst)
 
         with mock.patch("hebrew_workbench.training.store.os.replace", side_effect=_fail_staged_and_rollback):
-            with self.assertRaises(PermissionError):
+            with self.assertRaises(OSError) as ctx:
                 self.store.restore_database_zip(bzip)
 
+        self.assertIn("Simulated staged move failure", str(ctx.exception))
+        self.assertIsInstance(getattr(ctx.exception, "rollback_error", None), PermissionError)
         rescues = list(self.store.root.parent.glob(".hw-restore-rescue-*"))
         self.assertEqual(len(rescues), 1)
+        self.assertEqual(getattr(ctx.exception, "rescue_path", None), rescues[0])
         self.assertTrue((rescues[0] / "learning.sqlite3").is_file())
 
 
