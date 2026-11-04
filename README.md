@@ -242,10 +242,9 @@ bundle the CC0-1.0 offline Hebrew spelling lexicon (196,227 words + rabbinic/Mis
 morphology) and deterministic Hebrew grammar/punctuation rules, while לשון הספר
 remains an unavailable placeholder, in-document text search is unimplemented, and
 `benchmark/modern_school` awaits consented classroom pages. See the
-[full inventory and completion gates](docs/FINAL_READINESS.md). The audit also
-found a Qt 6 printing/PDF defect in v0.4.0; the source patch and stronger
-packaged self-tests must ship in a subsequent release, not be assumed present
-in the existing downloads.
+[full inventory and completion gates](docs/FINAL_READINESS.md). Note that v0.5.0
+ships the Qt 6 printing/PDF fix and packaged self-tests that were missing in the
+older v0.4.0 downloads.
 
 
 ### Optional offline Hebrew spelling plugin
