@@ -1,0 +1,81 @@
+{
+  "fixtures": "developer-curated spelling smoke, not school accuracy",
+  "seconds": 0.683,
+  "proposals": [
+    {
+      "original": "שלומ",
+      "replacement": "שלום",
+      "alternatives": [
+        "שלמו",
+        "לשמו"
+      ]
+    },
+    {
+      "original": "תלמיידים",
+      "replacement": "תלמידים",
+      "alternatives": [
+        "למיידים",
+        "ולמיידים"
+      ]
+    }
+  ],
+  "packaged_app": {
+    "ok": true,
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "results": [
+      {
+        "name": "environment",
+        "ok": true,
+        "detail": "python 3.12.10 on Windows-2022Server-10.0.20348-SP0"
+      },
+      {
+        "name": "core-imports",
+        "ok": true,
+        "detail": "all core modules import cleanly"
+      },
+      {
+        "name": "engine-contract",
+        "ok": true,
+        "detail": "the engine contract fails closed"
+      },
+      {
+        "name": "preview",
+        "ok": true,
+        "detail": "images and PDF pages preview correctly"
+      },
+      {
+        "name": "plugins",
+        "ok": true,
+        "detail": "plugins are installed and loaded"
+      },
+      {
+        "name": "bundled-hebrew-spelling",
+        "ok": true,
+        "detail": "bundled CC0-1.0 Hebrew lexicon, OCR-confusion ranker, and personal dictionary verified"
+      },
+      {
+        "name": "gui-startup",
+        "ok": true,
+        "detail": "main window created with title 'Hebrew Notes Workbench 0.5.0'"
+      },
+      {
+        "name": "document-output",
+        "ok": true,
+        "detail": "synthetic fixture: project/raw text, TXT, RTL DOCX and rendered PDF; physical printer output is not tested"
+      },
+      {
+        "name": "optional-hebrew-spelling",
+        "ok": true,
+        "detail": "real installed native Hunspell/Hspell plugin; curated smoke, not modern-school accuracy or grammar validation"
+      }
+    ]
+  },
+  "zip_bytes": 10659981,
+  "zip_sha256": "39753ac8c25948c658e16ce687c6a1099cb2c73b2cfbb439daca6f66ede0b99f",
+  "runtime_bytes": 8613446,
+  "ok": true,
+  "unicode_install_path": true,
+  "personal_persistence": true,
+  "uninstall_reinstall": true,
+  "dictionary_unchanged": true
+}

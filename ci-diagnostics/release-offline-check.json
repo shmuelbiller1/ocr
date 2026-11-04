@@ -1,0 +1,121 @@
+{
+  "offline_scope": "Python socket guard + fresh caches; local IPC allowed; not an OS firewall",
+  "cases": [
+    {
+      "case": "kraken-small-pdf",
+      "runs": {
+        "inference": {
+          "wall_seconds": 35.38,
+          "characters": 2166,
+          "raw_sha256": "da45023159bf446c6c62c72a5b46521c2bd62d997fef1d91f0c6768c59f46c88",
+          "alternative_characters": 0
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "kraken-medium-pdf",
+      "runs": {
+        "inference": {
+          "wall_seconds": 62.61,
+          "characters": 2278,
+          "raw_sha256": "5c9865b4e179888837cab762d45363dbe89ee44a33b0a8d49dbfb4517117ca88",
+          "alternative_characters": 0
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "mishkefet-raw-image",
+      "runs": {
+        "inference": {
+          "wall_seconds": 23.8,
+          "characters": 509,
+          "raw_sha256": "778f66b2026cd9bbc597dc3f4a0ee04ddd72987f6d526163485a13c3d7c69962",
+          "alternative_characters": 0
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "mishkefet-beam-pdf",
+      "runs": {
+        "inference": {
+          "wall_seconds": 104.72,
+          "characters": 2427,
+          "raw_sha256": "8df8370b5b19269ba0c577d60e2f4068afe594ddddb35a80e16da5b48e0cfb37",
+          "alternative_characters": 2447
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "mishkefet-assisted-pdf",
+      "runs": {
+        "inference": {
+          "wall_seconds": 110.0,
+          "characters": 2427,
+          "raw_sha256": "8df8370b5b19269ba0c577d60e2f4068afe594ddddb35a80e16da5b48e0cfb37",
+          "alternative_characters": 2384
+        }
+      },
+      "passed": true
+    }
+  ],
+  "bundles": {
+    "inference": {
+      "bytes": 819634200,
+      "components": {
+        "torch": 382983609,
+        "pyarrow": 85966956,
+        "cv2": 70801207,
+        "scipy": 65972690,
+        "ocr-worker.exe": 59045787,
+        "_internal": 25976893,
+        "numpy.libs": 20965968,
+        "scipy.libs": 20155392,
+        "sklearn": 15295245,
+        "skimage": 13858432,
+        "PIL": 13051904,
+        "lxml": 6912184,
+        "numpy": 6786048,
+        "pypdfium2_raw": 5446799,
+        "kraken": 5075058,
+        "torchvision": 4322522,
+        "Shapely.libs": 3573384,
+        "_tcl_data": 3162778,
+        "iso639": 1882483,
+        "torch-2.14.0+cpu.dist-info": 1828856,
+        "_tk_data": 851433,
+        "google": 745134,
+        "safetensors": 738304,
+        "regex": 736768,
+        "pyarrow.libs": 587112,
+        "aiohttp": 532480,
+        "shapely": 430592,
+        "charset_normalizer": 324096,
+        "tcl8": 276516,
+        "yaml": 253952,
+        "certifi": 235863,
+        "numpy-2.2.6.dist-info": 217883,
+        "multidict": 134144,
+        "yarl": 81920,
+        "psutil": 70656,
+        "frozenlist": 69632,
+        "propcache": 66048,
+        "tqdm-4.70.1.dist-info": 64041,
+        "torchvision-0.29.0+cpu.dist-info": 45446,
+        "kraken-7.1.1.dist-info": 37687,
+        "imageio-2.38.1.dist-info": 19559,
+        "setuptools": 18263,
+        "attrs-26.1.0.dist-info": 13510,
+        "markupsafe": 13312,
+        "markupsafe-3.0.3.dist-info": 5487,
+        "pypdfium2": 161,
+        "lightning": 6
+      }
+    }
+  },
+  "timing_note": "Cold subprocess wall time including model loading; no memory measurement.",
+  "passed": true
+}
