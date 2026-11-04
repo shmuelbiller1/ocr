@@ -1,0 +1,10 @@
+[SEG] unmodified                         adj=3/6 lines= 75->  72 (GT=62, |err|  13->10) SNR=  22.0-> 23.2 cpu= 82.8ms
+[SEG] red_pen_on_tan_paper               adj=6/6 lines=167->  84 (GT=62, |err| 119->22) SNR=   3.5-> 68.4 cpu= 74.6ms
+[SEG] pink_card_red_ink                  adj=0/6 lines= 70->  70 (GT=62, |err|   8-> 8) SNR=  15.1-> 15.1 cpu= 76.8ms
+[SEG] yellow_legal_pad                   adj=2/6 lines=101->  98 (GT=62, |err|  39->36) SNR=   9.3-> 27.1 cpu= 69.1ms
+[SEG] pastel_blue_paper                  adj=0/6 lines= 85->  85 (GT=62, |err|  23->23) SNR=  50.8-> 50.8 cpu= 77.2ms
+[SEG] mint_green_paper                   adj=0/6 lines= 86->  86 (GT=62, |err|  24->24) SNR=  46.3-> 46.3 cpu= 77.5ms
+[SEG] dark_slate_light_ink               adj=6/6 lines= 99->  86 (GT=62, |err|  37->24) SNR= -57.3-> 71.1 cpu= 72.8ms
+[SEG] regional_corner_shadow             adj=0/6 lines= 88->  88 (GT=62, |err|  26->26) SNR=   2.7->  2.7 cpu= 36.2ms
+[SEG] regional_highlighter_and_red_note  adj=6/6 lines= 79->  81 (GT=62, |err|  17->19) SNR=   9.3-> 40.9 cpu=141.8ms
+[SEG] cyan_graph_grid                    adj=6/6 lines=156->  85 (GT=62, |err|  94->23) SNR=   5.2-> 65.0 cpu=119.3ms

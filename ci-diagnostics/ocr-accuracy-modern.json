@@ -1,0 +1,20 @@
+{
+  "corpus": {
+    "name": "Modern school handwriting",
+    "description": "Pages written by students in class, with a transcript that was checked by a teacher. There are no pages yet, so the accuracy of the recognition on this material is not verified.",
+    "target": "modern",
+    "license": "",
+    "citation": "",
+    "url": "",
+    "pages": 0,
+    "pages_measured": 0,
+    "pages_without_verification": [],
+    "verified": false
+  },
+  "measurement": {
+    "what_is_measured": "the raw recognition of the engine",
+    "no_corrections": "the proposals of the spelling, of the grammar and of the scholarly style are not part of the measurement"
+  },
+  "engines": [],
+  "note": "the corpus has no page with a verified transcript, so the accuracy of the recognition on this material is NOT verified"
+}

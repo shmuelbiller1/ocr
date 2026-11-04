@@ -1,0 +1,120 @@
+{
+  "platform": "linux",
+  "python": "3.12.15",
+  "fifty_student_store_and_low_memory": {
+    "students_created": 50,
+    "verified_lines_persisted": 50,
+    "uncertain_lines_excluded_from_training": 50,
+    "approved_shared_vocab_words": 1,
+    "wall_seconds": 0.929,
+    "peak_rss_mb": 146.97,
+    "sqlite_db_kb": 188.0,
+    "total_store_kb": 260.1,
+    "online_export_zip_kb": 26.7,
+    "backup_zip_kb": 60.1,
+    "lru_max_pages_retained_of_25": 2
+  },
+  "real_handwriting_evaluation": {
+    "target_writer": "Rachel Bluwstein (PDM-1.0)",
+    "training_pages": [
+      "commons__begani_netatikha__p0001.jpg",
+      "commons__rachel_gan_naul__p0001.jpg",
+      "commons__rachel_aqara_1928__p0001.jpg"
+    ],
+    "aligned_verified_lines_by_page": {
+      "commons__begani_netatikha__p0001.jpg": 10,
+      "commons__rachel_gan_naul__p0001.jpg": 8,
+      "commons__rachel_aqara_1928__p0001.jpg": 12
+    },
+    "unseen_held_out_test_page": "commons__rachel_rak_al_atzmi__p0001.jpg",
+    "adaptation_gate_report": {
+      "writer_id": "student-001-ec0d1ab7",
+      "writer_name": "Rachel Bluwstein (PDM-1.0)",
+      "accepted": false,
+      "status": "kept_previous",
+      "active_round": 0,
+      "samples_total": 30,
+      "train_samples": 20,
+      "held_out_samples": 10,
+      "held_out_chars": 144,
+      "held_out_cer_before": 0.22916666666666666,
+      "held_out_cer_after": 0.2361111111111111,
+      "held_out_wer_before": 0.625,
+      "held_out_wer_after": 0.65625,
+      "train_cer_before": 0.2687,
+      "train_cer_after": 0.1582,
+      "message": "השורות המאומתות נשמרו (30 שורות), אך העדכון לא שיפר את הדיוק על שורות הבקרה העצמאיות (22.9% לפני לעומת 23.6% בניסיון) — לכן נשמר המודל הקודם ללא שינוי."
+    },
+    "four_way_unseen_page_comparison": {
+      "1_base_model_raw": {
+        "cer": 0.4226,
+        "wer": 0.9444,
+        "ref_chars": 265,
+        "hyp_preview": "כל צו כך לל עצמי לשפר וזעת צראלמי שאלם נלה ל גם מקא עושה דמלה ר ודד מבתש הצלהה גם עת צרפי בדרפה על זמרת דרן מכעד לדרך על"
+      },
+      "2_base_plus_student_adapter_raw": {
+        "cer": 0.4226,
+        "wer": 0.9444,
+        "ref_chars": 265,
+        "hyp_preview": "כל צו כך לל עצמי לשפר וזעת צראלמי שאלם נלה ל גם מקא עושה דמלה ר ודד מבתש הצלהה גם עת צרפי בדרפה על זמרת דרן מכעד לדרך על"
+      },
+      "3_base_plus_approved_shared_vocab": {
+        "cer": 0.4113,
+        "wer": 0.9074,
+        "ref_chars": 265,
+        "hyp_preview": "כל לה כך על עצמי לשפר וצעת צר אלא שאלה נלה ל גם מצא עושה במה ר ודוד מבתי הצלה ה גם עם צרפי בדרכה על זמרת דרך בור לדרך על"
+      },
+      "4_combined_adapter_plus_shared_vocab": {
+        "cer": 0.4113,
+        "wer": 0.9074,
+        "ref_chars": 265,
+        "hyp_preview": "כל לה כך על עצמי לשפר וצעת צר אלא שאלה נלה ל גם מצא עושה במה ר ודוד מבתי הצלה ה גם עם צרפי בדרכה על זמרת דרך בור לדרך על"
+      }
+    },
+    "other_writers_profile_isolated": {
+      "Hayyim Nahman Bialik": {
+        "cer": 0.3491,
+        "wer": 1.1053,
+        "ref_chars": 106,
+        "hyp_preview": "מודי צפור נל הרץ מדברץו אשרת הי דעקת אות אהלום לוא זאי שכנת אז עם את כפף רונים בכות ור בבות למורלוים",
+        "cer_delta_vs_base": 0.0
+      },
+      "Naftali Herz Imber": {
+        "cer": 0.5808,
+        "wer": 1.2258,
+        "ref_chars": 167,
+        "hyp_preview": "כק שלר בגבב בובוה אאר בנפש והורר הובות ש וגבעוני בחרח קריבורה עינו קניון עוברת ה סובהלה שה ל עוד בע עברה וגקתמהש רב הקת ",
+        "cer_delta_vs_base": 0.0
+      }
+    },
+    "other_writers_if_misapplied_cross_writer": {
+      "Hayyim Nahman Bialik": {
+        "cer": 0.3491,
+        "wer": 1.1053,
+        "ref_chars": 106,
+        "hyp_preview": "מודי צפור נל הרץ מדברץו אשרת הי דעקת אות אהלום לוא זאי שכנת אז עם את כפף רונים בכות ור בבות למורלוים",
+        "cer_delta_vs_base": 0.0
+      },
+      "Naftali Herz Imber": {
+        "cer": 0.5808,
+        "wer": 1.2258,
+        "ref_chars": 167,
+        "hyp_preview": "כק שלר בגבב בובוה אאר בנפש והורר הובות ש וגבעוני בחרח קריבורה עינו קניון עוברת ה סובהלה שה ל עוד בע עברה וגקתמהש רב הקת ",
+        "cer_delta_vs_base": 0.0
+      }
+    },
+    "lifecycle_verification": {
+      "adapter_accepted_by_validation_gate": false,
+      "fresh_engine_reload_matches_adapted": true,
+      "one_click_rollback_exact_match_base": true
+    },
+    "resources": {
+      "train_wall_seconds": 38.89,
+      "single_page_infer_seconds": 2.782,
+      "peak_rss_mb": 2046.76,
+      "adapter_head_npz_kb": 0.0,
+      "cached_backbone_features_kb": 6733.4,
+      "sqlite_db_kb": 104.0
+    }
+  }
+}

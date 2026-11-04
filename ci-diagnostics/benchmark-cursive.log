@@ -1,0 +1,181 @@
+=== the engine kraken-ppocrv6-small (isolated process) ===
+=== the engine kraken-ppocrv6-small ===
+[1/6] recognising pages/commons__begani_netatikha__p0001.jpg ...
+    CER 86.9%  WER 96.9%  10.0s
+    lines: 10 in the ground truth, 5 in the result
+    ground truth: בגני נטעתיך, בגני המצנע – בלבי. השתרגו פארותיך ועמקו שרשיך בי. ומבקר לערב לא ידם, לא ירגיע הגן – זה אתה בו, אתה בו באלפי צפריך רן. ב' אייר, תרץ השלום לך?
+    recognised:   האר rומוצו ה ת אייר, ר Piles
+[2/6] recognising pages/commons__bialik_el_hazippor__p0001.jpg ...
+    CER 88.7%  WER 100.0%  12.8s
+    lines: 4 in the ground truth, 7 in the result
+    ground truth: נודי, צפורי, אל־הרך, מדברך! אשרת, כי עזבת את־אהלי; לו עמי שכנת, אז גם־את, כנף רננים, בכית, מר בכית לגורלי.
+    recognised:   ו —- ת את מה r ת
+[3/6] recognising pages/commons__hatikvah_imber_manuscript__p0001.jpg ...
+    CER 96.4%  WER 100.0%  10.6s
+    lines: 10 in the ground truth, 1 in the result
+    ground truth: כל עוד בלבב פנימה נפש יהודי הומיה, ולפאתי מזרח קדימה עינו לציון צופיה. מקהלה עוד לא אבדה תקותנו, התקוה הנושנה: לשוב לארץ אבותינו, לעיר בה דוד חנה. נפתלי הרץ אימבר תרסח
+    recognised:   בותינו
+[4/6] recognising pages/commons__rachel_aqara_1928__p0001.jpg ...
+    CER 64.2%  WER 83.3%  6.0s
+    lines: 17 in the ground truth, 13 in the result
+    ground truth: אמהי בן לו היה לי. ילד קטן, שחר תלתלים ונבון. לאחז בידו ולפסע לאט בשבילי הגן. ילד... קטן. אורי אקרא לו, אורי שלי, רך וצלול הוא השם הקצר. צליל טבול אורה. לילד קטן ושחרחר "אורי!" – אקרא! עוד אתמרמר כרחל
+    recognised:   .piaot retal -hn אחז 2ידו ולפסוע לאט 1- 1 kוי רי ארא לו, אורי של en ק אירי K lle עוד אתמרמר עוד אתפלל sחנה 2ש עוד אדפ
+[5/6] recognising pages/commons__rachel_gan_naul__p0001.jpg ...
+    CER 77.3%  WER 97.5%  6.3s
+    lines: 9 in the ground truth, 8 in the result
+    ground truth: גן נעול מי אתה? מדוע יד מושטת לא פוגשת יד-אחות? ועינים אך תמתנה רגע והנה שפלו כבר נבוכות. גן נעול. לא שביל אליו, לא דרך. גן נעול – אדם. האלך לי? או אכה באבן, או אכה באבן עד זוב דם?!
+    recognised:   תה 3וע מ1 לא פוב שת יד - אחות ב הלוי iעול. ל- נבו כות ik
+[6/6] recognising pages/commons__rachel_rak_al_atzmi__p0001.jpg ...
+    CER 80.4%  WER 98.2%  6.4s
+    lines: 12 in the ground truth, 12 in the result
+    ground truth: רק על עצמי לספר ידעתי. צר עולמי כעולם נמלה, גם משאי עמסתי כמוה, רב וכבד מכתפי הדלה. גם את דרכי – כדרכה אל צמרת – דרך מכאוב ודרך עמל, יד ענקים זדונה ובוטחת, יד מתבדחת שמה לאל. כל ארחותי הלז והדמיע פחד 
+    recognised:   ר אל רר ורוז אכתה PE את אכאה : nA621 AA3311 צאר חמי הליז הב 3 אה באבתם אורוי קחמקים Ge. s
+=== the engine kraken-ppocrv6-medium (isolated process) ===
+=== the engine kraken-ppocrv6-medium ===
+[1/6] recognising pages/commons__begani_netatikha__p0001.jpg ...
+    CER 85.0%  WER 100.0%  10.5s
+    lines: 10 in the ground truth, 6 in the result
+    ground truth: בגני נטעתיך, בגני המצנע – בלבי. השתרגו פארותיך ועמקו שרשיך בי. ומבקר לערב לא ידם, לא ירגיע הגן – זה אתה בו, אתה בו באלפי צפריך רן. ב' אייר, תרץ השלום לך?
+    recognised:   פאר ב מוצנע א אייר,תר השלות
+[2/6] recognising pages/commons__bialik_el_hazippor__p0001.jpg ...
+    CER 89.6%  WER 100.0%  13.5s
+    lines: 4 in the ground truth, 5 in the result
+    ground truth: נודי, צפורי, אל־הרך, מדברך! אשרת, כי עזבת את־אהלי; לו עמי שכנת, אז גם־את, כנף רננים, בכית, מר בכית לגורלי.
+    recognised:   בודי - נת את -
+[3/6] recognising pages/commons__hatikvah_imber_manuscript__p0001.jpg ...
+    CER 95.8%  WER 100.0%  10.9s
+    lines: 10 in the ground truth, 2 in the result
+    ground truth: כל עוד בלבב פנימה נפש יהודי הומיה, ולפאתי מזרח קדימה עינו לציון צופיה. מקהלה עוד לא אבדה תקותנו, התקוה הנושנה: לשוב לארץ אבותינו, לעיר בה דוד חנה. נפתלי הרץ אימבר תרסח
+    recognised:   ביתינו 1
+[4/6] recognising pages/commons__rachel_aqara_1928__p0001.jpg ...
+    CER 62.9%  WER 79.2%  7.2s
+    lines: 17 in the ground truth, 11 in the result
+    ground truth: אמהי בן לו היה לי. ילד קטן, שחר תלתלים ונבון. לאחז בידו ולפסע לאט בשבילי הגן. ילד... קטן. אורי אקרא לו, אורי שלי, רך וצלול הוא השם הקצר. צליל טבול אורה. לילד קטן ושחרחר "אורי!" – אקרא! עוד אתמרמר כרחל
+    recognised:   ר aי נן. אחז בידו ולפסוע לאט S2 - 11 כי אברא לו, אורי של אורי א עוד אתמרמר עוד אתפלל כחנה בש עוד א3פ
+[5/6] recognising pages/commons__rachel_gan_naul__p0001.jpg ...
+    CER 81.2%  WER 97.5%  6.9s
+    lines: 9 in the ground truth, 9 in the result
+    ground truth: גן נעול מי אתה? מדוע יד מושטת לא פוגשת יד-אחות? ועינים אך תמתנה רגע והנה שפלו כבר נבוכות. גן נעול. לא שביל אליו, לא דרך. גן נעול – אדם. האלך לי? או אכה באבן, או אכה באבן עד זוב דם?!
+    recognised:   ת 3וע 2 לו פוגשת :3- אחות . e הו s S נדו כות (ite
+[6/6] recognising pages/commons__rachel_rak_al_atzmi__p0001.jpg ...
+    CER 84.5%  WER 98.2%  7.2s
+    lines: 12 in the ground truth, 10 in the result
+    ground truth: רק על עצמי לספר ידעתי. צר עולמי כעולם נמלה, גם משאי עמסתי כמוה, רב וכבד מכתפי הדלה. גם את דרכי – כדרכה אל צמרת – דרך מכאוב ודרך עמל, יד ענקים זדונה ובוטחת, יד מתבדחת שמה לאל. כל ארחותי הלז והדמיע פחד 
+    recognised:   א ז את אכאב AAG2I A צשבר וי הי ד ר קיי אה כאאם אורת וי Ge
+=== the engine mishkefet-v1 (isolated process) ===
+=== the engine mishkefet-v1 ===
+[1/6] recognising pages/commons__begani_netatikha__p0001.jpg ...
+    CER 24.2%  WER 68.8%  3.7s
+    lines: 10 in the ground truth, 12 in the result
+    ground truth: בגני נטעתיך, בגני המצנע – בלבי. השתרגו פארותיך ועמקו שרשיך בי. ומבקר לערב לא ידם, לא ירגיע הגן – זה אתה בו, אתה בו באלפי צפריך רן. ב' אייר, תרץ השלום לך?
+    recognised:   ש' בקני מטעתיקי שגני המוצנע רדיו השתרגוי פארותיך ועוקוי שרשיך ביי ומרקר קברב לא ידם לא ירגיע הגו זה אתה בן אתה בו דאלפי צפריך דן בי אייר תרץ השום לקך ב
+[2/6] recognising pages/commons__bialik_el_hazippor__p0001.jpg ...
+    CER 34.9%  WER 110.5%  0.8s
+    lines: 4 in the ground truth, 4 in the result
+    ground truth: נודי, צפורי, אל־הרך, מדברך! אשרת, כי עזבת את־אהלי; לו עמי שכנת, אז גם־את, כנף רננים, בכית, מר בכית לגורלי.
+    recognised:   מודי צפור נל הרץ מדברץו אשרת הי דעקת אות אהלום לוא זאי שכנת אז עם את כפף רונים בכות ור בבות למורלוים
+[3/6] recognising pages/commons__hatikvah_imber_manuscript__p0001.jpg ...
+    CER 58.1%  WER 122.6%  2.6s
+    lines: 10 in the ground truth, 10 in the result
+    ground truth: כל עוד בלבב פנימה נפש יהודי הומיה, ולפאתי מזרח קדימה עינו לציון צופיה. מקהלה עוד לא אבדה תקותנו, התקוה הנושנה: לשוב לארץ אבותינו, לעיר בה דוד חנה. נפתלי הרץ אימבר תרסח
+    recognised:   כק שלר בגבב בובוה אאר בנפש והורר הובות ש וגבעוני בחרח קריבורה עינו קניון עוברת ה סובהלה שה ל עוד בע עברה וגקתמהש רב הקת היר ב ל דלשוב קערו אבותוני תר דעור ב אור חדר פלי הברץ אומפרר תעת
+[4/6] recognising pages/commons__rachel_aqara_1928__p0001.jpg ...
+    CER 31.2%  WER 68.8%  2.4s
+    lines: 17 in the ground truth, 18 in the result
+    ground truth: אמהי בן לו היה לי. ילד קטן, שחר תלתלים ונבון. לאחז בידו ולפסע לאט בשבילי הגן. ילד... קטן. אורי אקרא לו, אורי שלי, רך וצלול הוא השם הקצר. צליל טבול אורה. לילד קטן ושחרחר "אורי!" – אקרא! עוד אתמרמר כרחל
+    recognised:   אמהו מ' אן לו היה לי ילד קטלי שחרי תלתלים בענדון לאחז גידו ולפסוע לאט גשדילי הגל חדם קטן אירלם אקרא לוו אורי שליך רגקצים ביץאא חשם הקצר צלי' ש בהקה' אודה לילד קטו נשערת ברת אורולל אקדאי עוד אתמרמר בדח
+[5/6] recognising pages/commons__rachel_gan_naul__p0001.jpg ...
+    CER 37.0%  WER 90.0%  6.4s
+    lines: 9 in the ground truth, 12 in the result
+    ground truth: גן נעול מי אתה? מדוע יד מושטת לא פוגשת יד-אחות? ועינים אך תמתנה רגע והנה שפלו כבר נבוכות. גן נעול. לא שביל אליו, לא דרך. גן נעול – אדם. האלך לי? או אכה באבן, או אכה באבן עד זוב דם?!
+    recognised:   נט' ואו' לזמן מי לתהר מזויר יצ מעשלת לא פוקשת ידסאחותר קאינים איך מדינה הגע והיה שפלוי בדר נדוכות אן נעולי לא שדי' אליו לא דרך י ן זעול ת אדםי האלך ליד או אפה דאצלו או פר דאד' עד ד דברו ם נכס
+[6/6] recognising pages/commons__rachel_rak_al_atzmi__p0001.jpg ...
+    CER 42.3%  WER 94.4%  2.6s
+    lines: 12 in the ground truth, 16 in the result
+    ground truth: רק על עצמי לספר ידעתי. צר עולמי כעולם נמלה, גם משאי עמסתי כמוה, רב וכבד מכתפי הדלה. גם את דרכי – כדרכה אל צמרת – דרך מכאוב ודרך עמל, יד ענקים זדונה ובוטחת, יד מתבדחת שמה לאל. כל ארחותי הלז והדמיע פחד 
+    recognised:   כל צו כך לל עצמי לשפר וזעת צראלמי שאלם נלה ל גם מקא עושה דמלה ר ודד מבתש הצלהה גם עת צרפי בדרפה על זמרת דרן מכעד לדרך על דד בלקים צדונה וגלות א ענדרחת למה לעל כל ערחותי הליז להזמא פחד אמר מצ ענקים למה
+=== the engine mishkefet-v1:beam (isolated process) ===
+=== the engine mishkefet-v1:beam ===
+[1/6] recognising pages/commons__begani_netatikha__p0001.jpg ...
+    CER 25.5%  WER 71.9%  8.8s
+    lines: 10 in the ground truth, 12 in the result
+    ground truth: בגני נטעתיך, בגני המצנע – בלבי. השתרגו פארותיך ועמקו שרשיך בי. ומבקר לערב לא ידם, לא ירגיע הגן – זה אתה בו, אתה בו באלפי צפריך רן. ב' אייר, תרץ השלום לך?
+    recognised:   ש' בקני מטעתיקי שגני המוצנע רדיו השתרגוי פארותיך ועודוי ששיך בי ומרקר קברב לא ידם לא ירגיע הגו זה אתה בן אתה בו דאלפי צפריך דן בי איר תרץ השום לך ב
+[2/6] recognising pages/commons__bialik_el_hazippor__p0001.jpg ...
+    CER 36.8%  WER 105.3%  1.7s
+    lines: 4 in the ground truth, 4 in the result
+    ground truth: נודי, צפורי, אל־הרך, מדברך! אשרת, כי עזבת את־אהלי; לו עמי שכנת, אז גם־את, כנף רננים, בכית, מר בכית לגורלי.
+    recognised:   נודי צפוח נל הרקודברץו אשרת פי דקת את אהלום לוא אי שכנת אז עם את כעץ רננים בכותס ור בבות למוכלות
+[3/6] recognising pages/commons__hatikvah_imber_manuscript__p0001.jpg ...
+    CER 58.7%  WER 116.1%  7.8s
+    lines: 10 in the ground truth, 10 in the result
+    ground truth: כל עוד בלבב פנימה נפש יהודי הומיה, ולפאתי מזרח קדימה עינו לציון צופיה. מקהלה עוד לא אבדה תקותנו, התקוה הנושנה: לשוב לארץ אבותינו, לעיר בה דוד חנה. נפתלי הרץ אימבר תרסח
+    recognised:   פק שלר בגבר בגובוו אםר נפט הורו הובוה ש וגבעני בחרח קריבותה' עינו קניון עופרה לה סובהלו ב גל עוד ב"ע עברה וגקתמהש הב הקרת בה ה ל דקשוב בערו אבותנו דער בה אור חצר פלי הברץ אומפרר תסעת
+[4/6] recognising pages/commons__rachel_aqara_1928__p0001.jpg ...
+    CER 31.7%  WER 68.8%  7.1s
+    lines: 17 in the ground truth, 18 in the result
+    ground truth: אמהי בן לו היה לי. ילד קטן, שחר תלתלים ונבון. לאחז בידו ולפסע לאט בשבילי הגן. ילד... קטן. אורי אקרא לו, אורי שלי, רך וצלול הוא השם הקצר. צליל טבול אורה. לילד קטן ושחרחר "אורי!" – אקרא! עוד אתמרמר כרחל
+    recognised:   אמהו מ'' אן לו היה לי ילד קטלי שחרי תלתלים ענדון לאחז גידו ולפסוע לאט גשדילי הגל חדם קטן אירל אקרא לך אורי שליו הבקצם ביקאא חשם הקצרו צלי' ש בהקה' אודה לילד קטו נישארת מרת אורולל אקדאי עוד אתמרמר בדחל
+[5/6] recognising pages/commons__rachel_gan_naul__p0001.jpg ...
+    CER 38.7%  WER 90.0%  12.1s
+    lines: 9 in the ground truth, 12 in the result
+    ground truth: גן נעול מי אתה? מדוע יד מושטת לא פוגשת יד-אחות? ועינים אך תמתנה רגע והנה שפלו כבר נבוכות. גן נעול. לא שביל אליו, לא דרך. גן נעול – אדם. האלך לי? או אכה באבן, או אכה באבן עד זוב דם?!
+    recognised:   נטל ואו' לזמן מי לתהר מזויר יצ מעשלת לא פוקשת יאאחותר קאינים איך מדינה הגע קהנה שפלוי בבר נדופות אן נעולי לא שדי' אליו ולא דרקי גין זעול אדם האלך ליד או אפה דאצלו או פר דאד' עד ד דברו וים נס
+[6/6] recognising pages/commons__rachel_rak_al_atzmi__p0001.jpg ...
+    CER 43.8%  WER 92.6%  7.7s
+    lines: 12 in the ground truth, 16 in the result
+    ground truth: רק על עצמי לספר ידעתי. צר עולמי כעולם נמלה, גם משאי עמסתי כמוה, רב וכבד מכתפי הדלה. גם את דרכי – כדרכה אל צמרת – דרך מכאוב ודרך עמל, יד ענקים זדונה ובוטחת, יד מתבדחת שמה לאל. כל ארחותי הלז והדמיע פחד 
+    recognised:   כל לר כך לל עצמי לשפר וזעת צראלמי שאלם נלה ל גם מקא ושה דלה בר ודד מבתם הצלהה גם עת צרפי בדרפה על זמרת דרך כור לדרך עו' דצ בעקים זדונה וגלת א ענדרחת למה לל כל ערחותי הליז להזמא פחד אמר מצ אנקים לאה קד
+=== the engine mishkefet-v1:assisted (isolated process) ===
+=== the engine mishkefet-v1:assisted ===
+[1/6] recognising pages/commons__begani_netatikha__p0001.jpg ...
+    CER 26.1%  WER 71.9%  9.7s
+    lines: 10 in the ground truth, 12 in the result
+    ground truth: בגני נטעתיך, בגני המצנע – בלבי. השתרגו פארותיך ועמקו שרשיך בי. ומבקר לערב לא ידם, לא ירגיע הגן – זה אתה בו, אתה בו באלפי צפריך רן. ב' אייר, תרץ השלום לך?
+    recognised:   ג' בגני נטעתיקי שני המוצע בדיו השתרגון הארותיך ועודי ששים בי ומבקר קרב לא ידם לא ירגיע הקו זה אתה בן אתה בו באלפי צריך דן בי אייר תרץ השלום לך ב ל
+[2/6] recognising pages/commons__bialik_el_hazippor__p0001.jpg ...
+    CER 41.5%  WER 105.3%  1.9s
+    lines: 4 in the ground truth, 4 in the result
+    ground truth: נודי, צפורי, אל־הרך, מדברך! אשרת, כי עזבת את־אהלי; לו עמי שכנת, אז גם־את, כנף רננים, בכית, מר בכית לגורלי.
+    recognised:   מודי צפור נל הרקודברץ ו אשרת פי אחת את אבלות ללא אי שכבת אז גם את כף רגמים בכות ורבבות למודלו
+[3/6] recognising pages/commons__hatikvah_imber_manuscript__p0001.jpg ...
+    CER 58.7%  WER 135.5%  8.6s
+    lines: 10 in the ground truth, 10 in the result
+    ground truth: כל עוד בלבב פנימה נפש יהודי הומיה, ולפאתי מזרח קדימה עינו לציון צופיה. מקהלה עוד לא אבדה תקותנו, התקוה הנושנה: לשוב לארץ אבותינו, לעיר בה דוד חנה. נפתלי הרץ אימבר תרסח
+    recognised:   פק שלה בגבר בגובה של ה נפט והורו הובות ה ה וגבעות בחרה בריכות ה עינו קניון עופרה לה ה סובלה ב ל עוד בה עבדה ונקבעה ב ה הקו היה ה ל שוב בערו אבותינו ה בעיר בה אור חזר עלי הפרש אופרה תלת
+[4/6] recognising pages/commons__rachel_aqara_1928__p0001.jpg ...
+    CER 32.1%  WER 72.9%  7.6s
+    lines: 17 in the ground truth, 18 in the result
+    ground truth: אמהי בן לו היה לי. ילד קטן, שחר תלתלים ונבון. לאחז בידו ולפסע לאט בשבילי הגן. ילד... קטן. אורי אקרא לו, אורי שלי, רך וצלול הוא השם הקצר. צליל טבול אורה. לילד קטן ושחרחר "אורי!" – אקרא! עוד אתמרמר כרחל
+    recognised:   אמהו מל אין לו היה לו ילד קטלי שחר תלתלים לנדון לאחר גידו ולפסוע לאט גדילי הגל קדם קטן איר אקרא לו אחרי שליו בעצם באו השם הקצר צליל בשם הקים אודה לילד קטן נשארת ת ארול ב אקראי ה עוד אתמרמר בהחל האשם ע
+[5/6] recognising pages/commons__rachel_gan_naul__p0001.jpg ...
+    CER 40.3%  WER 87.5%  12.4s
+    lines: 9 in the ground truth, 13 in the result
+    ground truth: גן נעול מי אתה? מדוע יד מושטת לא פוגשת יד-אחות? ועינים אך תמתנה רגע והנה שפלו כבר נבוכות. גן נעול. לא שביל אליו, לא דרך. גן נעול – אדם. האלך לי? או אכה באבן, או אכה באבן עד זוב דם?!
+    recognised:   של או' לזמן מי לדבר מזור יד משלת לא פוגשת אחותה ואינים אך מדינה הגר והיה שפלי הבר נדופות גן נעולי לא קדיל אליו ולא דרך י אין לעול האדם הלך ליד או אפה אצלו או בר דוד עד זה דברי ה ה ים נס
+[6/6] recognising pages/commons__rachel_rak_al_atzmi__p0001.jpg ...
+    CER 41.1%  WER 90.7%  8.0s
+    lines: 12 in the ground truth, 16 in the result
+    ground truth: רק על עצמי לספר ידעתי. צר עולמי כעולם נמלה, גם משאי עמסתי כמוה, רב וכבד מכתפי הדלה. גם את דרכי – כדרכה אל צמרת – דרך מכאוב ודרך עמל, יד ענקים זדונה ובוטחת, יד מתבדחת שמה לאל. כל ארחותי הלז והדמיע פחד 
+    recognised:   כל לה כך על עצמי לשפר וצעת צר אלא שאלה נלה ל גם מצא עושה במה ר ודוד מבתי הצלה ה גם עם צרפי בדרכה על זמרת דרך בור לדרך על ד לקים זדונה וגלות א עודדות שמה לל כל ברחות הליל להזמיא פחד אמר מדענקים למה קדמ
+{
+  "cer": 0.3966,
+  "wer": 0.9107,
+  "seconds_per_page": 8.04,
+  "cpu_seconds_per_page": 16.44,
+  "peak_rss_mb": 1776.57,
+  "characters_reference": 1112,
+  "words_reference": 224,
+  "lines_reference": 62,
+  "lines_hypothesis": 73,
+  "missing_lines": 7,
+  "extra_lines": 18,
+  "duplicated_lines": 0,
+  "reading_order_inversions": 0,
+  "pages_measured": 6,
+  "ground_truth_complete": true,
+  "pages_with_incomplete_ground_truth": [],
+  "pages_without_verification": [],
+  "measured": true
+}
+report written to ocr-accuracy-cursive.json

@@ -1,0 +1,113 @@
+the corpus is in .cache/pinkas/extracted
+there are 30 ground truth files
+there are 30 pages with a ground truth
+
+--- Page 105_1.jpg
+    the file holds: {'Page': 1, 'TextEquiv': 622, 'TextLine': 45, 'TextRegion': 6, 'Unicode': 622, 'Word': 571}
+    the text that is read: 2863 characters in 45 lines
+    the first lines: ['דיא ער בת"כ בפועל ממש ושאר גדרים מקבל עליו הוט גוועזן לא הועיל ער הוט אלש גבראכן אונ\' עובר גוועזן האחרון הכביד ער', 'הוט השררה יר"ה פהאן אננדר גהענגט אונ\' דורך דעם מבאיש ריחינו גוועזן שיצא ע"י כך קצף על כל העדה עד כי קצר המצע מהשתרע', 'צלין  בלי הנחה וכל ישראל ישמעו ויראו ולא יזידון עוד ואם יעשה תשובה כנ"ל ורפא לו יהיה עכ"פ זה בועד האב"ד והחבורה']
+    a line holds: ['Coords', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'TextEquiv']
+    the text of that line: 'דיא ער בת"כ בפועל ממש ושאר גדרים מקבל עליו הוט גוועזן לא הועיל ער הוט אלש גבראכן אונ\' עובר גוועזן האחרון הכביד ער'
+    its words: ['דיא', 'ער', 'בת"כ', 'בפועל', 'ממש', 'ושאר', 'גדרים', 'מקבל']
+    the image is 2732x3976 pixels
+    line: region 0 at y=None text='דיא ער בת"כ בפועל ממש ושאר גדרים מקבל עליו הוט ג'
+    line: region 0 at y=None text='הוט השררה יר"ה פהאן אננדר גהענגט אונ\' דורך דעם מ'
+    line: region 0 at y=None text='צלין  בלי הנחה וכל ישראל ישמעו ויראו ולא יזידון '
+    line: region 0 at y=None text='קדישא יצ"ו בצירוף קריאי בעדה בערך כ"ה ב"ב יום א\''
+    line: region 0 at y=None text='ונאום יוסף בן לא"א הר\' משה זלה"ה לואנץ'
+    line: region 0 at y=None text='ונאם יודא בן לא"א מהרר משה ז"ל אופנהיים'
+    line: region 0 at y=None text='ונאם שמואל ב"ר שניאר ז"ל בינג'
+    line: region 0 at y=None text='ונאם הק\' עזריאל בלא"א יצחק ז"ל ה"ה ברילן'
+    line: region 0 at y=None text="ונא' הקטן מאיר מזיא"
+    line: region 0 at y=None text="ונא' הקטין יעקב בכרך"
+    line: region 0 at y=None text="ונא' הצעיר שמואל הקטן מכונה זנוויל הז"
+    line: region 0 at y=None text='ונא\' נפתלי בן לא"א משה ז"ל מענטלר'
+    line: region 0 at y=None text='ולהעלות כל מעשיו הרעים על הנייר בכן משפטו חרוץ ו'
+    line: region 0 at y=None text='ונא\' יששכר בן לא"א מה"ר משה ר\' מענדלש ז"ל בכרך'
+    line: region 0 at y=None text='ונא\' יצאק בלא"א הרר אלחנן זצל בכרך'
+    line: region 0 at y=None text='מאיר בן מהר"ר אברהם הכהן זלה"ה'
+    line: region 0 at y=None text='אהרן בר יעקב מאיר ז"ל'
+    line: region 0 at y=None text='נפתלי בן לאא"מ הר"ר יודא אופנהיים'
+    line: region 0 at y=None text='משה בר משה נפתלי ז"ל בינג'
+    line: region 0 at y=None text='על ככה עם שאר קריאי העדה יצ"ו דז דיזר זעליקמן זא'
+    line: region 0 at y=None text='חמור יקבר ער זאל קיין דריסת הרגל נוך קיין לינת ל'
+    line: region 0 at y=None text='242'
+    line: region 0 at y=None text="וועת אונ' נוהג קלות בנידוי הזה איז יהיה מוחרם כמ"
+    line: region 0 at y=None text='יען וביען שמצאנו וראינו דז זעליקמן וימפפן הוט מצ'
+    line: region 0 at y=None text='אודר אנויש חוץ לקהלתינו זיינה קינדר זעלן מגורש מ'
+    line: region 0 at y=None text='אמנם אם יחזור בתשובה שלימה וישלם כל היזקותיו שהז'
+    line: region 0 at y=None text='אזי שערי תשובה לא ננעלו ושב ורפא לו ועכ"פ זאל ער'
+    line: region 0 at y=None text='הכנן וועלכר גבאי זו דאש ואר ברענגט דז ער זאלט דר'
+    line: region 1 at y=None text='1640'
+    line: region 2 at y=None text='יצא הדבר מאת החבורה יצ"ו בצירוף האב"ד ובני ישיבה'
+    line: region 2 at y=None text="לא יבא לשום דבר שבקדושה מהיום עד כלות שלשה שני' "
+    line: region 2 at y=None text='בהתוועדות כל האנשי\' הנ"ל החברותה וב"י וקריאי העד'
+    line: region 2 at y=None text='243'
+    line: region 3 at y=None text='כיום בעצם היום זה תאסף בחבורה ובצירוף האב"ד ובני'
+    line: region 3 at y=None text='חסד להר"ר אנשל הנ"ל שיכול מהיום לקרות בתורה אמנם'
+    line: region 3 at y=None text='לו שום מינוי יועמד בחזקתו כפי הפסק הנ"ל יום א\' כ'
+    line: region 3 at y=None text='244'
+    line: region 4 at y=None text='כהיום יום ד\' ט"ו באלול תיב# ל\' יצא הדבר מפי החבר'
+    line: region 4 at y=None text='לשום דבר שבקדושא מהיום עד כלות שלשה שנים ולא יקר'
+    line: region 4 at y=None text='אם לא כשיהיה חיוב לקרות בתורה כגון יאר צייט או י'
+    line: region 4 at y=None text='לו שאר מצות אף אם יהיה חיוב לקרות בתורה אמנם המצ'
+    line: region 4 at y=None text='כלות השנה הזאת נאם מנחמענדל'
+    line: region 4 at y=None text='ונאם זנוויל בינג גבאי קהל'
+    line: region 4 at y=None text='ונא\' משה ווימפפן ג"ק'
+    line: region 4 at y=None text='245'
+
+--- Page 105_2.jpg
+    the file holds: {'Page': 1, 'TextEquiv': 675, 'TextLine': 47, 'TextRegion': 7, 'Unicode': 675, 'Word': 621}
+    the text that is read: 3009 characters in 48 lines
+    the first lines: ['אברם שטיב"ל עשה מעשה ג"כ כמו יוקל הנ"ל בכן הוט מן אים ג"כ מענש גוועזן דז ער זאל בשלשה שני\'', "ניט קורא בתורה זיין אונ' ניט אויש עשין אונ' כל ימיו צו קיין מינוי קומן אונ' קיין קלפי איין גליגט", 'גטאן פאר עש דיא לייט דיא מכריז ג"כ מן זול גשיכט הנ"ל הכרוז ווען גם געבן קנס ר"ט ט"ו אונ\' ווערדן']
+    a line holds: ['Coords', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'Word', 'TextEquiv']
+    the text of that line: 'אברם שטיב"ל עשה מעשה ג"כ כמו יוקל הנ"ל בכן הוט מן אים ג"כ מענש גוועזן דז ער זאל בשלשה שני\''
+    its words: ['אברם', 'שטיב"ל', 'עשה', 'מעשה', 'ג"כ', 'כמו', 'יוקל', 'הנ"ל']
+    the image is 2492x3976 pixels
+    line: region 0 at y=None text='אברם שטיב"ל עשה מעשה ג"כ כמו יוקל הנ"ל בכן הוט מ'
+    line: region 0 at y=None text="ניט קורא בתורה זיין אונ' ניט אויש עשין אונ' כל י"
+    line: region 0 at y=None text='גטאן פאר עש דיא לייט דיא מכריז ג"כ מן זול גשיכט '
+    line: region 0 at y=None text='הנ"ל. יום נעשה האב"ד אצל זיין תשובה מקבל ער זול '
+    line: region 1 at y=None text='אלחנן מענטלר עשה כנ"ל כזאת וכזאת עשה אף כי היה ל'
+    line: region 1 at y=None text='בכן זה עונשו שלא יבא כל ימיו לשום דבר שבקדושה אי'
+    line: region 1 at y=None text='גם זול מן אין אין ששה שנים מהיום ניט קורא בתורה '
+    line: region 1 at y=None text="ניט אין דער אלט שול זיצן לגמרי ובכלות הששה שני' "
+    line: region 1 at y=None text='גם ניט אויש עשין בששה שנים הנ"ל גם מחויב ליתן מח'
+    line: region 1 at y=None text='לעשות תשובה כפי אשר יסדר לו האב"ד ויוכרז כנ"ל בי'
+    line: region 1 at y=None text='התריס נגד החבורא קדישא יצ"ו שלא כדת עלתה בהסכמה '
+    line: region 1 at y=None text='פסול לעדות ולשבועה שנה תמימה ובאם שידבר מהיום וה'
+    line: region 1 at y=None text='או הרשות ביד החברותא להשתדל על הוצאות אלחנן לאסר'
+    line: region 1 at y=None text='ע"ז גם יוכרז כרוז בב"ה שדבריו כנפיחת כלב ושאר גז'
+    line: region 1 at y=None text='247'
+    line: region 1 at y=None text='על אלחנן הנ"ל'
+    line: region 1 at y=None text='נעשה בימי קיץ תי"ח בהיות שהחבורא קדישא יצ"ו הטו '
+    line: region 1 at y=None text='משך זמן הנ"ל בכל פרטיו כנ"ל יום ג\' י"ב טבת תכ"ב '
+    line: region 2 at y=None text='היום יום א\' ט"ו תמוז תכב# ל\' עלתה הסכמה מחברותא '
+    line: region 2 at y=None text="הנקובים בשמותם למט' דעם נוך דש עשה נבלה בישראל"
+    line: region 2 at y=None text="וזנה עם גוטלין בעל נדה ובכן התאספו חברותא קדיש'"
+    line: region 2 at y=None text='בצירף שאר קריאה עדה הנקובים בשמותם עלתה הסכמה דש'
+    line: region 2 at y=None text='הנ"ל קיין עירונית כל ימיהם בכאן ק"ק ורנקבורט האב'
+    line: region 2 at y=None text='הלטן אדם חסד זולין דווקא כל חברותא קדישה בצירף ש'
+    line: region 2 at y=None text='ביחד זיין אונ\' פער הנ"ל זאל כל ימי\' צו קיין דבר '
+    line: region 2 at y=None text='או לקרות בתורה ואלה קריאי עדה'
+    line: region 2 at y=None text='לאחר זמן שבעה שנים ועשרה שבועות נמחל לו העונש הנ'
+    line: region 2 at y=None text='נשאר כנ"ל'
+    line: region 2 at y=None text='ר פער וק'
+    line: region 2 at y=None text='ר ליזר שיף'
+    line: region 2 at y=None text='ר וייבש רוטי טיר'
+    line: region 2 at y=None text='משה אטינגן'
+    line: region 2 at y=None text='מיכל צונץ'
+    line: region 2 at y=None text='ר\n וואלף שטורך'
+    line: region 2 at y=None text='ר ליב ושעש'
+    line: region 2 at y=None text='ר זלמן אופנס'
+    line: region 2 at y=None text='248'
+    line: region 3 at y=None text='בהיות דז כמ"ר יוקל וואול עשה נבלה בישראל וזנה עם'
+    line: region 3 at y=None text='בראש זאל ער כל ימיו צו קיין דבר שבקדושה קומן דז '
+    line: region 3 at y=None text="זאל קיין מינוי הבין כל ימיו אונ' ניט רופין לעדה "
+    line: region 3 at y=None text="דהיינו שלשה שנים לגמרי ניט קורא בתורה זיין אונ' "
+    line: region 3 at y=None text='ער איין חיוב איז אויך זאל ער בששה שנים הנ"ל ניט '
+    line: region 3 at y=None text="שנים הראשונים קיין מצוה אין דער שול הבין אונ' מו"
+    line: region 3 at y=None text="ניט איין שטט אויף דען אלעסדר הבין אונ' זול דאש י"
+    line: region 3 at y=None text='עש ווידר פיר ברענגן איין חסד צו טון מעונשי\' הנ"ל'
+    line: region 3 at y=None text='246'
+    line: region 4 at y=None text='1652'

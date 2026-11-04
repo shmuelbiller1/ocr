@@ -1,0 +1,4362 @@
+{
+  "benchmark": "stroke_width_and_real_scans",
+  "evaluation_normalization": "hebrew_workbench.benchmark.metrics.normalise",
+  "corpus": {
+    "path": "benchmark/modern_cursive",
+    "pages_total": 6,
+    "pages_measured": 6,
+    "accuracy_available": true
+  },
+  "memory_measurement": "isolated_process_per_engine",
+  "inference_stroke_compensation_audit": {
+    "mishkefet": {
+      "line_height_px": 64,
+      "inference_calls_stroke_augment": false,
+      "inference_calls_morph_stroke_norm": false,
+      "training_only_stroke_augment_present": true,
+      "preprocess_pipeline": "_contrast_normalize (p1..p99 clip when span >= 30) -> proportional resize to LINE_HEIGHT=64 (pad/cap width) -> continuous float32 inkness 1.0 - gray/255.0",
+      "training_augment_summary": "Augment._stroke() is strictly inside training-only Augment.__call__ (p=0.50: 72% erode k=2..3 at 0.3..1.0 blend, 28% dilate k=2 at 0.3..0.6 blend); never invoked by Recognizer or preprocess()"
+    },
+    "kraken": {
+      "installed": true,
+      "inference_calls_morph_stroke_norm": false,
+      "force_binarization_default": false,
+      "transforms_summary": "L/RGB conversion -> CenterNormalizer (1-ch) or pil_fixed_resize (3-ch PP-OCRv6) -> white pad 255 -> float [0,1] tensor_invert; no stroke-width normalization or binarization"
+    }
+  },
+  "variants_tested": [
+    {
+      "id": "original",
+      "description": "Original image, unchanged"
+    },
+    {
+      "id": "mild_thicken",
+      "description": "Very mild antialiased stroke thickening (gap-guarded)"
+    },
+    {
+      "id": "moderate_thicken",
+      "description": "Moderate antialiased stroke thickening (isotropic 3x3, gap-guarded)"
+    },
+    {
+      "id": "slight_thin",
+      "description": "Slight antialiased stroke thinning (core & punctuation protected)"
+    },
+    {
+      "id": "adaptive_norm",
+      "description": "Adaptive stroke-width normalization using measured ink thickness"
+    },
+    {
+      "id": "faint_repair",
+      "description": "Selective directional repair of faint or broken pen strokes"
+    }
+  ],
+  "regimes_tested": [
+    {
+      "id": "verified_native_300dpi",
+      "description": "Original verified cursive pages (4 writers, 2.0–5.6 px strokes)"
+    },
+    {
+      "id": "pen_fine_nib",
+      "description": "Simulated extra-fine ballpoint / fine dip nib (~1.8–2.4 px strokes)"
+    },
+    {
+      "id": "pen_faint_broken",
+      "description": "Simulated dry / skipping ballpoint with faint strokes & 1-px micro-breaks"
+    },
+    {
+      "id": "pen_heavy_marker",
+      "description": "Simulated heavy felt-tip / bleeding fountain pen (~5.5–6.8 px strokes)"
+    },
+    {
+      "id": "paper_warm_yellow",
+      "description": "Simulated warm yellow legal-pad paper (RGB ~ [248, 234, 162])"
+    },
+    {
+      "id": "paper_red_ink_tan",
+      "description": "Simulated red ink on warm tan notebook paper"
+    },
+    {
+      "id": "dpi_150_lowres",
+      "description": "Low-resolution 150 DPI scan (0.50x optical downsample)"
+    },
+    {
+      "id": "dpi_110_coarse",
+      "description": "Coarse 110 DPI scan (0.37x optical downsample)"
+    }
+  ],
+  "warnings": [],
+  "engines": {
+    "mishkefet-v1": {
+      "engine_id": "mishkefet-v1",
+      "engine_name": "Mishkefet-v1 (modern Hebrew cursive, CC-BY-NC-SA-4.0)",
+      "measured": true,
+      "pages_measured": 6,
+      "peak_rss_mb": 3231.05,
+      "line_crop_recognition": {
+        "with_photocraft": {
+          "verified_native_300dpi": {
+            "description": "Original verified cursive pages (4 writers, 2.0–5.6 px strokes)",
+            "variants": {
+              "original": {
+                "macro_cer": 0.3795,
+                "macro_wer": 0.9251,
+                "missing_lines_total": 6,
+                "extra_lines_total": 16,
+                "mean_confidence": 0.9314,
+                "mean_measured_sw_px": 4.17,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3491,
+                  "N. H. Imber": 0.5808,
+                  "Rachel Bluwstein": 0.3368
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.2418,
+                    "wer": 0.6875,
+                    "missing_lines": 0,
+                    "extra_lines": 2,
+                    "detected_lines": 12,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9528
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3491,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9233
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5808,
+                    "wer": 1.2258,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9011
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3125,
+                    "wer": 0.6875,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.9514
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3702,
+                    "wer": 0.9,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9227
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4226,
+                    "wer": 0.9444,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9369
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10460.2,
+                "ms_per_page": 1743.4,
+                "delta_cer_pp_vs_original": 0.0,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "mild_thicken": {
+                "macro_cer": 0.3876,
+                "macro_wer": 0.8984,
+                "missing_lines_total": 7,
+                "extra_lines_total": 17,
+                "mean_confidence": 0.9315,
+                "mean_measured_sw_px": 4.17,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3774,
+                  "N. H. Imber": 0.5569,
+                  "Rachel Bluwstein": 0.3478
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.2614,
+                    "wer": 0.6875,
+                    "missing_lines": 0,
+                    "extra_lines": 2,
+                    "detected_lines": 12,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.95
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3774,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9266
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5569,
+                    "wer": 1.1613,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9023
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3333,
+                    "wer": 0.6667,
+                    "missing_lines": 4,
+                    "extra_lines": 5,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.951
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3702,
+                    "wer": 0.825,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9211
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4264,
+                    "wer": 0.9444,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9381
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10432.7,
+                "ms_per_page": 1738.8,
+                "delta_cer_pp_vs_original": 0.81,
+                "delta_wer_pp_vs_original": -2.67
+              },
+              "moderate_thicken": {
+                "macro_cer": 0.3951,
+                "macro_wer": 0.8906,
+                "missing_lines_total": 6,
+                "extra_lines_total": 16,
+                "mean_confidence": 0.9326,
+                "mean_measured_sw_px": 4.17,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4151,
+                  "N. H. Imber": 0.5509,
+                  "Rachel Bluwstein": 0.3511
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.2418,
+                    "wer": 0.6562,
+                    "missing_lines": 0,
+                    "extra_lines": 2,
+                    "detected_lines": 12,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9491
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4151,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9277
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5509,
+                    "wer": 1.129,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9066
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3292,
+                    "wer": 0.7083,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.9499
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4033,
+                    "wer": 0.8,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9228
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4302,
+                    "wer": 0.9444,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9396
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10546.9,
+                "ms_per_page": 1757.8,
+                "delta_cer_pp_vs_original": 1.56,
+                "delta_wer_pp_vs_original": -3.45
+              },
+              "slight_thin": {
+                "macro_cer": 0.3834,
+                "macro_wer": 0.9143,
+                "missing_lines_total": 6,
+                "extra_lines_total": 16,
+                "mean_confidence": 0.9296,
+                "mean_measured_sw_px": 4.17,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3679,
+                  "N. H. Imber": 0.5449,
+                  "Rachel Bluwstein": 0.3469
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.2614,
+                    "wer": 0.7188,
+                    "missing_lines": 0,
+                    "extra_lines": 2,
+                    "detected_lines": 12,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9493
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3679,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9194
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5449,
+                    "wer": 1.1613,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.901
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3167,
+                    "wer": 0.6875,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.951
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3757,
+                    "wer": 0.85,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9215
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.434,
+                    "wer": 0.963,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9355
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10532.0,
+                "ms_per_page": 1755.3,
+                "delta_cer_pp_vs_original": 0.39,
+                "delta_wer_pp_vs_original": -1.08
+              },
+              "adaptive_norm": {
+                "macro_cer": 0.3813,
+                "macro_wer": 0.9155,
+                "missing_lines_total": 7,
+                "extra_lines_total": 17,
+                "mean_confidence": 0.9322,
+                "mean_measured_sw_px": 4.17,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3868,
+                  "N. H. Imber": 0.5689,
+                  "Rachel Bluwstein": 0.333
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.2418,
+                    "wer": 0.6875,
+                    "missing_lines": 0,
+                    "extra_lines": 2,
+                    "detected_lines": 12,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9525
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3868,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9262
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5689,
+                    "wer": 1.1935,
+                    "missing_lines": 3,
+                    "extra_lines": 3,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9008
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3083,
+                    "wer": 0.6875,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.9514
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3591,
+                    "wer": 0.875,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9237
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4226,
+                    "wer": 0.9444,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9388
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10575.4,
+                "ms_per_page": 1762.6,
+                "delta_cer_pp_vs_original": 0.18,
+                "delta_wer_pp_vs_original": -0.96
+              },
+              "faint_repair": {
+                "macro_cer": 0.3832,
+                "macro_wer": 0.8876,
+                "missing_lines_total": 7,
+                "extra_lines_total": 17,
+                "mean_confidence": 0.9326,
+                "mean_measured_sw_px": 4.17,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3585,
+                  "N. H. Imber": 0.5509,
+                  "Rachel Bluwstein": 0.3475
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.2549,
+                    "wer": 0.6875,
+                    "missing_lines": 0,
+                    "extra_lines": 2,
+                    "detected_lines": 12,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9514
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3585,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9277
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5509,
+                    "wer": 1.0968,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9021
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.325,
+                    "wer": 0.6667,
+                    "missing_lines": 4,
+                    "extra_lines": 5,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.9514
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3646,
+                    "wer": 0.825,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9257
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4453,
+                    "wer": 0.9444,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9372
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10550.0,
+                "ms_per_page": 1758.3,
+                "delta_cer_pp_vs_original": 0.37,
+                "delta_wer_pp_vs_original": -3.75
+              }
+            }
+          },
+          "pen_fine_nib": {
+            "description": "Simulated extra-fine ballpoint / fine dip nib (~1.8–2.4 px strokes)",
+            "variants": {
+              "original": {
+                "macro_cer": 0.7215,
+                "macro_wer": 1.242,
+                "missing_lines_total": 29,
+                "extra_lines_total": 82,
+                "mean_confidence": 0.955,
+                "mean_measured_sw_px": 13.87,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.7736,
+                  "N. H. Imber": 0.503,
+                  "Rachel Bluwstein": 0.7632
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3464,
+                    "wer": 0.7812,
+                    "missing_lines": 1,
+                    "extra_lines": 1,
+                    "detected_lines": 10,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9637
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.7736,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 11,
+                    "detected_lines": 17,
+                    "measured_sw_px": 10.0,
+                    "mean_confidence": 0.9593
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.503,
+                    "wer": 1.0,
+                    "missing_lines": 1,
+                    "extra_lines": 1,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.931
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.325,
+                    "wer": 0.7708,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9608
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3812,
+                    "wer": 2.9,
+                    "missing_lines": 8,
+                    "extra_lines": 65,
+                    "detected_lines": 108,
+                    "measured_sw_px": 16.0,
+                    "mean_confidence": 0.9604
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 46.0,
+                    "mean_confidence": null
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 13122.4,
+                "ms_per_page": 2187.1,
+                "delta_cer_pp_vs_original": 0.0,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "mild_thicken": {
+                "macro_cer": 0.7232,
+                "macro_wer": 1.2509,
+                "missing_lines_total": 29,
+                "extra_lines_total": 88,
+                "mean_confidence": 0.9546,
+                "mean_measured_sw_px": 13.87,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.7736,
+                  "N. H. Imber": 0.497,
+                  "Rachel Bluwstein": 0.7671
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3399,
+                    "wer": 0.8125,
+                    "missing_lines": 1,
+                    "extra_lines": 1,
+                    "detected_lines": 10,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9627
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.7736,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 12,
+                    "detected_lines": 18,
+                    "measured_sw_px": 10.0,
+                    "mean_confidence": 0.9597
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.497,
+                    "wer": 0.9677,
+                    "missing_lines": 1,
+                    "extra_lines": 1,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9296
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3292,
+                    "wer": 0.75,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9599
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.4033,
+                    "wer": 2.975,
+                    "missing_lines": 8,
+                    "extra_lines": 69,
+                    "detected_lines": 111,
+                    "measured_sw_px": 16.0,
+                    "mean_confidence": 0.9604
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.9962,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 1,
+                    "detected_lines": 1,
+                    "measured_sw_px": 46.0,
+                    "mean_confidence": 0.9553
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 13387.0,
+                "ms_per_page": 2231.2,
+                "delta_cer_pp_vs_original": 0.17,
+                "delta_wer_pp_vs_original": 0.89
+              },
+              "moderate_thicken": {
+                "macro_cer": 0.7224,
+                "macro_wer": 1.2356,
+                "missing_lines_total": 29,
+                "extra_lines_total": 87,
+                "mean_confidence": 0.9553,
+                "mean_measured_sw_px": 13.87,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.8113,
+                  "N. H. Imber": 0.491,
+                  "Rachel Bluwstein": 0.758
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3529,
+                    "wer": 0.8125,
+                    "missing_lines": 1,
+                    "extra_lines": 1,
+                    "detected_lines": 10,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9616
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.8113,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 11,
+                    "detected_lines": 15,
+                    "measured_sw_px": 10.0,
+                    "mean_confidence": 0.9578
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.491,
+                    "wer": 0.9677,
+                    "missing_lines": 1,
+                    "extra_lines": 1,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9311
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3125,
+                    "wer": 0.7083,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9624
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3702,
+                    "wer": 2.925,
+                    "missing_lines": 8,
+                    "extra_lines": 69,
+                    "detected_lines": 110,
+                    "measured_sw_px": 16.0,
+                    "mean_confidence": 0.96
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.9962,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 1,
+                    "detected_lines": 1,
+                    "measured_sw_px": 46.0,
+                    "mean_confidence": 0.9591
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 13593.2,
+                "ms_per_page": 2265.5,
+                "delta_cer_pp_vs_original": 0.09,
+                "delta_wer_pp_vs_original": -0.64
+              },
+              "slight_thin": {
+                "macro_cer": 0.7263,
+                "macro_wer": 1.249,
+                "missing_lines_total": 29,
+                "extra_lines_total": 84,
+                "mean_confidence": 0.9536,
+                "mean_measured_sw_px": 13.87,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.783,
+                  "N. H. Imber": 0.515,
+                  "Rachel Bluwstein": 0.7649
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3529,
+                    "wer": 0.7812,
+                    "missing_lines": 1,
+                    "extra_lines": 1,
+                    "detected_lines": 10,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.963
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.783,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 13,
+                    "detected_lines": 17,
+                    "measured_sw_px": 10.0,
+                    "mean_confidence": 0.9594
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.515,
+                    "wer": 1.0,
+                    "missing_lines": 1,
+                    "extra_lines": 1,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9306
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3458,
+                    "wer": 0.8125,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9593
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3646,
+                    "wer": 2.9,
+                    "missing_lines": 8,
+                    "extra_lines": 64,
+                    "detected_lines": 109,
+                    "measured_sw_px": 16.0,
+                    "mean_confidence": 0.96
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.9962,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 1,
+                    "detected_lines": 1,
+                    "measured_sw_px": 46.0,
+                    "mean_confidence": 0.9496
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 13632.4,
+                "ms_per_page": 2272.1,
+                "delta_cer_pp_vs_original": 0.48,
+                "delta_wer_pp_vs_original": 0.7
+              },
+              "adaptive_norm": {
+                "macro_cer": 0.7196,
+                "macro_wer": 1.2278,
+                "missing_lines_total": 30,
+                "extra_lines_total": 85,
+                "mean_confidence": 0.954,
+                "mean_measured_sw_px": 13.87,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.7736,
+                  "N. H. Imber": 0.509,
+                  "Rachel Bluwstein": 0.7588
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3464,
+                    "wer": 0.7812,
+                    "missing_lines": 1,
+                    "extra_lines": 1,
+                    "detected_lines": 10,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9644
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.7736,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 12,
+                    "detected_lines": 17,
+                    "measured_sw_px": 10.0,
+                    "mean_confidence": 0.9591
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.509,
+                    "wer": 0.9355,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9297
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3333,
+                    "wer": 0.75,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9604
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3591,
+                    "wer": 2.9,
+                    "missing_lines": 8,
+                    "extra_lines": 65,
+                    "detected_lines": 109,
+                    "measured_sw_px": 16.0,
+                    "mean_confidence": 0.9605
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.9962,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 1,
+                    "detected_lines": 1,
+                    "measured_sw_px": 46.0,
+                    "mean_confidence": 0.9502
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 13601.4,
+                "ms_per_page": 2266.9,
+                "delta_cer_pp_vs_original": -0.19,
+                "delta_wer_pp_vs_original": -1.42
+              },
+              "faint_repair": {
+                "macro_cer": 0.7201,
+                "macro_wer": 1.3003,
+                "missing_lines_total": 30,
+                "extra_lines_total": 87,
+                "mean_confidence": 0.956,
+                "mean_measured_sw_px": 13.87,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.7453,
+                  "N. H. Imber": 0.503,
+                  "Rachel Bluwstein": 0.7681
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3399,
+                    "wer": 0.75,
+                    "missing_lines": 1,
+                    "extra_lines": 1,
+                    "detected_lines": 10,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9634
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.7453,
+                    "wer": 1.2632,
+                    "missing_lines": 4,
+                    "extra_lines": 13,
+                    "detected_lines": 24,
+                    "measured_sw_px": 10.0,
+                    "mean_confidence": 0.9633
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.503,
+                    "wer": 0.9677,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.929
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3292,
+                    "wer": 0.7708,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9622
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.4033,
+                    "wer": 3.05,
+                    "missing_lines": 8,
+                    "extra_lines": 67,
+                    "detected_lines": 114,
+                    "measured_sw_px": 16.0,
+                    "mean_confidence": 0.9618
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 46.0,
+                    "mean_confidence": null
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 13555.7,
+                "ms_per_page": 2259.3,
+                "delta_cer_pp_vs_original": -0.14,
+                "delta_wer_pp_vs_original": 5.83
+              }
+            }
+          },
+          "pen_faint_broken": {
+            "description": "Simulated dry / skipping ballpoint with faint strokes & 1-px micro-breaks",
+            "variants": {
+              "original": {
+                "macro_cer": 0.6384,
+                "macro_wer": 1.3814,
+                "missing_lines_total": 17,
+                "extra_lines_total": 90,
+                "mean_confidence": 0.9397,
+                "mean_measured_sw_px": 6.53,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3679,
+                  "N. H. Imber": 0.6647,
+                  "Rachel Bluwstein": 0.6995
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4641,
+                    "wer": 0.8438,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9552
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3679,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 3.4,
+                    "mean_confidence": 0.9213
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6647,
+                    "wer": 1.3226,
+                    "missing_lines": 2,
+                    "extra_lines": 8,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9205
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3583,
+                    "wer": 0.7917,
+                    "missing_lines": 4,
+                    "extra_lines": 5,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.9524
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.4586,
+                    "wer": 3.225,
+                    "missing_lines": 9,
+                    "extra_lines": 66,
+                    "detected_lines": 128,
+                    "measured_sw_px": 18.0,
+                    "mean_confidence": 0.9544
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.517,
+                    "wer": 1.0,
+                    "missing_lines": 2,
+                    "extra_lines": 7,
+                    "detected_lines": 17,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9341
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 20831.6,
+                "ms_per_page": 3471.9,
+                "delta_cer_pp_vs_original": 0.0,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "mild_thicken": {
+                "macro_cer": 0.6468,
+                "macro_wer": 1.3725,
+                "missing_lines_total": 18,
+                "extra_lines_total": 95,
+                "mean_confidence": 0.9409,
+                "mean_measured_sw_px": 6.53,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3962,
+                  "N. H. Imber": 0.6826,
+                  "Rachel Bluwstein": 0.7005
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4706,
+                    "wer": 0.8125,
+                    "missing_lines": 2,
+                    "extra_lines": 6,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9545
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3962,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 3.4,
+                    "mean_confidence": 0.9256
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6826,
+                    "wer": 1.3548,
+                    "missing_lines": 2,
+                    "extra_lines": 8,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9206
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3708,
+                    "wer": 0.8125,
+                    "missing_lines": 4,
+                    "extra_lines": 5,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.9538
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.4475,
+                    "wer": 3.15,
+                    "missing_lines": 9,
+                    "extra_lines": 71,
+                    "detected_lines": 124,
+                    "measured_sw_px": 18.0,
+                    "mean_confidence": 0.9537
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.5132,
+                    "wer": 1.0,
+                    "missing_lines": 1,
+                    "extra_lines": 5,
+                    "detected_lines": 17,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.937
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 20884.5,
+                "ms_per_page": 3480.7,
+                "delta_cer_pp_vs_original": 0.84,
+                "delta_wer_pp_vs_original": -0.89
+              },
+              "moderate_thicken": {
+                "macro_cer": 0.6274,
+                "macro_wer": 1.3677,
+                "missing_lines_total": 16,
+                "extra_lines_total": 91,
+                "mean_confidence": 0.942,
+                "mean_measured_sw_px": 6.53,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3962,
+                  "N. H. Imber": 0.6587,
+                  "Rachel Bluwstein": 0.6774
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.451,
+                    "wer": 0.875,
+                    "missing_lines": 1,
+                    "extra_lines": 5,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9567
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3962,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 3.4,
+                    "mean_confidence": 0.9267
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6587,
+                    "wer": 1.3548,
+                    "missing_lines": 2,
+                    "extra_lines": 8,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9223
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3625,
+                    "wer": 0.7708,
+                    "missing_lines": 4,
+                    "extra_lines": 5,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.955
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3867,
+                    "wer": 3.1,
+                    "missing_lines": 9,
+                    "extra_lines": 68,
+                    "detected_lines": 122,
+                    "measured_sw_px": 18.0,
+                    "mean_confidence": 0.9529
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.5094,
+                    "wer": 1.0,
+                    "missing_lines": 0,
+                    "extra_lines": 5,
+                    "detected_lines": 17,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9383
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 20852.0,
+                "ms_per_page": 3475.3,
+                "delta_cer_pp_vs_original": -1.1,
+                "delta_wer_pp_vs_original": -1.37
+              },
+              "slight_thin": {
+                "macro_cer": 0.6282,
+                "macro_wer": 1.3576,
+                "missing_lines_total": 15,
+                "extra_lines_total": 89,
+                "mean_confidence": 0.9387,
+                "mean_measured_sw_px": 6.53,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3868,
+                  "N. H. Imber": 0.6347,
+                  "Rachel Bluwstein": 0.687
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4641,
+                    "wer": 0.8438,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9547
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3868,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 3.4,
+                    "mean_confidence": 0.9199
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6347,
+                    "wer": 1.2903,
+                    "missing_lines": 2,
+                    "extra_lines": 8,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9181
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3417,
+                    "wer": 0.75,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.9508
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.4365,
+                    "wer": 3.175,
+                    "missing_lines": 9,
+                    "extra_lines": 67,
+                    "detected_lines": 125,
+                    "measured_sw_px": 18.0,
+                    "mean_confidence": 0.9538
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.5057,
+                    "wer": 0.9815,
+                    "missing_lines": 1,
+                    "extra_lines": 6,
+                    "detected_lines": 17,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9351
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 20964.7,
+                "ms_per_page": 3494.1,
+                "delta_cer_pp_vs_original": -1.02,
+                "delta_wer_pp_vs_original": -2.38
+              },
+              "adaptive_norm": {
+                "macro_cer": 0.6364,
+                "macro_wer": 1.372,
+                "missing_lines_total": 16,
+                "extra_lines_total": 90,
+                "mean_confidence": 0.9395,
+                "mean_measured_sw_px": 6.53,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3868,
+                  "N. H. Imber": 0.6527,
+                  "Rachel Bluwstein": 0.6947
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4575,
+                    "wer": 0.8125,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9546
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3868,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 3.4,
+                    "mean_confidence": 0.9216
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6527,
+                    "wer": 1.3226,
+                    "missing_lines": 1,
+                    "extra_lines": 7,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9204
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3625,
+                    "wer": 0.7917,
+                    "missing_lines": 4,
+                    "extra_lines": 5,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.9522
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.442,
+                    "wer": 3.2,
+                    "missing_lines": 9,
+                    "extra_lines": 67,
+                    "detected_lines": 126,
+                    "measured_sw_px": 18.0,
+                    "mean_confidence": 0.9538
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.517,
+                    "wer": 1.0,
+                    "missing_lines": 2,
+                    "extra_lines": 7,
+                    "detected_lines": 17,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9347
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 21293.6,
+                "ms_per_page": 3548.9,
+                "delta_cer_pp_vs_original": -0.2,
+                "delta_wer_pp_vs_original": -0.94
+              },
+              "faint_repair": {
+                "macro_cer": 0.6424,
+                "macro_wer": 1.4194,
+                "missing_lines_total": 17,
+                "extra_lines_total": 90,
+                "mean_confidence": 0.9412,
+                "mean_measured_sw_px": 6.53,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3585,
+                  "N. H. Imber": 0.6287,
+                  "Rachel Bluwstein": 0.7168
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4641,
+                    "wer": 0.8438,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9565
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3585,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 3.4,
+                    "mean_confidence": 0.9215
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6287,
+                    "wer": 1.2903,
+                    "missing_lines": 4,
+                    "extra_lines": 10,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9212
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3542,
+                    "wer": 0.7708,
+                    "missing_lines": 4,
+                    "extra_lines": 5,
+                    "detected_lines": 18,
+                    "measured_sw_px": 4.2,
+                    "mean_confidence": 0.9546
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.547,
+                    "wer": 3.525,
+                    "missing_lines": 9,
+                    "extra_lines": 67,
+                    "detected_lines": 139,
+                    "measured_sw_px": 18.0,
+                    "mean_confidence": 0.9554
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.5019,
+                    "wer": 0.9815,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 17,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9381
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 21067.8,
+                "ms_per_page": 3511.3,
+                "delta_cer_pp_vs_original": 0.4,
+                "delta_wer_pp_vs_original": 3.8
+              }
+            }
+          },
+          "pen_heavy_marker": {
+            "description": "Simulated heavy felt-tip / bleeding fountain pen (~5.5–6.8 px strokes)",
+            "variants": {
+              "original": {
+                "macro_cer": 0.6699,
+                "macro_wer": 1.3604,
+                "missing_lines_total": 18,
+                "extra_lines_total": 85,
+                "mean_confidence": 0.9271,
+                "mean_measured_sw_px": 8.63,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4811,
+                  "N. H. Imber": 0.6287,
+                  "Rachel Bluwstein": 0.7274
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.5556,
+                    "wer": 1.0,
+                    "missing_lines": 0,
+                    "extra_lines": 1,
+                    "detected_lines": 11,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.9185
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4811,
+                    "wer": 1.2105,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.6,
+                    "mean_confidence": 0.9205
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6287,
+                    "wer": 1.3226,
+                    "missing_lines": 2,
+                    "extra_lines": 3,
+                    "detected_lines": 11,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.8988
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3833,
+                    "wer": 0.8542,
+                    "missing_lines": 3,
+                    "extra_lines": 6,
+                    "detected_lines": 20,
+                    "measured_sw_px": 6.79,
+                    "mean_confidence": 0.9477
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3481,
+                    "wer": 2.775,
+                    "missing_lines": 8,
+                    "extra_lines": 68,
+                    "detected_lines": 102,
+                    "measured_sw_px": 18.39,
+                    "mean_confidence": 0.956
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6226,
+                    "wer": 1.0,
+                    "missing_lines": 5,
+                    "extra_lines": 7,
+                    "detected_lines": 15,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.9213
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 14030.0,
+                "ms_per_page": 2338.3,
+                "delta_cer_pp_vs_original": 0.0,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "mild_thicken": {
+                "macro_cer": 0.6693,
+                "macro_wer": 1.3391,
+                "missing_lines_total": 20,
+                "extra_lines_total": 86,
+                "mean_confidence": 0.9279,
+                "mean_measured_sw_px": 8.63,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4811,
+                  "N. H. Imber": 0.6467,
+                  "Rachel Bluwstein": 0.722
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.5359,
+                    "wer": 0.9688,
+                    "missing_lines": 0,
+                    "extra_lines": 1,
+                    "detected_lines": 11,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.915
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4811,
+                    "wer": 1.1579,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.6,
+                    "mean_confidence": 0.9258
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6467,
+                    "wer": 1.3226,
+                    "missing_lines": 2,
+                    "extra_lines": 3,
+                    "detected_lines": 11,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9008
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3792,
+                    "wer": 0.8542,
+                    "missing_lines": 4,
+                    "extra_lines": 7,
+                    "detected_lines": 20,
+                    "measured_sw_px": 6.79,
+                    "mean_confidence": 0.9493
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3315,
+                    "wer": 2.75,
+                    "missing_lines": 9,
+                    "extra_lines": 68,
+                    "detected_lines": 101,
+                    "measured_sw_px": 18.39,
+                    "mean_confidence": 0.9567
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6415,
+                    "wer": 0.9815,
+                    "missing_lines": 5,
+                    "extra_lines": 7,
+                    "detected_lines": 15,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.9196
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 14065.1,
+                "ms_per_page": 2344.2,
+                "delta_cer_pp_vs_original": -0.06,
+                "delta_wer_pp_vs_original": -2.13
+              },
+              "moderate_thicken": {
+                "macro_cer": 0.6734,
+                "macro_wer": 1.3592,
+                "missing_lines_total": 22,
+                "extra_lines_total": 87,
+                "mean_confidence": 0.9256,
+                "mean_measured_sw_px": 8.63,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4906,
+                  "N. H. Imber": 0.6048,
+                  "Rachel Bluwstein": 0.7362
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.5621,
+                    "wer": 1.0,
+                    "missing_lines": 2,
+                    "extra_lines": 3,
+                    "detected_lines": 11,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.908
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4906,
+                    "wer": 1.2105,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.6,
+                    "mean_confidence": 0.9168
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6048,
+                    "wer": 1.2903,
+                    "missing_lines": 2,
+                    "extra_lines": 3,
+                    "detected_lines": 11,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9051
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.375,
+                    "wer": 0.8542,
+                    "missing_lines": 4,
+                    "extra_lines": 7,
+                    "detected_lines": 20,
+                    "measured_sw_px": 6.79,
+                    "mean_confidence": 0.9467
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3702,
+                    "wer": 2.8,
+                    "missing_lines": 9,
+                    "extra_lines": 67,
+                    "detected_lines": 102,
+                    "measured_sw_px": 18.39,
+                    "mean_confidence": 0.9572
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6377,
+                    "wer": 1.0,
+                    "missing_lines": 5,
+                    "extra_lines": 7,
+                    "detected_lines": 15,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.9196
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 14054.2,
+                "ms_per_page": 2342.4,
+                "delta_cer_pp_vs_original": 0.35,
+                "delta_wer_pp_vs_original": -0.12
+              },
+              "slight_thin": {
+                "macro_cer": 0.6643,
+                "macro_wer": 1.3567,
+                "missing_lines_total": 17,
+                "extra_lines_total": 83,
+                "mean_confidence": 0.9261,
+                "mean_measured_sw_px": 8.63,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4528,
+                  "N. H. Imber": 0.6407,
+                  "Rachel Bluwstein": 0.723
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.5294,
+                    "wer": 1.0,
+                    "missing_lines": 0,
+                    "extra_lines": 1,
+                    "detected_lines": 11,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.9129
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4528,
+                    "wer": 1.1579,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.6,
+                    "mean_confidence": 0.9189
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6407,
+                    "wer": 1.3548,
+                    "missing_lines": 1,
+                    "extra_lines": 2,
+                    "detected_lines": 11,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.897
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3958,
+                    "wer": 0.8958,
+                    "missing_lines": 3,
+                    "extra_lines": 6,
+                    "detected_lines": 20,
+                    "measured_sw_px": 6.79,
+                    "mean_confidence": 0.9485
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3481,
+                    "wer": 2.75,
+                    "missing_lines": 8,
+                    "extra_lines": 67,
+                    "detected_lines": 101,
+                    "measured_sw_px": 18.39,
+                    "mean_confidence": 0.9566
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6189,
+                    "wer": 0.9815,
+                    "missing_lines": 5,
+                    "extra_lines": 7,
+                    "detected_lines": 15,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.9227
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 14211.0,
+                "ms_per_page": 2368.5,
+                "delta_cer_pp_vs_original": -0.56,
+                "delta_wer_pp_vs_original": -0.37
+              },
+              "adaptive_norm": {
+                "macro_cer": 0.6664,
+                "macro_wer": 1.3566,
+                "missing_lines_total": 18,
+                "extra_lines_total": 84,
+                "mean_confidence": 0.9276,
+                "mean_measured_sw_px": 8.63,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4623,
+                  "N. H. Imber": 0.6347,
+                  "Rachel Bluwstein": 0.7254
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.549,
+                    "wer": 1.0,
+                    "missing_lines": 0,
+                    "extra_lines": 1,
+                    "detected_lines": 11,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.9166
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4623,
+                    "wer": 1.2105,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.6,
+                    "mean_confidence": 0.9242
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6347,
+                    "wer": 1.3226,
+                    "missing_lines": 2,
+                    "extra_lines": 3,
+                    "detected_lines": 11,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.8984
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3875,
+                    "wer": 0.875,
+                    "missing_lines": 3,
+                    "extra_lines": 6,
+                    "detected_lines": 20,
+                    "measured_sw_px": 6.79,
+                    "mean_confidence": 0.9477
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3425,
+                    "wer": 2.75,
+                    "missing_lines": 8,
+                    "extra_lines": 67,
+                    "detected_lines": 102,
+                    "measured_sw_px": 18.39,
+                    "mean_confidence": 0.9573
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6226,
+                    "wer": 0.9815,
+                    "missing_lines": 5,
+                    "extra_lines": 7,
+                    "detected_lines": 15,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.9215
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 14316.5,
+                "ms_per_page": 2386.1,
+                "delta_cer_pp_vs_original": -0.35,
+                "delta_wer_pp_vs_original": -0.38
+              },
+              "faint_repair": {
+                "macro_cer": 0.6711,
+                "macro_wer": 1.3567,
+                "missing_lines_total": 20,
+                "extra_lines_total": 87,
+                "mean_confidence": 0.928,
+                "mean_measured_sw_px": 8.63,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4811,
+                  "N. H. Imber": 0.6048,
+                  "Rachel Bluwstein": 0.7352
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.5556,
+                    "wer": 1.0312,
+                    "missing_lines": 0,
+                    "extra_lines": 2,
+                    "detected_lines": 12,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.9177
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4811,
+                    "wer": 1.1579,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.6,
+                    "mean_confidence": 0.925
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.6048,
+                    "wer": 1.2903,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 11,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.8995
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3792,
+                    "wer": 0.8542,
+                    "missing_lines": 4,
+                    "extra_lines": 7,
+                    "detected_lines": 20,
+                    "measured_sw_px": 6.79,
+                    "mean_confidence": 0.9472
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.3757,
+                    "wer": 2.825,
+                    "missing_lines": 8,
+                    "extra_lines": 67,
+                    "detected_lines": 104,
+                    "measured_sw_px": 18.39,
+                    "mean_confidence": 0.9567
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6302,
+                    "wer": 0.9815,
+                    "missing_lines": 5,
+                    "extra_lines": 7,
+                    "detected_lines": 15,
+                    "measured_sw_px": 8.0,
+                    "mean_confidence": 0.9217
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 14300.6,
+                "ms_per_page": 2383.4,
+                "delta_cer_pp_vs_original": 0.12,
+                "delta_wer_pp_vs_original": -0.37
+              }
+            }
+          },
+          "dpi_150_lowres": {
+            "description": "Low-resolution 150 DPI scan (0.50x optical downsample)",
+            "variants": {
+              "original": {
+                "macro_cer": 0.5252,
+                "macro_wer": 0.9897,
+                "missing_lines_total": 20,
+                "extra_lines_total": 25,
+                "mean_confidence": 0.9329,
+                "mean_measured_sw_px": 6.6,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4623,
+                  "N. H. Imber": 0.5269,
+                  "Rachel Bluwstein": 0.5405
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6144,
+                    "wer": 1.0,
+                    "missing_lines": 3,
+                    "extra_lines": 2,
+                    "detected_lines": 9,
+                    "measured_sw_px": 8.1,
+                    "mean_confidence": 0.9266
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4623,
+                    "wer": 1.1579,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.4,
+                    "mean_confidence": 0.9364
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5269,
+                    "wer": 1.0968,
+                    "missing_lines": 1,
+                    "extra_lines": 5,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9388
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3583,
+                    "wer": 0.8333,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9507
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3591,
+                    "wer": 0.85,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.0,
+                    "mean_confidence": 0.9358
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8302,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 10,
+                    "detected_lines": 10,
+                    "measured_sw_px": 8.89,
+                    "mean_confidence": 0.9091
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 11313.2,
+                "ms_per_page": 1885.5,
+                "delta_cer_pp_vs_original": 0.0,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "mild_thicken": {
+                "macro_cer": 0.5296,
+                "macro_wer": 0.9816,
+                "missing_lines_total": 23,
+                "extra_lines_total": 29,
+                "mean_confidence": 0.9318,
+                "mean_measured_sw_px": 6.6,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4623,
+                  "N. H. Imber": 0.515,
+                  "Rachel Bluwstein": 0.5502
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.634,
+                    "wer": 1.0,
+                    "missing_lines": 6,
+                    "extra_lines": 6,
+                    "detected_lines": 10,
+                    "measured_sw_px": 8.1,
+                    "mean_confidence": 0.9263
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4623,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.4,
+                    "mean_confidence": 0.9328
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.515,
+                    "wer": 1.0968,
+                    "missing_lines": 1,
+                    "extra_lines": 5,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9397
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.35,
+                    "wer": 0.8125,
+                    "missing_lines": 4,
+                    "extra_lines": 5,
+                    "detected_lines": 18,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9504
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3978,
+                    "wer": 0.875,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.0,
+                    "mean_confidence": 0.9326
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8189,
+                    "wer": 1.0,
+                    "missing_lines": 11,
+                    "extra_lines": 9,
+                    "detected_lines": 10,
+                    "measured_sw_px": 8.89,
+                    "mean_confidence": 0.9091
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 11288.7,
+                "ms_per_page": 1881.5,
+                "delta_cer_pp_vs_original": 0.44,
+                "delta_wer_pp_vs_original": -0.81
+              },
+              "moderate_thicken": {
+                "macro_cer": 0.5292,
+                "macro_wer": 0.9687,
+                "missing_lines_total": 25,
+                "extra_lines_total": 29,
+                "mean_confidence": 0.9314,
+                "mean_measured_sw_px": 6.6,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4528,
+                  "N. H. Imber": 0.491,
+                  "Rachel Bluwstein": 0.5578
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6209,
+                    "wer": 1.0,
+                    "missing_lines": 6,
+                    "extra_lines": 6,
+                    "detected_lines": 10,
+                    "measured_sw_px": 8.1,
+                    "mean_confidence": 0.9228
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4528,
+                    "wer": 1.0526,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.4,
+                    "mean_confidence": 0.9307
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.491,
+                    "wer": 1.0968,
+                    "missing_lines": 2,
+                    "extra_lines": 5,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9428
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3583,
+                    "wer": 0.8125,
+                    "missing_lines": 4,
+                    "extra_lines": 4,
+                    "detected_lines": 17,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9482
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4144,
+                    "wer": 0.85,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.0,
+                    "mean_confidence": 0.932
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8377,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 10,
+                    "detected_lines": 10,
+                    "measured_sw_px": 8.89,
+                    "mean_confidence": 0.9116
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 11441.4,
+                "ms_per_page": 1906.9,
+                "delta_cer_pp_vs_original": 0.4,
+                "delta_wer_pp_vs_original": -2.1
+              },
+              "slight_thin": {
+                "macro_cer": 0.5178,
+                "macro_wer": 0.9855,
+                "missing_lines_total": 19,
+                "extra_lines_total": 23,
+                "mean_confidence": 0.9329,
+                "mean_measured_sw_px": 6.6,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4623,
+                  "N. H. Imber": 0.503,
+                  "Rachel Bluwstein": 0.5354
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.5882,
+                    "wer": 1.0,
+                    "missing_lines": 3,
+                    "extra_lines": 2,
+                    "detected_lines": 9,
+                    "measured_sw_px": 8.1,
+                    "mean_confidence": 0.9288
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4623,
+                    "wer": 1.1579,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.4,
+                    "mean_confidence": 0.9366
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.503,
+                    "wer": 1.0968,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9382
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3625,
+                    "wer": 0.8333,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9497
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3646,
+                    "wer": 0.825,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.0,
+                    "mean_confidence": 0.9372
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8264,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 9,
+                    "detected_lines": 9,
+                    "measured_sw_px": 8.89,
+                    "mean_confidence": 0.907
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 11386.2,
+                "ms_per_page": 1897.7,
+                "delta_cer_pp_vs_original": -0.74,
+                "delta_wer_pp_vs_original": -0.42
+              },
+              "adaptive_norm": {
+                "macro_cer": 0.5219,
+                "macro_wer": 0.9897,
+                "missing_lines_total": 21,
+                "extra_lines_total": 25,
+                "mean_confidence": 0.9332,
+                "mean_measured_sw_px": 6.6,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4717,
+                  "N. H. Imber": 0.521,
+                  "Rachel Bluwstein": 0.5346
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6013,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 3,
+                    "detected_lines": 9,
+                    "measured_sw_px": 8.1,
+                    "mean_confidence": 0.9276
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4717,
+                    "wer": 1.1579,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.4,
+                    "mean_confidence": 0.9371
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.521,
+                    "wer": 1.0968,
+                    "missing_lines": 1,
+                    "extra_lines": 5,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9387
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.35,
+                    "wer": 0.8333,
+                    "missing_lines": 3,
+                    "extra_lines": 4,
+                    "detected_lines": 18,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9504
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3646,
+                    "wer": 0.85,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.0,
+                    "mean_confidence": 0.9385
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8226,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 9,
+                    "detected_lines": 9,
+                    "measured_sw_px": 8.89,
+                    "mean_confidence": 0.9069
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 11529.5,
+                "ms_per_page": 1921.6,
+                "delta_cer_pp_vs_original": -0.33,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "faint_repair": {
+                "macro_cer": 0.5193,
+                "macro_wer": 0.9814,
+                "missing_lines_total": 20,
+                "extra_lines_total": 25,
+                "mean_confidence": 0.9328,
+                "mean_measured_sw_px": 6.6,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4623,
+                  "N. H. Imber": 0.509,
+                  "Rachel Bluwstein": 0.5361
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6078,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 4,
+                    "detected_lines": 10,
+                    "measured_sw_px": 8.1,
+                    "mean_confidence": 0.9273
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4623,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 6.4,
+                    "mean_confidence": 0.9347
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.509,
+                    "wer": 1.129,
+                    "missing_lines": 1,
+                    "extra_lines": 5,
+                    "detected_lines": 14,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9414
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3417,
+                    "wer": 0.8542,
+                    "missing_lines": 2,
+                    "extra_lines": 3,
+                    "detected_lines": 18,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9502
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3646,
+                    "wer": 0.8,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.0,
+                    "mean_confidence": 0.9353
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8302,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 9,
+                    "detected_lines": 9,
+                    "measured_sw_px": 8.89,
+                    "mean_confidence": 0.9081
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 11700.3,
+                "ms_per_page": 1950.0,
+                "delta_cer_pp_vs_original": -0.59,
+                "delta_wer_pp_vs_original": -0.83
+              }
+            }
+          }
+        },
+        "without_photocraft": {
+          "verified_native_300dpi": {
+            "description": "Original verified cursive pages (4 writers, 2.0–5.6 px strokes)",
+            "variants": {
+              "original": {
+                "macro_cer": 0.4136,
+                "macro_wer": 0.949,
+                "missing_lines_total": 6,
+                "extra_lines_total": 18,
+                "mean_confidence": 0.9324,
+                "mean_measured_sw_px": 4.2,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3491,
+                  "N. H. Imber": 0.5808,
+                  "Rachel Bluwstein": 0.388
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4118,
+                    "wer": 0.8125,
+                    "missing_lines": 0,
+                    "extra_lines": 3,
+                    "detected_lines": 13,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9553
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3491,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9233
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5808,
+                    "wer": 1.2258,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9011
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3208,
+                    "wer": 0.6875,
+                    "missing_lines": 3,
+                    "extra_lines": 5,
+                    "detected_lines": 19,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9511
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3702,
+                    "wer": 0.9,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9227
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4491,
+                    "wer": 0.963,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9409
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10432.5,
+                "ms_per_page": 1738.8,
+                "delta_cer_pp_vs_original": 0.0,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "mild_thicken": {
+                "macro_cer": 0.4116,
+                "macro_wer": 0.9244,
+                "missing_lines_total": 6,
+                "extra_lines_total": 18,
+                "mean_confidence": 0.9329,
+                "mean_measured_sw_px": 4.2,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3774,
+                  "N. H. Imber": 0.5569,
+                  "Rachel Bluwstein": 0.3838
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4052,
+                    "wer": 0.7812,
+                    "missing_lines": 0,
+                    "extra_lines": 3,
+                    "detected_lines": 13,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9542
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3774,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9266
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5569,
+                    "wer": 1.1613,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9023
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3333,
+                    "wer": 0.7292,
+                    "missing_lines": 3,
+                    "extra_lines": 5,
+                    "detected_lines": 19,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9497
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3702,
+                    "wer": 0.825,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9211
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4264,
+                    "wer": 0.9444,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9435
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10607.3,
+                "ms_per_page": 1767.9,
+                "delta_cer_pp_vs_original": -0.2,
+                "delta_wer_pp_vs_original": -2.46
+              },
+              "moderate_thicken": {
+                "macro_cer": 0.4219,
+                "macro_wer": 0.9214,
+                "missing_lines_total": 6,
+                "extra_lines_total": 18,
+                "mean_confidence": 0.9341,
+                "mean_measured_sw_px": 4.2,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.4151,
+                  "N. H. Imber": 0.5509,
+                  "Rachel Bluwstein": 0.3914
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3987,
+                    "wer": 0.7812,
+                    "missing_lines": 0,
+                    "extra_lines": 3,
+                    "detected_lines": 13,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9535
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.4151,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9277
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5509,
+                    "wer": 1.129,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9066
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3333,
+                    "wer": 0.75,
+                    "missing_lines": 3,
+                    "extra_lines": 5,
+                    "detected_lines": 19,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9497
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4033,
+                    "wer": 0.8,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9228
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4302,
+                    "wer": 0.963,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9441
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10412.0,
+                "ms_per_page": 1735.3,
+                "delta_cer_pp_vs_original": 0.83,
+                "delta_wer_pp_vs_original": -2.76
+              },
+              "slight_thin": {
+                "macro_cer": 0.4097,
+                "macro_wer": 0.9303,
+                "missing_lines_total": 6,
+                "extra_lines_total": 17,
+                "mean_confidence": 0.9312,
+                "mean_measured_sw_px": 4.2,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3679,
+                  "N. H. Imber": 0.5449,
+                  "Rachel Bluwstein": 0.3864
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4118,
+                    "wer": 0.8125,
+                    "missing_lines": 0,
+                    "extra_lines": 3,
+                    "detected_lines": 13,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9542
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3679,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9194
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5449,
+                    "wer": 1.1613,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.901
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3167,
+                    "wer": 0.7083,
+                    "missing_lines": 3,
+                    "extra_lines": 5,
+                    "detected_lines": 19,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9505
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3757,
+                    "wer": 0.85,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9215
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4415,
+                    "wer": 0.9444,
+                    "missing_lines": 0,
+                    "extra_lines": 3,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9408
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10223.3,
+                "ms_per_page": 1703.9,
+                "delta_cer_pp_vs_original": -0.39,
+                "delta_wer_pp_vs_original": -1.87
+              },
+              "adaptive_norm": {
+                "macro_cer": 0.4128,
+                "macro_wer": 0.9364,
+                "missing_lines_total": 7,
+                "extra_lines_total": 19,
+                "mean_confidence": 0.9332,
+                "mean_measured_sw_px": 4.2,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3868,
+                  "N. H. Imber": 0.5689,
+                  "Rachel Bluwstein": 0.3803
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4118,
+                    "wer": 0.8125,
+                    "missing_lines": 0,
+                    "extra_lines": 3,
+                    "detected_lines": 13,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9553
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3868,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9262
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5689,
+                    "wer": 1.1935,
+                    "missing_lines": 3,
+                    "extra_lines": 3,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9008
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3125,
+                    "wer": 0.6875,
+                    "missing_lines": 3,
+                    "extra_lines": 5,
+                    "detected_lines": 19,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9507
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3591,
+                    "wer": 0.875,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9237
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4377,
+                    "wer": 0.9444,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9422
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10441.5,
+                "ms_per_page": 1740.2,
+                "delta_cer_pp_vs_original": -0.08,
+                "delta_wer_pp_vs_original": -1.26
+              },
+              "faint_repair": {
+                "macro_cer": 0.4068,
+                "macro_wer": 0.914,
+                "missing_lines_total": 6,
+                "extra_lines_total": 18,
+                "mean_confidence": 0.933,
+                "mean_measured_sw_px": 4.2,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.3585,
+                  "N. H. Imber": 0.5509,
+                  "Rachel Bluwstein": 0.3828
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.4118,
+                    "wer": 0.7812,
+                    "missing_lines": 0,
+                    "extra_lines": 3,
+                    "detected_lines": 13,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9515
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.3585,
+                    "wer": 1.1053,
+                    "missing_lines": 0,
+                    "extra_lines": 0,
+                    "detected_lines": 4,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9277
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.5509,
+                    "wer": 1.0968,
+                    "missing_lines": 2,
+                    "extra_lines": 2,
+                    "detected_lines": 10,
+                    "measured_sw_px": 2.8,
+                    "mean_confidence": 0.9021
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3208,
+                    "wer": 0.75,
+                    "missing_lines": 3,
+                    "extra_lines": 5,
+                    "detected_lines": 19,
+                    "measured_sw_px": 4.0,
+                    "mean_confidence": 0.9507
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.3646,
+                    "wer": 0.825,
+                    "missing_lines": 1,
+                    "extra_lines": 4,
+                    "detected_lines": 12,
+                    "measured_sw_px": 5.6,
+                    "mean_confidence": 0.9257
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.434,
+                    "wer": 0.9259,
+                    "missing_lines": 0,
+                    "extra_lines": 4,
+                    "detected_lines": 16,
+                    "measured_sw_px": 4.39,
+                    "mean_confidence": 0.9405
+                  }
+                ],
+                "model_input_height_px": 64,
+                "wall_ms": 10477.9,
+                "ms_per_page": 1746.3,
+                "delta_cer_pp_vs_original": -0.68,
+                "delta_wer_pp_vs_original": -3.5
+              }
+            }
+          }
+        }
+      },
+      "line_segmentation_effect": {},
+      "real_unverified_scans": [
+        {
+          "id": "scan-2026-10-28-221624",
+          "description": "Contemporary Yeshiva cursive Hebrew notebook scan (unverified)",
+          "ground_truth_available": false,
+          "size_px": [
+            2479,
+            3229
+          ],
+          "measured_sw_px_at_h64": 2.8,
+          "photocraft_audit": {
+            "width": 2479,
+            "height": 3229,
+            "bg_rgb": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "paper_chroma": 0.0,
+            "illumination_spread": 0.0,
+            "luma_contrast": 0.1658,
+            "chromatic_contrast": 0.1658,
+            "snr_luma": 8.29,
+            "snr_chromatic": 8.29,
+            "inverted_polarity": false,
+            "needs_chromatic_projection": false,
+            "needs_shadow_relight": false,
+            "needs_rule_suppression": false,
+            "needs_highlighter_suppression": false,
+            "active_tile_fraction": 0.0,
+            "channel_weights": [
+              -0.4472,
+              -0.878,
+              -0.1705
+            ],
+            "scale_factor": 1.0,
+            "needs_adjustment": false
+          },
+          "without_photocraft": {
+            "segmented_lines": 35,
+            "left_margin_snapped_boxes_x_le_220": 0,
+            "nonempty_recognized_lines": 35,
+            "char_count": 2427,
+            "wall_ms": 17402.7,
+            "segmentation_ms": 1393.1,
+            "recognition_ms": 16009.5
+          },
+          "with_photocraft": {
+            "segmented_lines": 35,
+            "skew_deg": 0.5,
+            "left_margin_snapped_boxes_x_le_220": 0,
+            "nonempty_recognized_lines": 35,
+            "char_count": 2427,
+            "mean_confidence": 0.9132,
+            "wall_ms": 18425.9,
+            "enhancement_ms": 48.0,
+            "segmentation_ms": 1396.0,
+            "recognition_ms": 16982.0,
+            "char_diff_enh_vs_unenh": 0,
+            "char_diff_adaptive_vs_original": 151,
+            "char_diff_mild_thicken_vs_original": 160
+          }
+        }
+      ]
+    },
+    "kraken-ppocrv6-small": {
+      "engine_id": "kraken-ppocrv6-small",
+      "engine_name": "kraken PP-OCRv6 (Apache-2.0)",
+      "measured": true,
+      "pages_measured": 6,
+      "peak_rss_mb": 2809.44,
+      "line_crop_recognition": {
+        "with_photocraft": {
+          "verified_native_300dpi": {
+            "description": "Original verified cursive pages (4 writers, 2.0–5.6 px strokes)",
+            "variants": {
+              "original": {
+                "macro_cer": 0.8232,
+                "macro_wer": 0.9598,
+                "missing_lines_total": 51,
+                "extra_lines_total": 34,
+                "mean_confidence": 0.6239,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.8868,
+                  "N. H. Imber": 0.9641,
+                  "Rachel Bluwstein": 0.7721
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8693,
+                    "wer": 0.9688,
+                    "missing_lines": 9,
+                    "extra_lines": 4,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6592
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.8868,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 6,
+                    "detected_lines": 7,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.49
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9641,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 1,
+                    "detected_lines": 1,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.7622
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6417,
+                    "wer": 0.8333,
+                    "missing_lines": 11,
+                    "extra_lines": 7,
+                    "detected_lines": 13,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6719
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.7735,
+                    "wer": 0.975,
+                    "missing_lines": 8,
+                    "extra_lines": 7,
+                    "detected_lines": 8,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.602
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8038,
+                    "wer": 0.9815,
+                    "missing_lines": 9,
+                    "extra_lines": 9,
+                    "detected_lines": 12,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.558
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 2340.9,
+                "ms_per_page": 390.1,
+                "delta_cer_pp_vs_original": 0.0,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "mild_thicken": {
+                "macro_cer": 0.8254,
+                "macro_wer": 0.9639,
+                "missing_lines_total": 52,
+                "extra_lines_total": 34,
+                "mean_confidence": 0.6324,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.8868,
+                  "N. H. Imber": 0.9641,
+                  "Rachel Bluwstein": 0.7754
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8627,
+                    "wer": 0.9688,
+                    "missing_lines": 9,
+                    "extra_lines": 4,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6597
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.8868,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 6,
+                    "detected_lines": 7,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5255
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9641,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 1,
+                    "detected_lines": 1,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.7425
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6542,
+                    "wer": 0.8333,
+                    "missing_lines": 11,
+                    "extra_lines": 6,
+                    "detected_lines": 12,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6667
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.7845,
+                    "wer": 1.0,
+                    "missing_lines": 8,
+                    "extra_lines": 7,
+                    "detected_lines": 8,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6337
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8,
+                    "wer": 0.9815,
+                    "missing_lines": 10,
+                    "extra_lines": 10,
+                    "detected_lines": 12,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5665
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 2512.4,
+                "ms_per_page": 418.7,
+                "delta_cer_pp_vs_original": 0.22,
+                "delta_wer_pp_vs_original": 0.41
+              },
+              "moderate_thicken": {
+                "macro_cer": 0.82,
+                "macro_wer": 0.9563,
+                "missing_lines_total": 52,
+                "extra_lines_total": 38,
+                "mean_confidence": 0.6108,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.8679,
+                  "N. H. Imber": 0.9641,
+                  "Rachel Bluwstein": 0.772
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8758,
+                    "wer": 0.9688,
+                    "missing_lines": 9,
+                    "extra_lines": 4,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6535
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.8679,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 8,
+                    "detected_lines": 8,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.4332
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9641,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 1,
+                    "detected_lines": 1,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.7089
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6333,
+                    "wer": 0.8125,
+                    "missing_lines": 11,
+                    "extra_lines": 7,
+                    "detected_lines": 13,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6938
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.779,
+                    "wer": 0.975,
+                    "missing_lines": 8,
+                    "extra_lines": 7,
+                    "detected_lines": 8,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6238
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8,
+                    "wer": 0.9815,
+                    "missing_lines": 10,
+                    "extra_lines": 11,
+                    "detected_lines": 13,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5517
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 2530.4,
+                "ms_per_page": 421.7,
+                "delta_cer_pp_vs_original": -0.32,
+                "delta_wer_pp_vs_original": -0.35
+              },
+              "slight_thin": {
+                "macro_cer": 0.8222,
+                "macro_wer": 0.9598,
+                "missing_lines_total": 52,
+                "extra_lines_total": 36,
+                "mean_confidence": 0.6158,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.8774,
+                  "N. H. Imber": 0.9641,
+                  "Rachel Bluwstein": 0.773
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8693,
+                    "wer": 0.9688,
+                    "missing_lines": 9,
+                    "extra_lines": 4,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6537
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.8774,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 6,
+                    "detected_lines": 7,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.4622
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9641,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 1,
+                    "detected_lines": 1,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.7509
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6417,
+                    "wer": 0.8333,
+                    "missing_lines": 11,
+                    "extra_lines": 7,
+                    "detected_lines": 13,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6531
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.7735,
+                    "wer": 0.975,
+                    "missing_lines": 8,
+                    "extra_lines": 7,
+                    "detected_lines": 8,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6057
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8075,
+                    "wer": 0.9815,
+                    "missing_lines": 10,
+                    "extra_lines": 11,
+                    "detected_lines": 13,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5692
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 2486.5,
+                "ms_per_page": 414.4,
+                "delta_cer_pp_vs_original": -0.1,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "adaptive_norm": {
+                "macro_cer": 0.8227,
+                "macro_wer": 0.9598,
+                "missing_lines_total": 52,
+                "extra_lines_total": 36,
+                "mean_confidence": 0.6227,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.8868,
+                  "N. H. Imber": 0.9641,
+                  "Rachel Bluwstein": 0.7714
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8627,
+                    "wer": 0.9688,
+                    "missing_lines": 9,
+                    "extra_lines": 4,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6549
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.8868,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 6,
+                    "detected_lines": 7,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5009
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9641,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 1,
+                    "detected_lines": 1,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.7622
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6417,
+                    "wer": 0.8333,
+                    "missing_lines": 11,
+                    "extra_lines": 7,
+                    "detected_lines": 13,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6694
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.7735,
+                    "wer": 0.975,
+                    "missing_lines": 8,
+                    "extra_lines": 7,
+                    "detected_lines": 8,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5867
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8075,
+                    "wer": 0.9815,
+                    "missing_lines": 10,
+                    "extra_lines": 11,
+                    "detected_lines": 13,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.562
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 2562.9,
+                "ms_per_page": 427.1,
+                "delta_cer_pp_vs_original": -0.05,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "faint_repair": {
+                "macro_cer": 0.8221,
+                "macro_wer": 0.9598,
+                "missing_lines_total": 52,
+                "extra_lines_total": 37,
+                "mean_confidence": 0.61,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.8868,
+                  "N. H. Imber": 0.9641,
+                  "Rachel Bluwstein": 0.7704
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8627,
+                    "wer": 0.9688,
+                    "missing_lines": 9,
+                    "extra_lines": 5,
+                    "detected_lines": 6,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5812
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.8868,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 6,
+                    "detected_lines": 7,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.4892
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9641,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 1,
+                    "detected_lines": 1,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.7604
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6417,
+                    "wer": 0.8333,
+                    "missing_lines": 11,
+                    "extra_lines": 7,
+                    "detected_lines": 13,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6691
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.7735,
+                    "wer": 0.975,
+                    "missing_lines": 8,
+                    "extra_lines": 7,
+                    "detected_lines": 8,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.598
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8038,
+                    "wer": 0.9815,
+                    "missing_lines": 10,
+                    "extra_lines": 11,
+                    "detected_lines": 13,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5622
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 2476.4,
+                "ms_per_page": 412.7,
+                "delta_cer_pp_vs_original": -0.11,
+                "delta_wer_pp_vs_original": 0.0
+              }
+            }
+          },
+          "pen_fine_nib": {
+            "description": "Simulated extra-fine ballpoint / fine dip nib (~1.8–2.4 px strokes)",
+            "variants": {
+              "original": {
+                "macro_cer": 0.9056,
+                "macro_wer": 0.9635,
+                "missing_lines_total": 57,
+                "extra_lines_total": 21,
+                "mean_confidence": 0.5707,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.9245,
+                  "N. H. Imber": 0.9281,
+                  "Rachel Bluwstein": 0.8953
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.902,
+                    "wer": 0.9688,
+                    "missing_lines": 10,
+                    "extra_lines": 5,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5725
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.9245,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 4,
+                    "detected_lines": 4,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5122
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9281,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 5,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5269
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6792,
+                    "wer": 0.8125,
+                    "missing_lines": 12,
+                    "extra_lines": 7,
+                    "detected_lines": 12,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6709
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 9,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 1936.7,
+                "ms_per_page": 322.8,
+                "delta_cer_pp_vs_original": 0.0,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "mild_thicken": {
+                "macro_cer": 0.9093,
+                "macro_wer": 0.967,
+                "missing_lines_total": 57,
+                "extra_lines_total": 19,
+                "mean_confidence": 0.6063,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.934,
+                  "N. H. Imber": 0.9281,
+                  "Rachel Bluwstein": 0.8984
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.902,
+                    "wer": 0.9688,
+                    "missing_lines": 10,
+                    "extra_lines": 5,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6349
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.934,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 3,
+                    "detected_lines": 3,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5709
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9281,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 5,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5299
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6917,
+                    "wer": 0.8333,
+                    "missing_lines": 12,
+                    "extra_lines": 6,
+                    "detected_lines": 11,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6897
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 9,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 1799.0,
+                "ms_per_page": 299.8,
+                "delta_cer_pp_vs_original": 0.37,
+                "delta_wer_pp_vs_original": 0.35
+              },
+              "moderate_thicken": {
+                "macro_cer": 0.9068,
+                "macro_wer": 0.9635,
+                "missing_lines_total": 56,
+                "extra_lines_total": 18,
+                "mean_confidence": 0.5926,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.934,
+                  "N. H. Imber": 0.9281,
+                  "Rachel Bluwstein": 0.8947
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.8954,
+                    "wer": 0.9688,
+                    "missing_lines": 10,
+                    "extra_lines": 5,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6263
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.934,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 3,
+                    "detected_lines": 3,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5495
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9281,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 5,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5182
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6833,
+                    "wer": 0.8125,
+                    "missing_lines": 11,
+                    "extra_lines": 5,
+                    "detected_lines": 11,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6762
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 9,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 1725.0,
+                "ms_per_page": 287.5,
+                "delta_cer_pp_vs_original": 0.12,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "slight_thin": {
+                "macro_cer": 0.9076,
+                "macro_wer": 0.9635,
+                "missing_lines_total": 57,
+                "extra_lines_total": 20,
+                "mean_confidence": 0.6049,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.9245,
+                  "N. H. Imber": 0.9401,
+                  "Rachel Bluwstein": 0.8953
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.902,
+                    "wer": 0.9688,
+                    "missing_lines": 10,
+                    "extra_lines": 5,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5972
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.9245,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 4,
+                    "detected_lines": 4,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5304
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9401,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 4,
+                    "detected_lines": 4,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.639
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6792,
+                    "wer": 0.8125,
+                    "missing_lines": 12,
+                    "extra_lines": 7,
+                    "detected_lines": 12,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.653
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 9,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 1740.1,
+                "ms_per_page": 290.0,
+                "delta_cer_pp_vs_original": 0.2,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "adaptive_norm": {
+                "macro_cer": 0.9076,
+                "macro_wer": 0.9635,
+                "missing_lines_total": 57,
+                "extra_lines_total": 20,
+                "mean_confidence": 0.6044,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.9245,
+                  "N. H. Imber": 0.9401,
+                  "Rachel Bluwstein": 0.8953
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.902,
+                    "wer": 0.9688,
+                    "missing_lines": 10,
+                    "extra_lines": 5,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.595
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.9245,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 4,
+                    "detected_lines": 4,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5158
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9401,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 4,
+                    "detected_lines": 4,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6383
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6792,
+                    "wer": 0.8125,
+                    "missing_lines": 12,
+                    "extra_lines": 7,
+                    "detected_lines": 12,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6684
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 9,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 1747.9,
+                "ms_per_page": 291.3,
+                "delta_cer_pp_vs_original": 0.2,
+                "delta_wer_pp_vs_original": 0.0
+              },
+              "faint_repair": {
+                "macro_cer": 0.9068,
+                "macro_wer": 0.9635,
+                "missing_lines_total": 57,
+                "extra_lines_total": 19,
+                "mean_confidence": 0.6192,
+                "mean_measured_sw_px": 0.0,
+                "by_writer_cer": {
+                  "H. N. Bialik": 0.934,
+                  "N. H. Imber": 0.9341,
+                  "Rachel Bluwstein": 0.8932
+                },
+                "pages": [
+                  {
+                    "id": "commons__begani_netatikha__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.902,
+                    "wer": 0.9688,
+                    "missing_lines": 10,
+                    "extra_lines": 5,
+                    "detected_lines": 5,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.593
+                  },
+                  {
+                    "id": "commons__bialik_el_hazippor__p0001",
+                    "writer": "H. N. Bialik",
+                    "cer": 0.934,
+                    "wer": 1.0,
+                    "missing_lines": 4,
+                    "extra_lines": 3,
+                    "detected_lines": 3,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6095
+                  },
+                  {
+                    "id": "commons__hatikvah_imber_manuscript__p0001",
+                    "writer": "N. H. Imber",
+                    "cer": 0.9341,
+                    "wer": 1.0,
+                    "missing_lines": 10,
+                    "extra_lines": 4,
+                    "detected_lines": 4,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.5949
+                  },
+                  {
+                    "id": "commons__rachel_aqara_1928__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 0.6708,
+                    "wer": 0.8125,
+                    "missing_lines": 12,
+                    "extra_lines": 7,
+                    "detected_lines": 12,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": 0.6795
+                  },
+                  {
+                    "id": "commons__rachel_gan_naul__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 9,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  },
+                  {
+                    "id": "commons__rachel_rak_al_atzmi__p0001",
+                    "writer": "Rachel Bluwstein",
+                    "cer": 1.0,
+                    "wer": 1.0,
+                    "missing_lines": 12,
+                    "extra_lines": 0,
+                    "detected_lines": 0,
+                    "measured_sw_px": 0.0,
+                    "mean_confidence": null
+                  }
+                ],
+                "model_input_height_px": 96,
+                "wall_ms": 1756.4,
+                "ms_per_page": 292.7,
+                "delta_cer_pp_vs_original": 0.12,
+                "delta_wer_pp_vs_original": 0.0
+              }
+            }
+          }
+        },
+        "without_photocraft": {}
+      },
+      "line_segmentation_effect": {},
+      "real_unverified_scans": [
+        {
+          "id": "scan-2026-10-28-221624",
+          "description": "Contemporary Yeshiva cursive Hebrew notebook scan (unverified)",
+          "ground_truth_available": false,
+          "segmented_lines": 34,
+          "nonempty_recognized_lines": 34,
+          "char_count": 2166,
+          "wall_ms": 14006.3,
+          "photocraft_enhanced": false
+        }
+      ]
+    }
+  },
+  "engine_failures": {}
+}

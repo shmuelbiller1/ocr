@@ -1,0 +1,3 @@
+[spelling_only] detected=10/27 top1=10 any=10 false=0 unwanted=0 CER 5.67%->3.90% WER 30.61%->19.39% (66.1 ms)
+[grammar_only] detected=17/27 top1=17 any=17 false=0 unwanted=0 CER 5.67%->1.95% WER 30.61%->13.27% (18.5 ms)
+[spelling_and_grammar] detected=27/27 top1=27 any=27 false=0 unwanted=0 CER 5.67%->0.18% WER 30.61%->2.04% (38.0 ms)

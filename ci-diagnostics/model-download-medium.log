@@ -1,0 +1,9 @@
+kraken PP-OCRv6 (medium) multilingual handwriting model (kraken-ppocrv6-medium)
+Script: Hebrew (among 43 other languages)
+License: Apache-2.0 - https://zenodo.org/records/21788410
+Size: 60.8 MB
+Source: https://zenodo.org/api/records/21788410/files/medium.safetensors/content
+The larger variant of the same family. The published character error rate for Hebrew is 5.1% and the word error rate 14.2%.
+downloaded: .cache/models/medium.safetensors
+size: 63779644 bytes
+sha256: 15313b51ace64cbfa81f8f6ef25ad64f04e5a6fb7f7823e67b107527bc081ac9

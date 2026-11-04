@@ -1,0 +1,9 @@
+the corpus Public-Domain Modern Cursive Hebrew Manuscripts (HeOCR/hash PDM-1.0): 6 pages
+  pages/commons__begani_netatikha__p0001.jpg: measured - 10 lines
+  pages/commons__bialik_el_hazippor__p0001.jpg: measured - 4 lines
+  pages/commons__hatikvah_imber_manuscript__p0001.jpg: measured - 10 lines
+  pages/commons__rachel_aqara_1928__p0001.jpg: measured - 17 lines
+  pages/commons__rachel_gan_naul__p0001.jpg: measured - 9 lines
+  pages/commons__rachel_rak_al_atzmi__p0001.jpg: measured - 12 lines
+the pages that were measured have a transcript that was checked by somebody who is not the one who wrote it down
+manifest written to build/manifest-modern-cursive.json
