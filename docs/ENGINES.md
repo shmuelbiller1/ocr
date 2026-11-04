@@ -4,7 +4,7 @@ This page records the search for an open model that can read the
 handwriting the program is made for, and the reasons behind the choice.
 It was written on 2026-10-28 and it says what was checked and when.
 
-## Current distribution (v0.4.0)
+## Current distribution (v0.5.0)
 
 The search/benchmark observations below remain a dated research record.
 Distribution now depends on edition: Lite bundles Kraken small; All Models —
