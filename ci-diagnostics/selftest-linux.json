@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "python": "3.12.16 (main, Oct 26 2026, 02:50:49) [GCC 13.3.0]",
+  "results": [
+    {
+      "name": "environment",
+      "ok": true,
+      "detail": "python 3.12.16 on Linux-7.0.0-1017-azure-x86_64-with-glibc2.39"
+    },
+    {
+      "name": "core-imports",
+      "ok": true,
+      "detail": "all core modules import cleanly"
+    },
+    {
+      "name": "engine-contract",
+      "ok": true,
+      "detail": "the engine contract fails closed"
+    },
+    {
+      "name": "preview",
+      "ok": true,
+      "detail": "images and PDF pages preview correctly"
+    },
+    {
+      "name": "plugins",
+      "ok": true,
+      "detail": "plugins are installed and loaded"
+    },
+    {
+      "name": "bundled-hebrew-spelling",
+      "ok": true,
+      "detail": "bundled CC0-1.0 Hebrew lexicon, OCR-confusion ranker, and personal dictionary verified"
+    },
+    {
+      "name": "gui-startup",
+      "ok": true,
+      "detail": "main window created with title 'Hebrew Notes Workbench 0.5.0'"
+    },
+    {
+      "name": "document-output",
+      "ok": true,
+      "detail": "synthetic fixture: project/raw text, TXT, RTL DOCX and rendered PDF; physical printer output is not tested"
+    }
+  ]
+}
