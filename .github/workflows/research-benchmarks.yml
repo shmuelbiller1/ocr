@@ -57,7 +57,7 @@ jobs:
           # pure Python package, and every version is pinned, so what is
           # built is the version that was asked for.  Every other line
           # of this build is wheel-only.
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
+          python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
           python -m pip install --only-binary :all: "opencv-python-headless==4.12.0.88" "pypdfium2==4.30.0"
           python tools/check_engine.py
       - name: Download recognition models

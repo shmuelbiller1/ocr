@@ -40,10 +40,15 @@ def main(argv=None) -> int:
         parser.error("--transcript requires --verified-by, and vice versa")
     # Every path the tool was given is resolved and kept inside the
     # folders it may use before anything is read or written.
+    from hebrew_workbench.engine.models import model_bases
+
     bases = default_bases()
     output = confine_path(args.output, *bases)
     document = confine_path(args.document, *bases)
     transcript = confine_path(args.transcript, *bases) if args.transcript else None
+    # The model may be the one the program installed into a folder of its
+    # own, outside the repository, and not only one of this checkout.
+    model = confine_path(args.model, *model_bases())
     output.mkdir(parents=True, exist_ok=True)
     targets = [
         output / f"decoding-{name}.txt"
@@ -66,8 +71,8 @@ def main(argv=None) -> int:
         reference = transcript.read_bytes().decode("utf-8") if transcript else None
         if reference is not None and not reference.strip():
             raise ValueError("The verified transcript must not be empty")
-        raw = MishkefetEngine(args.model).recognize(document)
-        compared = MishkefetEngine(args.model, mode=args.mode).recognize(document)
+        raw = MishkefetEngine(model).recognize(document)
+        compared = MishkefetEngine(model, mode=args.mode).recognize(document)
         if not raw.text.strip() or not (compared.assisted_text or "").strip():
             raise RuntimeError("Comparison requires nonempty raw and alternative readings")
         # The comparison run also contains its own independent raw reading.

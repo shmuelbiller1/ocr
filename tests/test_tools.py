@@ -176,37 +176,94 @@ class ThePinsOfTheBuildTests(unittest.TestCase):
                 "the workflow and requirements.txt have drifted apart",
             )
 
-    def test_the_line_that_cannot_be_wheel_only_is_not(self) -> None:
+    def _jobs(self, name: str) -> dict[str, tuple[str, list[str]]]:
+        """Every job of a workflow: its machine and the lines it runs."""
+        import re
+
+        jobs: dict[str, tuple[str, list[str]]] = {}
+        current: str | None = None
+        machine = ""
+        body: list[str] = []
+        for line in (REPO_ROOT / ".github" / "workflows" / name).read_text(
+            encoding="utf-8"
+        ).splitlines():
+            job = re.match(r"^  ([A-Za-z0-9_.-]+):\s*$", line)
+            if job:
+                if current:
+                    jobs[current] = (machine, body)
+                current, machine, body = job.group(1), "", []
+                continue
+            if current is None:
+                continue
+            runs_on = re.match(r"^    runs-on:\s*(.+)$", line)
+            if runs_on:
+                machine = runs_on.group(1).strip().strip("\"'")
+            body.append(line)
+        if current:
+            jobs[current] = (machine, body)
+        return jobs
+
+    def _kraken_lines(self, name: str) -> list[tuple[bool, str]]:
+        """Every line that installs kraken, with whether it runs on Windows."""
+        found: list[tuple[bool, str]] = []
+        for machine, body in self._jobs(name).values():
+            windows = "windows" in machine
+            found.extend(
+                (windows, line)
+                for line in body
+                if "kraken==" in line and "pip install" in line
+            )
+        return found
+
+    def test_every_install_is_wheel_only_even_the_one_that_asks_for_kraken(self) -> None:
         """kraken asks for a package that has no wheel for Windows.
 
         kraken asks for ``coremltools~=9.0``, and that package publishes
-        wheels for macOS and Linux only.  A wheel-only install of kraken
-        therefore has nothing to install on Windows, and the build of the
-        worker stopped with no kraken at all.  That one line builds the
-        package from the source archive that was published for it; every
-        other line of the build stays wheel-only.  This test is here so
-        that nobody puts the flag back without reading why it is not
-        there.
+        wheels for macOS and Linux only: a wheel-only install of kraken
+        has nothing to install on Windows, and the build of the worker
+        once stopped with no kraken at all.
+
+        The answer is *not* to let the whole line build from source -
+        that would run the setup script of any package in kraken's tree.
+        The answer is to name the one package: ``--no-binary
+        coremltools`` keeps everything else on the line, and every other
+        line of the build, wheel-only.  On Linux the wheel exists, so
+        even that package is taken as published.
         """
-        workflow = (REPO_ROOT / ".github" / "workflows" / "windows.yml").read_text(
-            encoding="utf-8"
-        )
-        lines = [
-            line
-            for line in workflow.splitlines()
-            if "kraken==" in line and "pip install" in line
-        ]
-        self.assertTrue(lines, "kraken is not installed by the build any more")
-        for line in lines:
-            self.assertNotIn(
-                "--only-binary :all:",
-                line,
-                "kraken asks for coremltools, and coremltools has no wheel "
-                "for Windows: this line has to be allowed to build it",
-            )
-        # And the reason is written where the line is read.
-        self.assertIn("coremltools", workflow)
-        self.assertIn("wheel-only", workflow)
+        for name in ("windows.yml", "research-benchmarks.yml"):
+            with self.subTest(workflow=name):
+                lines = self._kraken_lines(name)
+                self.assertTrue(lines, f"kraken is not installed in {name}")
+                for windows, line in lines:
+                    self.assertIn(
+                        "--only-binary :all:",
+                        line,
+                        "every install has to be wheel-only",
+                    )
+                    if windows:
+                        self.assertIn(
+                            "--no-binary coremltools",
+                            line,
+                            "kraken asks for coremltools, which has no wheel "
+                            "for Windows: that one package has to be named",
+                        )
+                    else:
+                        self.assertNotIn(
+                            "--no-binary",
+                            line,
+                            "coremltools has a wheel for Linux: nothing on "
+                            "this line has to be built from source",
+                        )
+
+    def test_the_reason_for_the_one_package_is_written_where_it_is_read(self) -> None:
+        """Whoever reads the line is told why one package is exempt."""
+        for name in ("windows.yml", "research-benchmarks.yml"):
+            with self.subTest(workflow=name):
+                workflow = (
+                    REPO_ROOT / ".github" / "workflows" / name
+                ).read_text(encoding="utf-8")
+                self.assertIn("coremltools", workflow)
+                self.assertIn("wheel-only", workflow)
 
 
 class TheReportAndTheCorpusAgreeTests(unittest.TestCase):

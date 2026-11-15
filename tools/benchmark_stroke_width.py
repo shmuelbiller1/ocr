@@ -68,7 +68,10 @@ from hebrew_workbench.benchmark.metrics import (  # noqa: E402
     process_memory_mb,
     word_error_rate,
 )
-from hebrew_workbench.engine.models import models_directory  # noqa: E402
+from hebrew_workbench.engine.models import (  # noqa: E402
+    model_bases,
+    models_directory,
+)
 from hebrew_workbench.engine.photocraft_audit import (  # noqa: E402
     audit_document_page,
     prepare_page_for_ocr,
@@ -1011,8 +1014,13 @@ def main(argv: list[str] | None = None) -> int:
     # folders it may use before anything is read or written.
     for name in ("corpus", "models", "output", "single_engine_output"):
         value = getattr(args, name, None)
-        if value:
-            setattr(args, name, confine_path(value, *default_bases()))
+        if not value:
+            continue
+        # The folder of the models may be the one the program installed
+        # its models into, which is a folder of its own outside the
+        # repository.
+        bases = model_bases() if name == "models" else default_bases()
+        setattr(args, name, confine_path(value, *bases))
 
     corpus_dir = Path(args.corpus)
     models_folder = Path(args.models) if args.models else models_directory()

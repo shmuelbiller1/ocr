@@ -882,6 +882,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # Every folder and file the tool was given is resolved and kept
     # inside the folders it may use before anything is read or written.
+    from hebrew_workbench.engine.models import model_bases
+
     bases = default_bases()
     for name in (
         "corpus",
@@ -893,8 +895,12 @@ def main(argv: list[str] | None = None) -> int:
         "single_engine_output",
     ):
         value = getattr(args, name, None)
-        if value:
-            setattr(args, name, confine_path(value, *bases))
+        if not value:
+            continue
+        # A model, or a folder of models, may be the one the program
+        # installed into a folder of its own.
+        allowed = model_bases() if name in ("model", "models") else bases
+        setattr(args, name, confine_path(value, *allowed))
 
     if not args.corpus and not args.pinkas:
         raise SystemExit(
