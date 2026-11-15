@@ -50,7 +50,14 @@ jobs:
           set -o pipefail
           python -m pip install --upgrade --only-binary :all: "pip==26.3"
           python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
-          python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
+          # kraken asks for coremltools~=9.0, and coremltools publishes
+          # no wheel for Windows - only for macOS and Linux - so this
+          # one line cannot be wheel-only: pip has to build that package
+          # from the source archive that was published for it.  It is a
+          # pure Python package, and every version is pinned, so what is
+          # built is the version that was asked for.  Every other line
+          # of this build is wheel-only.
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
           python -m pip install --only-binary :all: "opencv-python-headless==4.12.0.88" "pypdfium2==4.30.0"
           python tools/check_engine.py
       - name: Download recognition models

@@ -384,7 +384,7 @@ def evaluate_ocr_report(report_path: Path, corpus_folder: Path) -> list[Benchmar
         page.image.relative_to(corpus_folder).as_posix(): page.text
         for page in corpus.measured_pages
     }
-    data = json.loads(confine_path(report_path, *default_bases()).read_text(encoding="utf-8"))
+    data = json.loads(report_path.read_text(encoding="utf-8"))
     cases: list[BenchmarkCase] = []
     for engine_entry in data.get("engines", []):
         model = engine_entry.get("model") or engine_entry.get("engine", "ocr")
@@ -438,6 +438,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--corpus", type=Path, help="corpus folder matching --ocr-report")
     parser.add_argument("--output", type=Path, default=Path("suggestions-benchmark.json"))
     args = parser.parse_args(argv)
+
+    # Every folder and file the tool was given is resolved and kept
+    # inside the folders it may use before anything is read or written.
+    # The corpus is resolved here and not only where it is read: the
+    # pages of the report are named against the resolved folder, and a
+    # folder that was left as it was typed would not match them.
+    bases = default_bases()
+    for name in ("corpus", "ocr_report", "output"):
+        value = getattr(args, name, None)
+        if value:
+            setattr(args, name, confine_path(value, *bases))
 
     suite_cases = list(DEFAULT_SUITE)
     payload: dict = {
@@ -494,7 +505,7 @@ def main(argv: list[str] | None = None) -> int:
             }
         payload["post_ocr_by_engine"] = by_engine
 
-    confine_path(args.output, *default_bases()).write_text(
+    args.output.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     for mode, summary in payload["suite"].items():

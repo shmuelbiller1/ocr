@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -173,6 +174,118 @@ class ThePinsOfTheBuildTests(unittest.TestCase):
                 pins,
                 wanted,
                 "the workflow and requirements.txt have drifted apart",
+            )
+
+    def test_the_line_that_cannot_be_wheel_only_is_not(self) -> None:
+        """kraken asks for a package that has no wheel for Windows.
+
+        kraken asks for ``coremltools~=9.0``, and that package publishes
+        wheels for macOS and Linux only.  A wheel-only install of kraken
+        therefore has nothing to install on Windows, and the build of the
+        worker stopped with no kraken at all.  That one line builds the
+        package from the source archive that was published for it; every
+        other line of the build stays wheel-only.  This test is here so
+        that nobody puts the flag back without reading why it is not
+        there.
+        """
+        workflow = (REPO_ROOT / ".github" / "workflows" / "windows.yml").read_text(
+            encoding="utf-8"
+        )
+        lines = [
+            line
+            for line in workflow.splitlines()
+            if "kraken==" in line and "pip install" in line
+        ]
+        self.assertTrue(lines, "kraken is not installed by the build any more")
+        for line in lines:
+            self.assertNotIn(
+                "--only-binary :all:",
+                line,
+                "kraken asks for coremltools, and coremltools has no wheel "
+                "for Windows: this line has to be allowed to build it",
+            )
+        # And the reason is written where the line is read.
+        self.assertIn("coremltools", workflow)
+        self.assertIn("wheel-only", workflow)
+
+
+class TheReportAndTheCorpusAgreeTests(unittest.TestCase):
+    """A folder that was typed is the folder the report was written from.
+
+    The report of the accuracy names its pages against the folder it was
+    given, resolved; the tool that reads the report names them against
+    the folder it was given.  When one of the two resolved the folder
+    and the other did not, the two names did not meet and the build
+    stopped.  Both resolve now, and this is the run that failed.
+    """
+
+    def test_the_corpus_of_the_report_may_be_typed_as_it_comes(self) -> None:
+        import json
+        import os
+        import subprocess
+
+        corpus = REPO_ROOT / "benchmark" / "modern_cursive"
+        manifest = json.loads((corpus / "corpus.json").read_text(encoding="utf-8"))
+        page = next(
+            row
+            for row in manifest["pages"]
+            if (corpus / row["transcript"]).is_file()
+        )
+        ground_truth = (corpus / page["transcript"]).read_text(encoding="utf-8")
+        # The report is what ``benchmark_ocr.py`` writes: the pages are
+        # named against the resolved folder, because that is the folder
+        # the report was measured from.
+        report = {
+            "engines": [
+                {
+                    "model": "mishkefet-v1",
+                    "results": [
+                        {
+                            "page": (corpus / page["image"])
+                            .resolve()
+                            .relative_to(corpus.resolve())
+                            .as_posix(),
+                            "hypothesis_text": "שלום",
+                            "reference_sample": ground_truth[:40],
+                        }
+                    ],
+                }
+            ]
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            report_path = Path(folder) / "ocr-accuracy.json"
+            report_path.write_text(
+                json.dumps(report, ensure_ascii=False), encoding="utf-8"
+            )
+            output = Path(folder) / "suggestions.json"
+            # The folder is handed over as it is typed, next to nothing
+            # resolved, from the folder of the repository - the way the
+            # build hands it over.
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "tools" / "benchmark_suggestions.py"),
+                    "--ocr-report",
+                    str(report_path),
+                    "--corpus",
+                    os.path.join("benchmark", "modern_cursive"),
+                    "--output",
+                    str(output),
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"the tool stopped: {result.stderr[-500:]}",
+            )
+            written = json.loads(output.read_text(encoding="utf-8"))
+            # A case was built from the report, so the two names met.
+            self.assertGreaterEqual(
+                written["post_ocr"]["spelling_and_grammar"]["cases"], 1
             )
 
 

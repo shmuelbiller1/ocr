@@ -177,7 +177,21 @@ jobs:
           # anything else.  torch and torchvision have to be a matching
           # pair from the same place.
           python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 install-engine.log
-          python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          # kraken asks for coremltools~=9.0, and coremltools publishes
+          # no wheel for Windows - only for macOS and Linux - so this
+          # one line cannot be wheel-only: pip has to build that package
+          # from the source archive that was published for it.  It is a
+          # pure Python package, and every version is pinned, so what is
+          # built is the version that was asked for.  Every other line
+          # of this build is wheel-only.
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition engine could not be installed' }
+          # kraken is what the worker is built from, and a build that
+          # could not be installed must be heard here and not three
+          # steps later, where the worker would only say that the
+          # package is missing.
+          python -m pip show kraken 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition engine could not be installed' }
           # The page segmentation of the second engine (Mishkefet) is
           # written with OpenCV.  The package is Apache-2.0 and it does
           # not need a display.
@@ -435,7 +449,14 @@ jobs:
             # apart and the recognition dies with "operator
             # torchvision::nms does not exist".  The pair is pinned.
             python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
-            python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
+          # kraken asks for coremltools~=9.0, and coremltools publishes
+          # no wheel for Windows - only for macOS and Linux - so this
+          # one line cannot be wheel-only: pip has to build that package
+          # from the source archive that was published for it.  It is a
+          # pure Python package, and every version is pinned, so what is
+          # built is the version that was asked for.  Every other line
+          # of this build is wheel-only.
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
             # The page segmentation of the second engine (Mishkefet) is
             # written with OpenCV.  The package is Apache-2.0 and it does
             # not need a display.
@@ -688,7 +709,21 @@ jobs:
           # and the worker dies with "operator torchvision::nms does not
           # exist".  The pair is pinned.
           python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
-          python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          # kraken asks for coremltools~=9.0, and coremltools publishes
+          # no wheel for Windows - only for macOS and Linux - so this
+          # one line cannot be wheel-only: pip has to build that package
+          # from the source archive that was published for it.  It is a
+          # pure Python package, and every version is pinned, so what is
+          # built is the version that was asked for.  Every other line
+          # of this build is wheel-only.
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition engine could not be installed' }
+          # kraken is what the worker is built from, and a build that
+          # could not be installed must be heard here and not three
+          # steps later, where the worker would only say that the
+          # package is missing.
+          python -m pip show kraken 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition engine could not be installed' }
           # The page segmentation of the second engine (Mishkefet) is
           # written with OpenCV.  The package is Apache-2.0 and it does
           # not need a display.
@@ -696,6 +731,7 @@ jobs:
           # Match the desktop PDF runtime: the independent worker now tests PDFs too.
           python -m pip install --only-binary :all: "pypdfium2==4.30.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           python -m pip install --only-binary :all: "pyinstaller==6.16.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition engine could not be installed' }
       - name: Check that torch and torchvision belong together
         shell: pwsh
         run: |
