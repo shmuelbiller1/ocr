@@ -456,8 +456,12 @@ def main() -> int:
     # folders it may use before anything is read or written.
     for name in ("corpus", "models", "output"):
         value = getattr(args, name, None)
-        if value:
-            setattr(args, name, confine_path(value, *default_bases()))
+        if not value:
+            continue
+        from hebrew_workbench.engine.models import model_bases
+
+        allowed = model_bases() if name == "models" else default_bases()
+        setattr(args, name, confine_path(value, *allowed))
 
     cv2.setNumThreads(1)
     seg_rows = (

@@ -191,6 +191,18 @@ def models_directory() -> Path:
     return Path(base) / "hebrew-notes-workbench" / "models"
 
 
+def model_bases() -> list[str]:
+    """The folders a model file may be read from or written into.
+
+    A tool is given the folder of the models on its command line, and
+    when it is given none, the models are the ones the program itself
+    installed - in a folder of its own, outside the repository.  That is
+    a folder the program chose, so a tool may read from it as well;
+    without it, every run that did not name a folder was refused.
+    """
+    return [str(models_directory()), *default_bases()]
+
+
 def md5_of(path: str | Path) -> str:
     # MD5 is kept only to compare a file with a digest that was published
     # before this program pinned its models by SHA-256; it is a check
@@ -257,11 +269,17 @@ def install_artifact(
     # that folder, or into a folder of the repository or of the build.
     models_home = models_directory()
     allowed = (models_home.parent, *default_bases())
-    target_dir = (
-        confine_path(destination, models_home, *allowed)
-        if destination
-        else confine_path(models_home, *allowed)
-    )
+    try:
+        target_dir = (
+            confine_path(destination, models_home, *allowed)
+            if destination
+            else confine_path(models_home, *allowed)
+        )
+    except ValueError as exc:
+        # A folder that was refused is said the way every other failure
+        # of the installer is said, and not as a traceback: the tool that
+        # downloads a model catches this.
+        raise InstallError(str(exc)) from exc
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / artifact.filename
 

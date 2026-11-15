@@ -893,8 +893,12 @@ def main(argv: list[str] | None = None) -> int:
         "single_engine_output",
     ):
         value = getattr(args, name, None)
-        if value:
-            setattr(args, name, confine_path(value, *bases))
+        if not value:
+            continue
+        # A model, or a folder of models, may be the one the program
+        # installed into a folder of its own.
+        allowed = model_bases() if name in ("model", "models") else bases
+        setattr(args, name, confine_path(value, *allowed))
 
     if not args.corpus and not args.pinkas:
         raise SystemExit(
@@ -990,7 +994,7 @@ def main(argv: list[str] | None = None) -> int:
     description["pages_measured"] = pages_measured
 
     # -- the engines --------------------------------------------------------
-    from hebrew_workbench.engine.models import models_directory
+    from hebrew_workbench.engine.models import model_bases, models_directory
 
     model_ids = list(args.engines)
     if args.model:

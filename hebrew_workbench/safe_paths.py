@@ -59,10 +59,14 @@ def confine_path(raw: str | Path, *bases: str | Path) -> Path:
     """
     real = os.path.realpath(str(raw))
     for base in bases:
-        prefix = os.path.realpath(str(base))
-        if not prefix.endswith(os.sep):
-            prefix = prefix + os.sep
-        if real.startswith(prefix):
+        root = os.path.realpath(str(base))
+        prefix = root if root.endswith(os.sep) else root + os.sep
+        # The folder itself is allowed, and so is anything under it.  A
+        # folder that was refused *because* it is one of the folders that
+        # are allowed said something plainly wrong, and it broke every
+        # call that named one of them - ``--corpus .``, ``--output .``,
+        # the folder of the temporary files.
+        if real == root or real.startswith(prefix):
             return Path(real)
     allowed = ", ".join(str(base) for base in bases) or "no folder"
     raise PathRefused(

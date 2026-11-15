@@ -252,32 +252,40 @@ class TheCheckpointIsCheckedTests(unittest.TestCase):
         self.assertIn("verify_mishkefet_checkpoint(", body)
 
     def test_the_gate_checks_the_digest_before_it_builds(self) -> None:
-        """Inside the gate the order is: check, and only then build."""
+        """Inside the gate the order is: check, and only then build.
+
+        The first version of this test compared the position of the
+        check with the length of the list, which is true wherever the
+        check is, and it only looked at calls that stand alone - so the
+        ``return Recognizer(...)`` was never part of the comparison and
+        the test could not fail.  This one compares the statement that
+        checks with the statement that builds.
+        """
         import ast
 
         source = (REPO_ROOT / "hebrew_workbench" / "engine" / "mishkefet.py").read_text(
             encoding="utf-8"
         )
-        tree = ast.parse(source)
         gate = next(
             node
-            for node in tree.body
-            if isinstance(node, ast.FunctionDef) and node.name == "load_verified_recognizer"
+            for node in ast.parse(source).body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "load_verified_recognizer"
         )
-        names = [
-            stmt.value.func.id
-            for stmt in gate.body
-            if isinstance(stmt, ast.Expr)
-            and isinstance(stmt.value, ast.Call)
-            and isinstance(stmt.value.func, ast.Name)
-        ]
-        self.assertIn("verify_mishkefet_checkpoint", names)
+        unparsed = [ast.unparse(stmt) for stmt in gate.body]
+        verify_at = next(
+            index
+            for index, stmt in enumerate(unparsed)
+            if "verify_mishkefet_checkpoint(" in stmt
+        )
+        build_at = next(
+            index for index, stmt in enumerate(unparsed) if "Recognizer(" in stmt
+        )
         self.assertLess(
-            names.index("verify_mishkefet_checkpoint"),
-            len(names),
-            "the check has to come before the recogniser is built",
+            verify_at,
+            build_at,
+            "the digest has to be checked before the checkpoint is read",
         )
-        self.assertIn("Recognizer(", ast.unparse(gate))
 
 
 def engine_manifest() -> EngineManifest:
