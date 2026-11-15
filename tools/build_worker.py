@@ -91,8 +91,7 @@ def main(argv=None) -> int:
               "worker_bytes": sum(p.stat().st_size for p in worker.rglob("*") if p.is_file())}
     report_path = confine_path(args.report, *default_bases())
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    # NOSONAR (S8707): report_path was confined on the line above.
-    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")  # NOSONAR (S8707): confined above
     print(json.dumps(report, indent=2))
     return 0
 
