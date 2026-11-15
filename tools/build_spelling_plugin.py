@@ -143,10 +143,10 @@ def build(output, cmake='cmake'):
     # Every path of the command was confined on its way in, and the
     # program was looked up with ``shutil.which`` and confined as well,
     # so there is nothing in the command that was taken on trust.
-    subprocess.run(configure, check=True)  # NOSONAR (S8701)
+    subprocess.run(configure, check=True)  # NOSONAR
     build = [program, '--build', _inside(compile_dir),
              '--config', 'Release', '--parallel', '2']
-    subprocess.run(build, check=True)  # NOSONAR (S8701)
+    subprocess.run(build, check=True)  # NOSONAR
     binary_name = 'hebrew-spelling-worker.exe' if os.name == 'nt' else 'hebrew-spelling-worker'
     candidates = list(compile_dir.rglob(binary_name))
     if len(candidates) != 1:
