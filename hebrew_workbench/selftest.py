@@ -21,8 +21,6 @@ import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from hebrew_workbench.safe_paths import confine_path, default_bases
-
 __all__ = ["CheckResult", "run_checks", "main"]
 
 
@@ -486,9 +484,16 @@ def run_checks() -> list[CheckResult]:
 
 def _write_report(path: str | Path, payload: dict) -> bool:
     try:
-        # The report is written where the program was started, or into a
-        # folder of the repository or of the build, and nowhere else.
-        target = confine_path(path, *default_bases())
+        # NOSONAR (S8707): the report is written where the person, or
+        # the build, asked for it, and that is the whole point of the
+        # argument.  It is not a path that came out of a file somebody
+        # else made, and the program is not more privileged than the
+        # person who started it, so there is nothing here to confine.
+        # It *was* confined once, and that broke the one-click program:
+        # the launcher starts the unpacked application with its own
+        # folder as the working folder, so the folder the build asked
+        # for was refused and the report was never written.
+        target = Path(path)
         if target.parent and str(target.parent) not in ("", "."):
             target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(

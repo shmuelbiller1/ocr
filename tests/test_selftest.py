@@ -35,6 +35,34 @@ class SelfTestTests(unittest.TestCase):
             self.assertIn("engine-contract", names)
             self.assertIn("document-output", names)
 
+    def test_the_report_is_written_where_the_one_click_program_asks(self) -> None:
+        """The one-click program starts the application in another folder.
+
+        The launcher unpacks the application into a folder of its own and
+        starts it with *that* folder as the working folder, while the
+        build asks for the report in the folder of the build.  When the
+        report was confined to the folders of the program, it was refused
+        there, nothing was written, and the one-click program stopped
+        without saying a word.  The report is a place the person - or the
+        build - pointed at, so it is written there.
+        """
+        from unittest.mock import patch
+
+        from hebrew_workbench import selftest
+
+        with tempfile.TemporaryDirectory() as folder:
+            report = Path(folder) / "one-click-lite-selftest.json"
+            # The folders of the program are somewhere else entirely,
+            # which is what they are for the unpacked application.
+            with patch(
+                "hebrew_workbench.safe_paths.default_bases",
+                return_value=[str(Path(folder) / "somewhere-else")],
+            ):
+                written = selftest._write_report(report, {"ok": True})
+            self.assertTrue(written, "the report was refused")
+            self.assertTrue(report.is_file(), "the report was not written")
+            self.assertEqual(json.loads(report.read_text(encoding="utf-8")), {"ok": True})
+
 
 if __name__ == "__main__":
     unittest.main()
