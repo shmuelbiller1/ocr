@@ -1,0 +1,49 @@
+[CROP][mishkefet-v1][with_photocraft][verified_native_300dpi][original] CER=37.95% (+0.00pp) conf=0.9314 sw=4.17 18154ms
+[CROP][mishkefet-v1][with_photocraft][verified_native_300dpi][mild_thicken] CER=38.76% (+0.81pp) conf=0.9315 sw=4.17 18195ms
+[CROP][mishkefet-v1][with_photocraft][verified_native_300dpi][moderate_thicken] CER=39.51% (+1.56pp) conf=0.9326 sw=4.17 18175ms
+[CROP][mishkefet-v1][with_photocraft][verified_native_300dpi][slight_thin] CER=38.34% (+0.39pp) conf=0.9296 sw=4.17 18093ms
+[CROP][mishkefet-v1][with_photocraft][verified_native_300dpi][adaptive_norm] CER=38.13% (+0.18pp) conf=0.9322 sw=4.17 18238ms
+[CROP][mishkefet-v1][with_photocraft][verified_native_300dpi][faint_repair] CER=38.32% (+0.37pp) conf=0.9326 sw=4.17 18285ms
+[CROP][mishkefet-v1][with_photocraft][pen_fine_nib][original] CER=72.15% (+0.00pp) conf=0.955 sw=13.87 24522ms
+[CROP][mishkefet-v1][with_photocraft][pen_fine_nib][mild_thicken] CER=72.32% (+0.17pp) conf=0.9546 sw=13.87 25271ms
+[CROP][mishkefet-v1][with_photocraft][pen_fine_nib][moderate_thicken] CER=72.24% (+0.09pp) conf=0.9553 sw=13.87 25072ms
+[CROP][mishkefet-v1][with_photocraft][pen_fine_nib][slight_thin] CER=72.63% (+0.48pp) conf=0.9536 sw=13.87 24943ms
+[CROP][mishkefet-v1][with_photocraft][pen_fine_nib][adaptive_norm] CER=71.96% (-0.19pp) conf=0.954 sw=13.87 25573ms
+[CROP][mishkefet-v1][with_photocraft][pen_fine_nib][faint_repair] CER=72.01% (-0.14pp) conf=0.956 sw=13.87 25184ms
+[CROP][mishkefet-v1][with_photocraft][pen_faint_broken][original] CER=63.84% (+0.00pp) conf=0.9397 sw=6.53 36868ms
+[CROP][mishkefet-v1][with_photocraft][pen_faint_broken][mild_thicken] CER=64.68% (+0.84pp) conf=0.9409 sw=6.53 37797ms
+[CROP][mishkefet-v1][with_photocraft][pen_faint_broken][moderate_thicken] CER=62.74% (-1.10pp) conf=0.942 sw=6.53 37567ms
+[CROP][mishkefet-v1][with_photocraft][pen_faint_broken][slight_thin] CER=62.82% (-1.02pp) conf=0.9387 sw=6.53 37528ms
+[CROP][mishkefet-v1][with_photocraft][pen_faint_broken][adaptive_norm] CER=63.64% (-0.20pp) conf=0.9395 sw=6.53 37961ms
+[CROP][mishkefet-v1][with_photocraft][pen_faint_broken][faint_repair] CER=64.24% (+0.40pp) conf=0.9412 sw=6.53 37546ms
+[CROP][mishkefet-v1][with_photocraft][pen_heavy_marker][original] CER=66.99% (+0.00pp) conf=0.9271 sw=8.63 25329ms
+[CROP][mishkefet-v1][with_photocraft][pen_heavy_marker][mild_thicken] CER=66.93% (-0.06pp) conf=0.9279 sw=8.63 25631ms
+[CROP][mishkefet-v1][with_photocraft][pen_heavy_marker][moderate_thicken] CER=67.34% (+0.35pp) conf=0.9256 sw=8.63 25972ms
+[CROP][mishkefet-v1][with_photocraft][pen_heavy_marker][slight_thin] CER=66.43% (-0.56pp) conf=0.9261 sw=8.63 25708ms
+[CROP][mishkefet-v1][with_photocraft][pen_heavy_marker][adaptive_norm] CER=66.64% (-0.35pp) conf=0.9276 sw=8.63 25758ms
+[CROP][mishkefet-v1][with_photocraft][pen_heavy_marker][faint_repair] CER=67.11% (+0.12pp) conf=0.928 sw=8.63 25838ms
+[CROP][mishkefet-v1][with_photocraft][dpi_150_lowres][original] CER=52.52% (+0.00pp) conf=0.9329 sw=6.60 19755ms
+[CROP][mishkefet-v1][with_photocraft][dpi_150_lowres][mild_thicken] CER=52.96% (+0.44pp) conf=0.9318 sw=6.60 20027ms
+[CROP][mishkefet-v1][with_photocraft][dpi_150_lowres][moderate_thicken] CER=52.92% (+0.40pp) conf=0.9314 sw=6.60 20220ms
+[CROP][mishkefet-v1][with_photocraft][dpi_150_lowres][slight_thin] CER=51.78% (-0.74pp) conf=0.9329 sw=6.60 20154ms
+[CROP][mishkefet-v1][with_photocraft][dpi_150_lowres][adaptive_norm] CER=52.19% (-0.33pp) conf=0.9332 sw=6.60 20280ms
+[CROP][mishkefet-v1][with_photocraft][dpi_150_lowres][faint_repair] CER=51.93% (-0.59pp) conf=0.9328 sw=6.60 20002ms
+[CROP][mishkefet-v1][without_photocraft][verified_native_300dpi][original] CER=41.36% (+0.00pp) conf=0.9324 sw=4.20 18338ms
+[CROP][mishkefet-v1][without_photocraft][verified_native_300dpi][mild_thicken] CER=41.16% (-0.20pp) conf=0.9329 sw=4.20 18749ms
+[CROP][mishkefet-v1][without_photocraft][verified_native_300dpi][moderate_thicken] CER=42.19% (+0.83pp) conf=0.9341 sw=4.20 18435ms
+[CROP][mishkefet-v1][without_photocraft][verified_native_300dpi][slight_thin] CER=40.97% (-0.39pp) conf=0.9312 sw=4.20 18561ms
+[CROP][mishkefet-v1][without_photocraft][verified_native_300dpi][adaptive_norm] CER=41.28% (-0.08pp) conf=0.9332 sw=4.20 18936ms
+[CROP][mishkefet-v1][without_photocraft][verified_native_300dpi][faint_repair] CER=40.68% (-0.68pp) conf=0.933 sw=4.20 18550ms
+[CROP][kraken-ppocrv6-small][with_photocraft][verified_native_300dpi][original] CER=82.32% (+0.00pp) conf=0.6239 4407ms
+[CROP][kraken-ppocrv6-small][with_photocraft][verified_native_300dpi][mild_thicken] CER=82.54% (+0.22pp) conf=0.6324 4750ms
+[CROP][kraken-ppocrv6-small][with_photocraft][verified_native_300dpi][moderate_thicken] CER=82.00% (-0.32pp) conf=0.6108 4611ms
+[CROP][kraken-ppocrv6-small][with_photocraft][verified_native_300dpi][slight_thin] CER=82.22% (-0.10pp) conf=0.6158 4534ms
+[CROP][kraken-ppocrv6-small][with_photocraft][verified_native_300dpi][adaptive_norm] CER=82.27% (-0.05pp) conf=0.6227 4740ms
+[CROP][kraken-ppocrv6-small][with_photocraft][verified_native_300dpi][faint_repair] CER=82.21% (-0.11pp) conf=0.61 4559ms
+[CROP][kraken-ppocrv6-small][with_photocraft][pen_fine_nib][original] CER=90.56% (+0.00pp) conf=0.5707 2991ms
+[CROP][kraken-ppocrv6-small][with_photocraft][pen_fine_nib][mild_thicken] CER=90.93% (+0.37pp) conf=0.6063 3156ms
+[CROP][kraken-ppocrv6-small][with_photocraft][pen_fine_nib][moderate_thicken] CER=90.68% (+0.12pp) conf=0.5926 3333ms
+[CROP][kraken-ppocrv6-small][with_photocraft][pen_fine_nib][slight_thin] CER=90.76% (+0.20pp) conf=0.6049 3149ms
+[CROP][kraken-ppocrv6-small][with_photocraft][pen_fine_nib][adaptive_norm] CER=90.76% (+0.20pp) conf=0.6044 3375ms
+[CROP][kraken-ppocrv6-small][with_photocraft][pen_fine_nib][faint_repair] CER=90.68% (+0.12pp) conf=0.6192 3368ms
+Wrote stroke-width benchmark report to /home/runner/work/ocr/ocr/stroke-width-benchmark.json

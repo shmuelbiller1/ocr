@@ -1,0 +1,22 @@
+{
+  "document": "benchmark/smoke_test/pages/scan-2026-10-28-221624.pdf",
+  "mode": "assisted",
+  "accuracy": "unverified",
+  "runtime_note": "Comparison runtime includes BOTH raw and alternative decoding.",
+  "readings": {
+    "raw": {
+      "text_file": "/home/runner/work/ocr/ocr/build/decoding-comparison/decoding-raw.txt",
+      "characters": 2427
+    },
+    "comparison-raw": {
+      "text_file": "/home/runner/work/ocr/ocr/build/decoding-comparison/decoding-comparison-raw.txt",
+      "characters": 2427
+    },
+    "assisted": {
+      "text_file": "/home/runner/work/ocr/ocr/build/decoding-comparison/decoding-assisted.txt",
+      "characters": 2384
+    }
+  },
+  "raw_seconds": 31.96,
+  "comparison_seconds": 105.08
+}
