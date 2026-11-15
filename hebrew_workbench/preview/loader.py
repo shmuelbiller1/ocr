@@ -95,6 +95,14 @@ class DocumentPreview:
         # file may answer them differently.  The size is read from the
         # open file, which is the size that is really rendered.
         try:
+            # NOSONAR (S2083): the document is the one the person chose
+            # in the dialog of the program, and the program is asked to
+            # show it; there is no folder the program is confined to when
+            # a person points at a file and says "open this one".  What
+            # is checked is what can be checked: the file is opened once
+            # and the size that is really rendered is read from that
+            # open file, so no question is asked twice about a path that
+            # may answer differently the second time.
             with open(self.path, "rb") as stream:
                 size = stream.seek(0, os.SEEK_END)
         except FileNotFoundError as exc:

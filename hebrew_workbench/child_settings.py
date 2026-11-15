@@ -29,9 +29,10 @@ def write_child_settings(folder: str | Path, settings: dict) -> Path:
     """Write the *settings* of a child into *folder* and return the file.
 
     The folder is the one the parent made for this child, so the file is
-    written where nothing else is.
+    written where nothing else is - and it is confined here as well, so
+    that a caller that forgot to ask cannot write one outside of it.
     """
-    target = Path(folder) / SETTINGS_NAME
+    target = confine_path(Path(folder) / SETTINGS_NAME, *default_bases())
     target.write_text(
         json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8"
     )

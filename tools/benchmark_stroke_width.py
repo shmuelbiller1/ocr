@@ -1129,7 +1129,7 @@ def main(argv: list[str] | None = None) -> int:
 
     text = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:
-        out = Path(args.output)
+        out = confine_path(args.output, *default_bases())
         out.parent.mkdir(parents=True, exist_ok=True)
         # The report is written through an open file and not with
         # ``write_text``, so that the text is written as it is and no

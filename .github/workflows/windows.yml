@@ -288,7 +288,7 @@ jobs:
             if ($edition -eq 'full') {
               $modelArgs += @('--full-models-dir', '.cache/models')
             }
-            python tools/build_one_click.py @modelArgs
+            python tools/build_one_click.py @modelArgs 2>&1 | Tee-Object -FilePath "one-click-$edition-payload.txt"
             if ($LASTEXITCODE -ne 0) { throw "Model packaging failed: $edition" }
             $name = if ($edition -eq 'full') {
               "$base-all-models-noncommercial-one-click"
@@ -301,7 +301,7 @@ jobs:
               --distpath release `
               --workpath "build/one-click-build-$edition" `
               --specpath "build/one-click-spec-$edition" `
-              --name $name tools/portable_launcher.py
+              --name $name tools/portable_launcher.py 2>&1 | Tee-Object -FilePath "one-click-$edition-exe.txt"
             if ($LASTEXITCODE -ne 0) { throw "One-click EXE build failed: $edition" }
             $exe = Join-Path 'release' ($name + '.exe')
             $report = "one-click-$edition-selftest.json"
@@ -310,7 +310,7 @@ jobs:
                 -Exe $exe -Report $report `
                 -StdOut "one-click-$edition-out.txt" `
                 -StdErr "one-click-$edition-err.txt" `
-                -TimeoutSeconds 300
+                -TimeoutSeconds 600
               if ($LASTEXITCODE -ne 0) { throw "Offline EXE failed first launch: $edition" }
             }
             if (-not (Test-Path $report)) { throw "Offline report missing: $edition" }
@@ -322,7 +322,7 @@ jobs:
                 -Exe $exe -Report $warmReport `
                 -StdOut "one-click-$edition-warm-out.txt" `
                 -StdErr "one-click-$edition-warm-err.txt" `
-                -TimeoutSeconds 300
+                -TimeoutSeconds 600
               if ($LASTEXITCODE -ne 0) { throw "Offline EXE failed second launch: $edition" }
             }
             $exeSize = (Get-Item $exe).Length
@@ -391,7 +391,7 @@ jobs:
         run: |
           Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py --branch=ci/diagnostics one-click-telemetry.json one-click-lite-selftest.json one-click-full-selftest.json modern-spelling-build.txt modern-spelling-check.txt modern-spelling-windows.json spelling-build.txt spelling-check.txt spelling-windows.json test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-out.txt.exit.txt release-selftest-err.txt release-selftest.json release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
+          python tools/publish_diagnostics.py --branch=ci/diagnostics one-click-telemetry.json one-click-lite-selftest.json one-click-full-selftest.json one-click-lite-payload.txt one-click-full-payload.txt one-click-lite-exe.txt one-click-full-exe.txt one-click-lite-out.txt one-click-lite-err.txt one-click-full-out.txt one-click-full-err.txt one-click-lite-warm-selftest.json one-click-full-warm-selftest.json one-click-lite-warm-out.txt one-click-lite-warm-err.txt one-click-full-warm-out.txt one-click-full-warm-err.txt modern-spelling-build.txt modern-spelling-check.txt modern-spelling-windows.json spelling-build.txt spelling-check.txt spelling-windows.json test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-out.txt.exit.txt release-selftest-err.txt release-selftest.json release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4

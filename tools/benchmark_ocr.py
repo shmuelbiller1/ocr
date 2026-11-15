@@ -117,6 +117,9 @@ def ground_truth_of(path: Path) -> tuple[str, dict]:
 
 def download_dataset(target: Path) -> Path:
     """Download and verify the Pinkas dataset."""
+    # The folder is asked about here and not only where it was given, so
+    # that the archive cannot be written outside of it.
+    target = confine_path(target, *default_bases())
     target.mkdir(parents=True, exist_ok=True)
     archive = target / "pinkas_dataset.zip"
     if (
@@ -493,7 +496,7 @@ def check_against_the_manifest(corpus_folder: Path, pages: list[Page]) -> list[s
     A corpus without a manifest is not checked: there is nothing to
     check it against.
     """
-    manifest_path = Path(corpus_folder) / "manifest.json"
+    manifest_path = confine_path(corpus_folder, *default_bases()) / "manifest.json"
     if not manifest_path.is_file():
         return []
     try:

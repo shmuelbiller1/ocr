@@ -116,6 +116,11 @@ def source_files(root):
     return result
 
 
+def _inside(path) -> str:
+    """The path as a word of a command, confined to the folders of the build."""
+    return str(confine_path(path, *default_bases()))
+
+
 def build(output, cmake='cmake'):
     output = confine_path(output, *default_bases())
     # Avoid deleting any user-selected directory: builds stage in a fresh subfolder.
@@ -127,14 +132,16 @@ def build(output, cmake='cmake'):
     hspell = extract(files['hspell-source.tar.gz'], output / 'upstream-hspell')
     compile_dir = output / ('native-vs2022-x64' if os.name == 'nt' else 'native')
     program = _executable(cmake)
-    configure = [program, '-S', str(TEMPLATE), '-B', str(compile_dir),
-                 '-DHUNSPELL_SOURCE=' + str(hunspell), '-DCMAKE_BUILD_TYPE=Release']
+    # Nothing reaches a command before it was asked about: the folder of
+    # the sources, the folder of the build and the sources themselves.
+    configure = [program, '-S', _inside(TEMPLATE), '-B', _inside(compile_dir),
+                 '-DHUNSPELL_SOURCE=' + _inside(hunspell), '-DCMAKE_BUILD_TYPE=Release']
     if os.name == 'nt':
         # Hosted runners can export CMAKE_GENERATOR=NMake without a developer
         # shell. The VS generator locates MSVC without relying on PATH/nmake.
         configure += ['-G', 'Visual Studio 17 2022', '-A', 'x64']
     subprocess.run(configure, check=True)
-    subprocess.run([program, '--build', str(compile_dir), '--config', 'Release', '--parallel', '2'], check=True)
+    subprocess.run([program, '--build', _inside(compile_dir), '--config', 'Release', '--parallel', '2'], check=True)
     binary_name = 'hebrew-spelling-worker.exe' if os.name == 'nt' else 'hebrew-spelling-worker'
     candidates = list(compile_dir.rglob(binary_name))
     if len(candidates) != 1:
