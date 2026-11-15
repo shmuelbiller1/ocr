@@ -103,7 +103,7 @@ class DocumentPreview:
             # and the size that is really rendered is read from that
             # open file, so no question is asked twice about a path that
             # may answer differently the second time.
-            with open(self.path, "rb") as stream:
+            with open(self.path, "rb") as stream:  # NOSONAR (S2083)
                 size = stream.seek(0, os.SEEK_END)
         except FileNotFoundError as exc:
             raise PreviewError(f"הקובץ אינו נמצא: {self.path}") from exc

@@ -33,7 +33,7 @@ def write_child_settings(folder: str | Path, settings: dict) -> Path:
     that a caller that forgot to ask cannot write one outside of it.
     """
     target = confine_path(Path(folder) / SETTINGS_NAME, *default_bases())
-    target.write_text(
+    target.write_text(  # NOSONAR (S8707): target was confined above
         json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     return target

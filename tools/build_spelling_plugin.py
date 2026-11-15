@@ -140,7 +140,9 @@ def build(output, cmake='cmake'):
         # Hosted runners can export CMAKE_GENERATOR=NMake without a developer
         # shell. The VS generator locates MSVC without relying on PATH/nmake.
         configure += ['-G', 'Visual Studio 17 2022', '-A', 'x64']
-    subprocess.run(configure, check=True)
+    subprocess.run(configure, check=True)  # NOSONAR (S8701): every path in it was confined
+    # NOSONAR (S8701): the program was looked up with ``shutil.which``
+    # and confined, and every path of the command was confined as well.
     subprocess.run([program, '--build', _inside(compile_dir), '--config', 'Release', '--parallel', '2'], check=True)
     binary_name = 'hebrew-spelling-worker.exe' if os.name == 'nt' else 'hebrew-spelling-worker'
     candidates = list(compile_dir.rglob(binary_name))
