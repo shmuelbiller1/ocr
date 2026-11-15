@@ -454,12 +454,12 @@ def main() -> int:
 
     # The folders the tool was given are resolved and kept inside the
     # folders it may use before anything is read or written.
+    from hebrew_workbench.engine.models import model_bases
+
     for name in ("corpus", "models", "output"):
         value = getattr(args, name, None)
         if not value:
             continue
-        from hebrew_workbench.engine.models import model_bases
-
         allowed = model_bases() if name == "models" else default_bases()
         setattr(args, name, confine_path(value, *allowed))
 

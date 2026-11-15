@@ -882,6 +882,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # Every folder and file the tool was given is resolved and kept
     # inside the folders it may use before anything is read or written.
+    from hebrew_workbench.engine.models import model_bases
+
     bases = default_bases()
     for name in (
         "corpus",
@@ -994,7 +996,7 @@ def main(argv: list[str] | None = None) -> int:
     description["pages_measured"] = pages_measured
 
     # -- the engines --------------------------------------------------------
-    from hebrew_workbench.engine.models import model_bases, models_directory
+    from hebrew_workbench.engine.models import models_directory
 
     model_ids = list(args.engines)
     if args.model:

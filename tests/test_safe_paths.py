@@ -39,7 +39,11 @@ class TheFolderItselfIsAllowedTests(unittest.TestCase):
         )
 
     def test_the_folder_the_program_was_started_in_is_allowed(self) -> None:
-        self.assertEqual(confine_path(".", *default_bases()), Path.cwd().resolve())
+        # The comparison is made on the resolved folder: on the machine
+        # that builds the program the folder of the temporary files comes
+        # back with a short name of eight characters, and a path that was
+        # not resolved would not be equal to it.
+        self.assertEqual(confine_path(".", *default_bases()), Path(working_base()))
 
     def test_the_folder_of_the_temporary_files_is_allowed(self) -> None:
         self.assertEqual(
@@ -48,7 +52,7 @@ class TheFolderItselfIsAllowedTests(unittest.TestCase):
 
     def test_a_folder_under_an_allowed_folder_is_allowed(self) -> None:
         self.assertEqual(
-            confine_path("tools", *default_bases()), Path.cwd() / "tools"
+            confine_path("tools", *default_bases()), Path(working_base()) / "tools"
         )
 
     def test_a_brother_folder_whose_name_begins_the_same_is_still_refused(self) -> None:
@@ -58,11 +62,12 @@ class TheFolderItselfIsAllowedTests(unittest.TestCase):
         there now that the folder itself is allowed as well.
         """
         with tempfile.TemporaryDirectory() as folder:
-            base = Path(folder) / "workspace"
+            root = Path(os.path.realpath(folder))
+            base = root / "workspace"
             base.mkdir()
             self.assertEqual(confine_path(base / "inside", base), base / "inside")
             with self.assertRaises(PathRefused):
-                confine_path(Path(folder) / "work", base)
+                confine_path(root / "work", base)
 
     def test_a_path_outside_is_refused_and_says_why(self) -> None:
         with self.assertRaises(PathRefused) as caught:
@@ -97,7 +102,7 @@ class TheFolderOfTheModelsTests(unittest.TestCase):
         from hebrew_workbench.engine.models import model_bases, models_directory
 
         with tempfile.TemporaryDirectory() as folder:
-            home = Path(folder) / "models"
+            home = Path(os.path.realpath(folder)) / "models"
             home.mkdir()
             with patch.dict(
                 os.environ, {"HEBREW_WORKBENCH_MODELS": str(home)}
@@ -116,22 +121,24 @@ class TheFolderOfTheModelsTests(unittest.TestCase):
         """A refused folder is not a traceback.
 
         The tool that downloads a model catches ``InstallError``, so a
-        folder that is refused has to be one.
+        folder that is refused has to be one.  The folders are chosen
+        here and not taken from the machine, so the test says the same
+        thing wherever it runs - and it never reaches the network,
+        because a folder is refused before anything is downloaded.
         """
+        from hebrew_workbench.engine import models as models_module
         from hebrew_workbench.engine.models import MODEL_ARTIFACTS, InstallError
 
         artifact = MODEL_ARTIFACTS["kraken-ppocrv6-small"]
-        outside = (
-            Path(tempfile.gettempdir()).parent
-            if os.name != "nt"
-            else Path("C:\\")
-        )
-        if os.name == "nt":  # pragma: no cover - the build measures on Linux
-            self.skipTest("every folder is inside the drive on Windows")
-        from hebrew_workbench.engine.models import install_artifact
-
-        with self.assertRaises(InstallError) as caught:
-            install_artifact(artifact, destination=outside / "somewhere-else-entirely")
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(os.path.realpath(folder))
+            home = root / "models"
+            refused = root.parent / "somewhere-else-entirely"
+            with patch.object(models_module, "models_directory", return_value=home), patch.object(
+                models_module, "default_bases", return_value=[str(root / "nowhere")]
+            ):
+                with self.assertRaises(InstallError) as caught:
+                    models_module.install_artifact(artifact, destination=refused)
         self.assertIn("outside", str(caught.exception))
 
 

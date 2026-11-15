@@ -40,14 +40,14 @@ def main(argv=None) -> int:
         parser.error("--transcript requires --verified-by, and vice versa")
     # Every path the tool was given is resolved and kept inside the
     # folders it may use before anything is read or written.
+    from hebrew_workbench.engine.models import model_bases
+
     bases = default_bases()
     output = confine_path(args.output, *bases)
     document = confine_path(args.document, *bases)
     transcript = confine_path(args.transcript, *bases) if args.transcript else None
     # The model may be the one the program installed into a folder of its
     # own, outside the repository, and not only one of this checkout.
-    from hebrew_workbench.engine.models import model_bases
-
     model = confine_path(args.model, *model_bases())
     output.mkdir(parents=True, exist_ok=True)
     targets = [
