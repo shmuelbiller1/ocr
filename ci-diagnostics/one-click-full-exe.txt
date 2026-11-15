@@ -1,0 +1,62 @@
+93 INFO: PyInstaller: 6.16.0, contrib hooks: 2026.10
+93 INFO: Python: 3.12.10
+109 INFO: Platform: Windows-2022Server-10.0.20348-SP0
+109 INFO: Python environment: C:\hostedtoolcache\windows\Python\3.12.10\x64
+109 INFO: wrote build/one-click-spec-full\HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click.spec
+125 INFO: Removing temporary files and cleaning cache in C:\Users\runneradmin\AppData\Local\pyinstaller
+125 INFO: Module search paths (PYTHONPATH):
+['D:\\a\\ocr\\ocr',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\python312.zip',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\DLLs',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages',
+ 'D:\\a\\ocr\\ocr\\tools']
+375 INFO: Appending 'datas' from .spec
+375 INFO: checking Analysis
+375 INFO: Building Analysis because Analysis-00.toc is non existent
+375 INFO: Looking for Python shared library...
+375 INFO: Using Python shared library: C:\hostedtoolcache\windows\Python\3.12.10\x64\python312.dll
+375 INFO: Running Analysis Analysis-00.toc
+375 INFO: Target bytecode optimization level: 0
+375 INFO: Initializing module dependency graph...
+375 INFO: Initializing module graph hook caches...
+375 INFO: Analyzing modules for base_library.zip ...
+1221 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+2472 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+3144 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+3473 INFO: Caching module dependency graph...
+3504 INFO: Analyzing D:\a\ocr\ocr\tools\portable_launcher.py
+3535 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+3535 INFO: Processing module hooks (post-graph stage)...
+3551 INFO: Performing binary vs. data reclassification (2 entries)
+3551 INFO: Looking for ctypes DLLs
+3551 INFO: Analyzing run-time hooks ...
+3551 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+3551 INFO: Creating base_library.zip...
+3566 INFO: Looking for dynamic libraries
+3660 INFO: Extra DLL search directories (AddDllDirectory): []
+3660 INFO: Extra DLL search directories (PATH): []
+3879 WARNING: Library not found: could not resolve 'api-ms-win-core-path-l1-1-0.dll', dependency of 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\python312.dll'.
+3879 INFO: Warnings written to D:\a\ocr\ocr\build\one-click-build-full\HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click\warn-HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click.txt
+3895 INFO: Graph cross-reference written to D:\a\ocr\ocr\build\one-click-build-full\HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click\xref-HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click.html
+3911 INFO: checking PYZ
+3911 INFO: Building PYZ because PYZ-00.toc is non existent
+3911 INFO: Building PYZ (ZlibArchive) D:\a\ocr\ocr\build\one-click-build-full\HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click\PYZ-00.pyz
+4036 INFO: Building PYZ (ZlibArchive) D:\a\ocr\ocr\build\one-click-build-full\HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click\PYZ-00.pyz completed successfully.
+4036 INFO: checking PKG
+4036 INFO: Building PKG because PKG-00.toc is non existent
+4036 INFO: Building PKG (CArchive) HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click.pkg
+33591 INFO: Building PKG (CArchive) HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click.pkg completed successfully.
+33591 INFO: Bootloader C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+33591 INFO: checking EXE
+33591 INFO: Building EXE because EXE-00.toc is non existent
+33591 INFO: Building EXE from EXE-00.toc
+33591 INFO: Copying bootloader EXE to D:\a\ocr\ocr\release\HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click.exe
+33591 INFO: Copying icon to EXE
+33591 INFO: Copying 0 resources to EXE
+33591 INFO: Embedding manifest in EXE
+33606 INFO: Appending PKG archive to EXE
+33841 INFO: Fixing EXE headers
+38709 INFO: Building EXE from EXE-00.toc completed successfully.
+38709 INFO: Build complete! The results are available in: D:\a\ocr\ocr\release

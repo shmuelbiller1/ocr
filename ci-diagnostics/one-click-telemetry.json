@@ -1,0 +1,18 @@
+{
+  "zip_bytes": 360633735,
+  "zip_name": "HebrewNotesWorkbench-0.5.0-win64.zip",
+  "editions": {
+    "full": {
+      "subsequent_launch_selftest_seconds": 5.72,
+      "first_launch_selftest_seconds": 17.36,
+      "exe_bytes": 561430837,
+      "exe_name": "HebrewNotesWorkbench-0.5.0-all-models-noncommercial-one-click.exe"
+    },
+    "lite": {
+      "subsequent_launch_selftest_seconds": 3.17,
+      "first_launch_selftest_seconds": 19.34,
+      "exe_bytes": 378476209,
+      "exe_name": "HebrewNotesWorkbench-0.5.0-one-click.exe"
+    }
+  }
+}

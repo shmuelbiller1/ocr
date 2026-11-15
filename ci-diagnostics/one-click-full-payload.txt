@@ -1,0 +1,3 @@
+one-click offline payload: D:\a\ocr\ocr\build\one-click-full\one-click-payload.zip
+size: 590384639 bytes
+sha256: cf21e6659823ce42adf995c795b1b7a1b07122f8921dae42e139e720c14dac59
