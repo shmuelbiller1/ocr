@@ -11,3 +11,6 @@ dist/
 .ruff_cache/
 selftest-*.json
 *.hwproj
+
+# The folder where the diagnostics of a build are put together.
+/ci-diagnostics/

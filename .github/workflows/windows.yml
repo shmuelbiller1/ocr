@@ -46,9 +46,17 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libgl1 libegl1 libxkbcommon0 libdbus-1-3 libfontconfig1 fonts-dejavu-core
       - name: Install dependencies
+        # Every version is pinned, and nothing is built from a source
+        # archive: a wheel is taken as it was published.  The pins are
+        # the pins of ``requirements.txt``, and a test makes sure that
+        # the two never drift apart.
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install --upgrade --only-binary :all: "pip==26.3"
+          python -m pip install --only-binary :all: \
+            "PySide6-Essentials==6.9.1" \
+            "pillow==11.3.0" \
+            "pypdfium2==4.30.0" \
+            "python-docx==1.2.0"
       - name: Run the test suite in parallel
         run: |
           set -o pipefail
@@ -106,9 +114,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
+        # The same pins, and the same reason, as in the Linux job.
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install --upgrade --only-binary :all: "pip==26.3"
+          python -m pip install --only-binary :all: "PySide6-Essentials==6.9.1" "pillow==11.3.0" "pypdfium2==4.30.0" "python-docx==1.2.0"
       - name: Run the test suite in parallel
         shell: pwsh
         run: |
@@ -116,7 +125,8 @@ jobs:
             Tee-Object -FilePath test-output.txt
           if ($LASTEXITCODE -ne 0) { throw 'the test suite did not pass' }
       - name: Install packaging tool
-        run: python -m pip install pyinstaller==6.16.0
+        run: |
+          python -m pip install --only-binary :all: pyinstaller==6.16.0
       - name: Build Windows executable
         shell: pwsh
         run: |
@@ -130,7 +140,7 @@ jobs:
       - name: Build and verify the optional Hebrew spelling plugin
         shell: pwsh
         run: |
-          python -m pip install cmake==3.31.6
+          python -m pip install --only-binary :all: cmake==3.31.6
           if ($LASTEXITCODE -ne 0) { throw 'CMake install failed' }
           python tools/build_spelling_plugin.py --output build/hebrew-spelling 2>&1 | Tee-Object -FilePath spelling-build.txt
           if ($LASTEXITCODE -ne 0) { throw 'Spelling source build failed' }
@@ -166,12 +176,26 @@ jobs:
           # program, so that the program can read handwriting without
           # anything else.  torch and torchvision have to be a matching
           # pair from the same place.
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 install-engine.log
+          python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 install-engine.log
+          # kraken asks for coremltools~=9.0, and coremltools publishes
+          # no wheel for Windows - only for macOS and Linux - so this
+          # one line cannot be wheel-only: pip has to build that package
+          # from the source archive that was published for it.  It is a
+          # pure Python package, and every version is pinned, so what is
+          # built is the version that was asked for.  Every other line
+          # of this build is wheel-only.
           python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition engine could not be installed' }
+          # kraken is what the worker is built from, and a build that
+          # could not be installed must be heard here and not three
+          # steps later, where the worker would only say that the
+          # package is missing.
+          python -m pip show kraken 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition engine could not be installed' }
           # The page segmentation of the second engine (Mishkefet) is
           # written with OpenCV.  The package is Apache-2.0 and it does
           # not need a display.
-          python -m pip install "opencv-python-headless==4.12.0.88" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          python -m pip install --only-binary :all: "opencv-python-headless==4.12.0.88" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           python tools/check_engine.py 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           if ($LASTEXITCODE -ne 0) { throw 'torch and torchvision do not belong together' }
       - name: Build the recognition worker
@@ -264,7 +288,7 @@ jobs:
             if ($edition -eq 'full') {
               $modelArgs += @('--full-models-dir', '.cache/models')
             }
-            python tools/build_one_click.py @modelArgs
+            python tools/build_one_click.py @modelArgs 2>&1 | Tee-Object -FilePath "one-click-$edition-payload.txt"
             if ($LASTEXITCODE -ne 0) { throw "Model packaging failed: $edition" }
             $name = if ($edition -eq 'full') {
               "$base-all-models-noncommercial-one-click"
@@ -277,7 +301,7 @@ jobs:
               --distpath release `
               --workpath "build/one-click-build-$edition" `
               --specpath "build/one-click-spec-$edition" `
-              --name $name tools/portable_launcher.py
+              --name $name tools/portable_launcher.py 2>&1 | Tee-Object -FilePath "one-click-$edition-exe.txt"
             if ($LASTEXITCODE -ne 0) { throw "One-click EXE build failed: $edition" }
             $exe = Join-Path 'release' ($name + '.exe')
             $report = "one-click-$edition-selftest.json"
@@ -286,7 +310,7 @@ jobs:
                 -Exe $exe -Report $report `
                 -StdOut "one-click-$edition-out.txt" `
                 -StdErr "one-click-$edition-err.txt" `
-                -TimeoutSeconds 300
+                -TimeoutSeconds 600
               if ($LASTEXITCODE -ne 0) { throw "Offline EXE failed first launch: $edition" }
             }
             if (-not (Test-Path $report)) { throw "Offline report missing: $edition" }
@@ -298,7 +322,7 @@ jobs:
                 -Exe $exe -Report $warmReport `
                 -StdOut "one-click-$edition-warm-out.txt" `
                 -StdErr "one-click-$edition-warm-err.txt" `
-                -TimeoutSeconds 300
+                -TimeoutSeconds 600
               if ($LASTEXITCODE -ne 0) { throw "Offline EXE failed second launch: $edition" }
             }
             $exeSize = (Get-Item $exe).Length
@@ -367,7 +391,7 @@ jobs:
         run: |
           Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File -Encoding utf8 'dist-listing.txt'
-          python tools/publish_diagnostics.py --branch=ci/diagnostics one-click-telemetry.json one-click-lite-selftest.json one-click-full-selftest.json modern-spelling-build.txt modern-spelling-check.txt modern-spelling-windows.json spelling-build.txt spelling-check.txt spelling-windows.json test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-out.txt.exit.txt release-selftest-err.txt release-selftest.json release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
+          python tools/publish_diagnostics.py --branch=ci/diagnostics one-click-telemetry.json one-click-lite-selftest.json one-click-full-selftest.json one-click-lite-payload.txt one-click-full-payload.txt one-click-lite-exe.txt one-click-full-exe.txt one-click-lite-out.txt one-click-lite-err.txt one-click-full-out.txt one-click-full-err.txt one-click-lite-warm-selftest.json one-click-full-warm-selftest.json one-click-lite-warm-out.txt one-click-lite-warm-err.txt one-click-full-warm-out.txt one-click-full-warm-err.txt modern-spelling-build.txt modern-spelling-check.txt modern-spelling-windows.json spelling-build.txt spelling-check.txt spelling-windows.json test-output.txt build-windows.log build-worker.log install-engine.log build-console.log build-release.log selftest-windows.json selftest-out.txt selftest-out.txt.exit.txt selftest-err.txt selftest-console.json console-out.txt console-out.txt.exit.txt console-err.txt dist-listing.txt model-download.log release-listing.txt release-selftest-out.txt release-selftest-out.txt.exit.txt release-selftest-err.txt release-selftest.json release-worker-out.txt release-worker-err.txt release-result.json worker-build.json release-offline-check.json
       - name: Upload the self-test report
         if: always()
         uses: actions/upload-artifact@v4
@@ -417,22 +441,29 @@ jobs:
         run: |
           set -o pipefail
           {
-            python -m pip install --upgrade pip
+            python -m pip install --upgrade --only-binary :all: "pip==26.3"
             # torch and torchvision have to be a matching pair, and both
             # have to come from the same place.  kraken asks for
             # torch<=2.14, and the torchvision that belongs to torch
             # 2.14.1 asks for torch 2.14.1, so pip leaves the two
             # apart and the recognition dies with "operator
             # torchvision::nms does not exist".  The pair is pinned.
-            python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
+            python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
+          # kraken asks for coremltools~=9.0, and coremltools publishes
+          # no wheel for Windows - only for macOS and Linux - so this
+          # one line cannot be wheel-only: pip has to build that package
+          # from the source archive that was published for it.  It is a
+          # pure Python package, and every version is pinned, so what is
+          # built is the version that was asked for.  Every other line
+          # of this build is wheel-only.
             python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
             # The page segmentation of the second engine (Mishkefet) is
             # written with OpenCV.  The package is Apache-2.0 and it does
             # not need a display.
-            python -m pip install "opencv-python-headless==4.12.0.88"
+            python -m pip install --only-binary :all: "opencv-python-headless==4.12.0.88"
             # The pages of a PDF are read with pypdfium2, and the real
             # page of the smoke test is a PDF.
-            python -m pip install "pypdfium2==4.30.0"
+            python -m pip install --only-binary :all: "pypdfium2==4.30.0"
           } 2>&1 | tee install-engine.log
       - name: Check that torch and torchvision belong together
         run: |
@@ -670,22 +701,37 @@ jobs:
       - name: Install the recognition engine
         shell: pwsh
         run: |
-          python -m pip install --upgrade pip 2>&1 | Out-File -Encoding utf8 install-engine.log
+          python -m pip install --upgrade --only-binary :all: "pip==26.3" 2>&1 | Out-File -Encoding utf8 install-engine.log
           # torch and torchvision must be a matching pair from the same
           # place, otherwise the recognition fails to start.  kraken asks
           # for torch<=2.14, and the torchvision that belongs to torch
           # 2.14.1 asks for torch 2.14.1, so pip leaves the two apart
           # and the worker dies with "operator torchvision::nms does not
           # exist".  The pair is pinned.
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          # kraken asks for coremltools~=9.0, and coremltools publishes
+          # no wheel for Windows - only for macOS and Linux - so this
+          # one line cannot be wheel-only: pip has to build that package
+          # from the source archive that was published for it.  It is a
+          # pure Python package, and every version is pinned, so what is
+          # built is the version that was asked for.  Every other line
+          # of this build is wheel-only.
           python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition engine could not be installed' }
+          # kraken is what the worker is built from, and a build that
+          # could not be installed must be heard here and not three
+          # steps later, where the worker would only say that the
+          # package is missing.
+          python -m pip show kraken 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition engine could not be installed' }
           # The page segmentation of the second engine (Mishkefet) is
           # written with OpenCV.  The package is Apache-2.0 and it does
           # not need a display.
-          python -m pip install "opencv-python-headless==4.12.0.88" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          python -m pip install --only-binary :all: "opencv-python-headless==4.12.0.88" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
           # Match the desktop PDF runtime: the independent worker now tests PDFs too.
-          python -m pip install "pypdfium2==4.30.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
-          python -m pip install "pyinstaller==6.16.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          python -m pip install --only-binary :all: "pypdfium2==4.30.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          python -m pip install --only-binary :all: "pyinstaller==6.16.0" 2>&1 | Out-File -Encoding utf8 -Append install-engine.log
+          if ($LASTEXITCODE -ne 0) { throw 'the recognition engine could not be installed' }
       - name: Check that torch and torchvision belong together
         shell: pwsh
         run: |

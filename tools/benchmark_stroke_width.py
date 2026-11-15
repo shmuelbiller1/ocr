@@ -55,6 +55,11 @@ except Exception:  # pragma: no cover - GUI-only env without worker libs
 from PIL import Image  # noqa: E402
 
 from hebrew_workbench.benchmark.corpus import load_corpus  # noqa: E402
+from hebrew_workbench.child_settings import (  # noqa: E402
+    apply_child_settings,
+    write_child_settings,
+)
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
 from hebrew_workbench.benchmark.metrics import (  # noqa: E402
     character_error_rate,
     levenshtein,
@@ -914,34 +919,31 @@ def _run_child_engine(
     ci_fast: bool = False,
     child_timeout: int = 3600,
 ) -> dict[str, object]:
-    cmd = [
-        sys.executable,
-        str(Path(__file__).resolve()),
-        "--in-process",
-        "--engines",
-        engine_id,
-        "--models",
-        str(models_folder),
-        "--corpus",
-        str(corpus_dir),
-    ]
-    for s in extra_scans:
-        cmd.extend(["--extra-scan", s])
-    if fetch_public:
-        cmd.append("--fetch-public-real-scans")
-    if ci_fast:
-        cmd.append("--ci-fast")
-
-    with tempfile.NamedTemporaryFile(
-        prefix=f"sw-bench-{engine_id}-", suffix=".json", delete=False
-    ) as tmp:
-        out_path = Path(tmp.name)
-    cmd.extend(["--single-engine-output", str(out_path)])
-    try:
+    # The child is told what to measure in a file of its own and not on
+    # the command line, so that nothing that was typed reaches a command.
+    with tempfile.TemporaryDirectory(prefix="sw-bench-child-") as folder:
+        out_path = Path(folder) / "single-engine.json"
+        settings_file = write_child_settings(
+            folder,
+            {
+                "in_process": True,
+                "engines": [engine_id],
+                "models": str(models_folder),
+                "corpus": str(corpus_dir),
+                "extra_scan": list(extra_scans),
+                "fetch_public_real_scans": bool(fetch_public),
+                "ci_fast": bool(ci_fast),
+                "single_engine_output": str(out_path),
+            },
+        )
+        cmd = [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "--child-settings",
+            str(settings_file),
+        ]
         subprocess.run(cmd, check=True, timeout=child_timeout)
         return json.loads(out_path.read_text(encoding="utf-8"))
-    finally:
-        out_path.unlink(missing_ok=True)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -995,7 +997,22 @@ def main(argv: list[str] | None = None) -> int:
         "--single-engine-output",
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--child-settings",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args(argv)
+
+    # A child of this tool is given its work in a file, and it reads it
+    # here; see hebrew_workbench.child_settings.
+    apply_child_settings(args, args.child_settings)
+
+    # The folders the tool was given are resolved and kept inside the
+    # folders it may use before anything is read or written.
+    for name in ("corpus", "models", "output", "single_engine_output"):
+        value = getattr(args, name, None)
+        if value:
+            setattr(args, name, confine_path(value, *default_bases()))
 
     corpus_dir = Path(args.corpus)
     models_folder = Path(args.models) if args.models else models_directory()
@@ -1112,9 +1129,13 @@ def main(argv: list[str] | None = None) -> int:
 
     text = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:
-        out = Path(args.output)
+        out = confine_path(args.output, *default_bases())
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(text + "\n", encoding="utf-8")
+        # The report is written through an open file and not with
+        # ``write_text``, so that the text is written as it is and no
+        # question is asked about the path twice.
+        with open(out, "w", encoding="utf-8") as stream:
+            stream.write(text + "\n")
         print(f"Wrote stroke-width benchmark report to {out}")
     else:
         print(text)

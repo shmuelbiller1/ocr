@@ -25,6 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from hebrew_workbench.safe_paths import confine_path, default_bases
 from hebrew_workbench.benchmark.metrics import (  # noqa: E402
     character_error_rate,
     levenshtein,
@@ -437,6 +438,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--corpus", type=Path, help="corpus folder matching --ocr-report")
     parser.add_argument("--output", type=Path, default=Path("suggestions-benchmark.json"))
     args = parser.parse_args(argv)
+
+    # Every folder and file the tool was given is resolved and kept
+    # inside the folders it may use before anything is read or written.
+    # The corpus is resolved here and not only where it is read: the
+    # pages of the report are named against the resolved folder, and a
+    # folder that was left as it was typed would not match them.
+    bases = default_bases()
+    for name in ("corpus", "ocr_report", "output"):
+        value = getattr(args, name, None)
+        if value:
+            setattr(args, name, confine_path(value, *bases))
 
     suite_cases = list(DEFAULT_SUITE)
     payload: dict = {

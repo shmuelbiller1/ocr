@@ -28,6 +28,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from hebrew_workbench.console import use_utf8
 from hebrew_workbench.benchmark.corpus import load_corpus  # noqa: E402
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
 
 __all__ = ["build_manifest", "main"]
 
@@ -123,14 +124,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    folder = Path(args.corpus)
+    folder = confine_path(args.corpus, *default_bases())
     corpus = load_corpus(folder)
     for error in corpus.errors:
         print(f"error: {error}", file=sys.stderr)
 
     manifest = build_manifest(corpus)
     target = (
-        Path(args.output)
+        confine_path(args.output, *default_bases())
         if args.output
         else folder / MANIFEST_FILE
     )

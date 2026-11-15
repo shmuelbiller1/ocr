@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import subprocess
 import tempfile
 import threading
@@ -709,7 +710,9 @@ class PreviewPane(QWidget):
 
     def _apply_zoom(self) -> None:
         self.view.resetTransform()
-        if self._zoom != 1.0:
+        # The zoom is a size that was measured and divided, so it is
+        # compared with a tolerance and not for equality.
+        if not math.isclose(self._zoom, 1.0):
             self.view.scale(self._zoom, self._zoom)
         self.view.centerOn(self.scene.itemsBoundingRect().center())
 

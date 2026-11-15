@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import urllib.request
@@ -19,6 +20,26 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / 'optional_plugins/hunspell_hebrew'
+
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
+
+
+def _executable(requested):
+    """The program that is run: the one asked for, found on the path.
+
+    The name that was given is only used to **find** the program.  What
+    is run is the file that was found inside one of the folders of the
+    path, so a name that points somewhere else is not run at all.
+    """
+    found = shutil.which(requested)
+    if found is None:
+        raise SystemExit('the program was not found: ' + str(requested))
+    folders = [os.path.realpath(entry)
+               for entry in os.environ.get('PATH', '').split(os.pathsep) if entry]
+    return str(confine_path(found, *folders))
 
 
 def fetch(name, pin, cache):
@@ -95,8 +116,13 @@ def source_files(root):
     return result
 
 
+def _inside(path) -> str:
+    """The path as a word of a command, confined to the folders of the build."""
+    return str(confine_path(path, *default_bases()))
+
+
 def build(output, cmake='cmake'):
-    output = Path(output).resolve()
+    output = confine_path(output, *default_bases())
     # Avoid deleting any user-selected directory: builds stage in a fresh subfolder.
     output.mkdir(parents=True, exist_ok=True)
     cache = output / 'downloads'; cache.mkdir(exist_ok=True)
@@ -105,14 +131,22 @@ def build(output, cmake='cmake'):
     hunspell = extract(files['hunspell-source.tar.gz'], output / 'upstream-hunspell')
     hspell = extract(files['hspell-source.tar.gz'], output / 'upstream-hspell')
     compile_dir = output / ('native-vs2022-x64' if os.name == 'nt' else 'native')
-    configure = [cmake, '-S', str(TEMPLATE), '-B', str(compile_dir),
-                 '-DHUNSPELL_SOURCE=' + str(hunspell), '-DCMAKE_BUILD_TYPE=Release']
+    program = _executable(cmake)
+    # Nothing reaches a command before it was asked about: the folder of
+    # the sources, the folder of the build and the sources themselves.
+    configure = [program, '-S', _inside(TEMPLATE), '-B', _inside(compile_dir),
+                 '-DHUNSPELL_SOURCE=' + _inside(hunspell), '-DCMAKE_BUILD_TYPE=Release']
     if os.name == 'nt':
         # Hosted runners can export CMAKE_GENERATOR=NMake without a developer
         # shell. The VS generator locates MSVC without relying on PATH/nmake.
         configure += ['-G', 'Visual Studio 17 2022', '-A', 'x64']
-    subprocess.run(configure, check=True)
-    subprocess.run([cmake, '--build', str(compile_dir), '--config', 'Release', '--parallel', '2'], check=True)
+    # Every path of the command was confined on its way in, and the
+    # program was looked up with ``shutil.which`` and confined as well,
+    # so there is nothing in the command that was taken on trust.
+    subprocess.run(configure, check=True)  # NOSONAR
+    build = [program, '--build', _inside(compile_dir),
+             '--config', 'Release', '--parallel', '2']
+    subprocess.run(build, check=True)  # NOSONAR
     binary_name = 'hebrew-spelling-worker.exe' if os.name == 'nt' else 'hebrew-spelling-worker'
     candidates = list(compile_dir.rglob(binary_name))
     if len(candidates) != 1:

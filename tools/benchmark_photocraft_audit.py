@@ -33,7 +33,12 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from hebrew_workbench.child_settings import (  # noqa: E402
+    apply_child_settings,
+    write_child_settings,
+)
 from hebrew_workbench.console import use_utf8  # noqa: E402
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
 
 use_utf8()
 
@@ -440,7 +445,19 @@ def main() -> int:
     parser.add_argument("--in-process", action="store_true")
     parser.add_argument("--child-timeout", type=int, default=3600)
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--child-settings", help=argparse.SUPPRESS)
     args = parser.parse_args()
+
+    # A child of this tool is given its work in a file, and it reads it
+    # here; see hebrew_workbench.child_settings.
+    apply_child_settings(args, args.child_settings)
+
+    # The folders the tool was given are resolved and kept inside the
+    # folders it may use before anything is read or written.
+    for name in ("corpus", "models", "output"):
+        value = getattr(args, name, None)
+        if value:
+            setattr(args, name, confine_path(value, *default_bases()))
 
     cv2.setNumThreads(1)
     seg_rows = (
@@ -470,19 +487,24 @@ def main() -> int:
             for eng_id in engine_list:
                 with tempfile.TemporaryDirectory(prefix="pc-bench-iso-") as td:
                     tmp_out = Path(td) / "eng.json"
+                    # The work of the child is written into a file of its
+                    # own instead of onto the command line.
+                    settings_file = write_child_settings(
+                        td,
+                        {
+                            "corpus": str(args.corpus),
+                            "models": str(args.models),
+                            "engines": [eng_id],
+                            "skip_segmentation": True,
+                            "in_process": True,
+                            "output": str(tmp_out),
+                        },
+                    )
                     cmd = [
                         sys.executable,
                         str(Path(__file__).resolve()),
-                        "--corpus",
-                        str(args.corpus),
-                        "--models",
-                        str(args.models),
-                        "--engines",
-                        eng_id,
-                        "--skip-segmentation",
-                        "--in-process",
-                        "--output",
-                        str(tmp_out),
+                        "--child-settings",
+                        str(settings_file),
                     ]
                     proc = subprocess.run(
                         cmd, check=False, timeout=args.child_timeout

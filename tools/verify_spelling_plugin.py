@@ -16,6 +16,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from hebrew_workbench.plugins import PluginInstaller, PluginRegistry
+from hebrew_workbench.safe_paths import confine_path, default_bases
 
 
 def exercise(module):
@@ -38,6 +39,7 @@ def exercise(module):
 
 
 def verify(archive, report, packaged_app=None, modern=False):
+    report = confine_path(report, *default_bases())
     with tempfile.TemporaryDirectory(prefix='hebrew-spell-') as folder:
         home = Path(folder) / 'עברית space'
         previous = os.environ.get('HEBREW_WORKBENCH_HOME')

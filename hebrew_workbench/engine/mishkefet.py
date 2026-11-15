@@ -132,6 +132,60 @@ def make_engine(options: dict | None = None) -> "MishkefetEngine":
     )
 
 
+def mishkefet_artifact(artifact_id: str = "mishkefet-v1"):
+    """The published description of the checkpoint this project pinned."""
+    from .models import MODEL_ARTIFACTS
+
+    artifact = MODEL_ARTIFACTS.get(artifact_id)
+    if artifact is None:
+        raise EngineFailure(
+            f"מנוע הזיהוי אינו יודע את המודל {artifact_id!r}."
+        )
+    return artifact
+
+
+def verify_mishkefet_checkpoint(
+    model_path: str | Path, artifact_id: str = "mishkefet-v1"
+) -> None:
+    """Check the checkpoint against the digest that the project pinned.
+
+    The file is checked again when it is loaded, and not only when it is
+    downloaded.  A file that was replaced after the download would
+    otherwise reach ``torch.load``, which runs the code that is inside
+    the file, and the code of the checkpoint is not ours to trust.
+    """
+    from .models import verify_file
+
+    artifact = mishkefet_artifact(artifact_id)
+    problem = verify_file(Path(model_path), artifact)
+    if problem is not None:
+        raise EngineFailure(
+            "קובץ המודל של Mishkefet אינו תואם למה שנעוץ בפרויקט "
+            f"({problem}). המודל לא נטען."
+        )
+
+
+def load_verified_recognizer(
+    model_path: str | Path, *, artifact_id: str = "mishkefet-v1", **options
+):
+    """The one gate in front of the code that came with the model.
+
+    The vendored ``Recognizer`` reads its checkpoint with
+    ``weights_only=False``, which runs the code that is inside the file.
+    That is the code the author of the model published, and it is used as
+    it came.  It is only reached after the digest of the file was checked
+    against the digest this project pinned, so the bytes that are read
+    are the bytes the author published -- and nothing else may reach that
+    line.  Every place in this project that builds a ``Recognizer`` from
+    a path goes through here; a test keeps it that way.
+    """
+    verify_mishkefet_checkpoint(model_path, artifact_id)
+    from .vendor.hebocr.recognize import Recognizer
+
+    options.setdefault("device", "cpu")
+    return Recognizer(str(model_path), **options)
+
+
 class MishkefetEngine:
     """An OCR engine that runs *Mishkefet-v1* on the processor.
 
@@ -284,12 +338,10 @@ class MishkefetEngine:
         if self._recognizer is None:
             if self.model_path is None:
                 raise EngineUnavailable("קובץ המודל של Mishkefet אינו מותקן.")
-            # The file is checked before the library that reads it is even
-            # loaded, so that a file that was replaced after the download
-            # never reaches the code that runs what is inside the file.
-            self._verify_checkpoint()
-            from .vendor.hebocr.recognize import Recognizer
-
+            # The file is checked against the pinned digest before the
+            # library that reads it is even loaded, so that a file that
+            # was replaced after the download never reaches the code that
+            # runs what is inside the file.
             try:
                 options = {}
                 if self.mode != "raw":
@@ -304,8 +356,10 @@ class MishkefetEngine:
                             word_lm=word_lm,
                             word_weight=0.2,
                         )
-                self._recognizer = Recognizer(
-                    str(self.model_path), device="cpu", **options
+                # The gate checks the digest and then builds the
+                # recogniser; there is no other way in.
+                self._recognizer = load_verified_recognizer(
+                    self.model_path, artifact_id=self.artifact_id, **options
                 )
                 self._vocab_state_key = self._current_vocab_state_key(eff_learn)
             except Exception as exc:
@@ -378,26 +432,8 @@ class MishkefetEngine:
             recognizer.reset_writer_head()
 
     def _verify_checkpoint(self) -> None:
-        """Check the checkpoint against the digest that the project pinned.
-
-        The file is checked again when it is loaded, and not only when it
-        is downloaded.  A file that was replaced after the download would
-        otherwise reach ``torch.load``, which runs the code that is inside
-        the file, and the code of the checkpoint is not ours to trust.
-        """
-        from .models import MODEL_ARTIFACTS, verify_file
-
-        artifact = MODEL_ARTIFACTS.get(self.artifact_id)
-        if artifact is None:
-            raise EngineFailure(
-                f"מנוע הזיהוי אינו יודע את המודל {self.artifact_id!r}."
-            )
-        problem = verify_file(self.model_path, artifact)
-        if problem is not None:
-            raise EngineFailure(
-                "קובץ המודל של Mishkefet אינו תואם למה שנעוץ בפרויקט "
-                f"({problem}). המודל לא נטען."
-            )
+        """Check the checkpoint against the digest that the project pinned."""
+        verify_mishkefet_checkpoint(self.model_path, self.artifact_id)
 
     def _recognize_page(
         self,

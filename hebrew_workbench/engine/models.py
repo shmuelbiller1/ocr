@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from hebrew_workbench.safe_paths import confine_path, default_bases
+
 __all__ = [
     "ModelArtifact",
     "MODEL_ARTIFACTS",
@@ -190,7 +192,11 @@ def models_directory() -> Path:
 
 
 def md5_of(path: str | Path) -> str:
-    digest = hashlib.md5()
+    # MD5 is kept only to compare a file with a digest that was published
+    # before this program pinned its models by SHA-256; it is a check
+    # against a corrupted download and not a security decision, and every
+    # artifact of this project is pinned by SHA-256 as well.
+    digest = hashlib.md5(usedforsecurity=False)
     with open(path, "rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
@@ -246,7 +252,16 @@ def install_artifact(
     The download can be stopped: the ``cancel`` callable is asked at
     every step, and a download that was stopped leaves nothing behind.
     """
-    target_dir = Path(destination) if destination else models_directory()
+    # The model files live in the folder of the program, and the folder
+    # may be given on a command line; the download is written only into
+    # that folder, or into a folder of the repository or of the build.
+    models_home = models_directory()
+    allowed = (models_home.parent, *default_bases())
+    target_dir = (
+        confine_path(destination, models_home, *allowed)
+        if destination
+        else confine_path(models_home, *allowed)
+    )
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / artifact.filename
 

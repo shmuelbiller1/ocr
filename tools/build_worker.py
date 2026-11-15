@@ -14,6 +14,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
 # These are CLI / contribution tools, not model or dataset implementations.
 EXCLUDED_MODULES = ("kraken.ketos", "kraken.kraken", "kraken.contrib")
 # Model classes resolved by kraken.models entry points in the supported models.
@@ -85,8 +89,9 @@ def main(argv=None) -> int:
               "excluded_modules": list(EXCLUDED_MODULES) if args.profile == "inference" else [],
               "explicitly_removed_files": removed,
               "worker_bytes": sum(p.stat().st_size for p in worker.rglob("*") if p.is_file())}
-    args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    report_path = confine_path(args.report, *default_bases())
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")  # NOSONAR (S8707): confined above
     print(json.dumps(report, indent=2))
     return 0
 

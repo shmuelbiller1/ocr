@@ -1,5 +1,6 @@
 """Loading a trained checkpoint and reading line images with it."""
 
+import math
 from pathlib import Path
 
 import torch
@@ -64,7 +65,12 @@ class Recognizer:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(device)
 
-        state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+        # NOSONAR (S6985): the file is checked against the digest that
+        # this project pinned *before* this line runs - the only way in
+        # is ``mishkefet.load_verified_recognizer``, and a test keeps it
+        # that way - and it is the file that the authors of the model
+        # published, kept as it came.
+        state = torch.load(checkpoint, map_location="cpu", weights_only=False)  # NOSONAR
         self.charset = Charset(chars=state["charset"])
         config = state.get("config", {})
         if config.get("arch") == "trocr":
@@ -286,7 +292,8 @@ class Recognizer:
         best_score = [float("-inf")] * len(images)
 
         for scale in self.TTA_SCALES[:n_views]:
-            if scale == 1.0:
+            # The scale of the page as it is: no copy, no resampling.
+            if math.isclose(scale, 1.0):
                 views = images
             else:
                 views = [

@@ -40,6 +40,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree
 
+from hebrew_workbench.safe_paths import confine_path, default_bases
+
 __all__ = [
     "Corpus",
     "Page",
@@ -293,8 +295,13 @@ def load_corpus(folder: Path) -> Corpus:
 
     A folder without a ``corpus.json`` is not a corpus, and the reason
     is returned in the errors of the corpus.
+
+    The names of the pages come from the ``corpus.json`` of the folder,
+    and a corpus is a folder that somebody else may have put together:
+    every name is therefore read as a name of a file **inside** the
+    folder, and a name that points somewhere else is refused.
     """
-    folder = Path(folder)
+    folder = confine_path(folder, *default_bases())
     corpus = Corpus(folder=folder)
     description = folder / CORPUS_FILE
     if not description.is_file():
@@ -329,9 +336,19 @@ def load_corpus(folder: Path) -> Corpus:
         if not image_name:
             corpus.errors.append("a page of the corpus has no image")
             continue
-        image = folder / image_name
         transcript_name = str(entry.get("transcript", "")).strip()
-        transcript = folder / transcript_name if transcript_name else None
+        try:
+            image = confine_path(folder / image_name, folder)
+            transcript = (
+                confine_path(folder / transcript_name, folder)
+                if transcript_name
+                else None
+            )
+        except ValueError:
+            corpus.errors.append(
+                f"the file of the page is outside the corpus: {image_name}"
+            )
+            continue
         page = Page(
             image=image,
             transcript=transcript,

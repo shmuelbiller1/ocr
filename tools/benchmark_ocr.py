@@ -46,7 +46,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from hebrew_workbench.child_settings import (  # noqa: E402
+    apply_child_settings,
+    write_child_settings,
+)
 from hebrew_workbench.console import use_utf8
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
 
 # The console of Windows cannot write Hebrew in the code page of the
 # system, and the program would stop in the middle of a report because
@@ -112,14 +117,21 @@ def ground_truth_of(path: Path) -> tuple[str, dict]:
 
 def download_dataset(target: Path) -> Path:
     """Download and verify the Pinkas dataset."""
+    # The folder is asked about here and not only where it was given, so
+    # that the archive cannot be written outside of it.
+    target = confine_path(target, *default_bases())
     target.mkdir(parents=True, exist_ok=True)
     archive = target / "pinkas_dataset.zip"
-    if archive.exists() and hashlib.md5(archive.read_bytes()).hexdigest() == DATASET_MD5:
+    if (
+        archive.exists()
+        and hashlib.md5(archive.read_bytes(), usedforsecurity=False).hexdigest()
+        == DATASET_MD5
+    ):
         return archive
     print(f"downloading {DATASET_URL}")
     with urllib.request.urlopen(DATASET_URL, timeout=600) as response:
         data = response.read()
-    digest = hashlib.md5(data).hexdigest()
+    digest = hashlib.md5(data, usedforsecurity=False).hexdigest()
     if digest != DATASET_MD5:
         raise SystemExit(
             f"the downloaded corpus does not match the published md5 ({digest}). "
@@ -484,7 +496,7 @@ def check_against_the_manifest(corpus_folder: Path, pages: list[Page]) -> list[s
     A corpus without a manifest is not checked: there is nothing to
     check it against.
     """
-    manifest_path = Path(corpus_folder) / "manifest.json"
+    manifest_path = confine_path(corpus_folder, *default_bases()) / "manifest.json"
     if not manifest_path.is_file():
         return []
     try:
@@ -762,30 +774,33 @@ def _run_isolated_engine_subprocess(
 
     with tempfile.TemporaryDirectory(prefix="ocr-bench-iso-") as tmp_dir:
         single_out = Path(tmp_dir) / "single-engine.json"
+        # The child is told what to do in a file of its own and not on
+        # the command line: nothing that was typed is put into a command.
+        settings: dict = {
+            "engines": [identifier],
+            "in_process": True,
+            "single_engine_output": str(single_out),
+            "timeout": args.timeout,
+            "decoding_mode": args.decoding_mode,
+            "pages": args.pages,
+        }
+        if args.corpus:
+            settings["corpus"] = str(args.corpus)
+        elif args.pinkas:
+            settings["pinkas"] = True
+            if dataset_root is not None:
+                settings["dataset"] = str(dataset_root)
+            else:
+                settings["cache"] = str(args.cache)
+        if args.models:
+            settings["models"] = str(args.models)
+        settings_file = write_child_settings(tmp_dir, settings)
         cmd = [
             sys.executable,
             str(Path(__file__).resolve()),
-            "--engines",
-            identifier,
-            "--in-process",
-            "--single-engine-output",
-            str(single_out),
-            "--timeout",
-            str(args.timeout),
-            "--decoding-mode",
-            str(args.decoding_mode),
+            "--child-settings",
+            str(settings_file),
         ]
-        if args.corpus:
-            cmd.extend(["--corpus", str(args.corpus)])
-        elif args.pinkas:
-            cmd.append("--pinkas")
-            if dataset_root is not None:
-                cmd.extend(["--dataset", str(dataset_root)])
-            else:
-                cmd.extend(["--cache", str(args.cache)])
-            cmd.extend(["--pages", str(args.pages)])
-        if args.models:
-            cmd.extend(["--models", str(args.models)])
         try:
             proc = subprocess.run(cmd, check=False, timeout=child_timeout)
         except subprocess.TimeoutExpired:
@@ -855,7 +870,31 @@ def main(argv: list[str] | None = None) -> int:
         "--single-engine-output",
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--child-settings",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args(argv)
+
+    # A child process of this tool is given its work in a file, and it
+    # reads it here; see hebrew_workbench.child_settings.
+    apply_child_settings(args, args.child_settings)
+
+    # Every folder and file the tool was given is resolved and kept
+    # inside the folders it may use before anything is read or written.
+    bases = default_bases()
+    for name in (
+        "corpus",
+        "model",
+        "models",
+        "dataset",
+        "cache",
+        "output",
+        "single_engine_output",
+    ):
+        value = getattr(args, name, None)
+        if value:
+            setattr(args, name, confine_path(value, *bases))
 
     if not args.corpus and not args.pinkas:
         raise SystemExit(
