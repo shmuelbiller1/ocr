@@ -539,9 +539,11 @@ def train_writer_profile_in_process(
     from .models import MODEL_ARTIFACTS, verify_file
 
     if recognizer_factory is None:
-        from .vendor.hebocr.recognize import Recognizer
+        # The checkpoint is checked against the pinned digest before the
+        # code that came with the model reads it.
+        from .mishkefet import load_verified_recognizer
 
-        recognizer_factory = lambda path: Recognizer(str(path), device="cpu")
+        recognizer_factory = lambda path: load_verified_recognizer(path)
 
     store = SchoolLearningStore(store_root)
     profile = store.get_writer(writer_id)
@@ -1181,9 +1183,13 @@ def import_external_adapter_in_process(
             prob = verify_file(m_path, art)
             if prob is not None:
                 raise RuntimeError(f"קובץ המודל אינו תקין: {prob}")
-        from .vendor.hebocr.recognize import Recognizer
+        from .mishkefet import load_verified_recognizer
 
-        recognizer = Recognizer(str(m_path), device="cpu")
+        # The digest of the file was checked a moment ago, and it is
+        # checked again here: the gate is the only way into the code that
+        # reads the checkpoint, so it cannot be left out by an edit that
+        # moves this block.
+        recognizer = load_verified_recognizer(m_path)
     else:
         recognizer = recognizer_factory(m_path)
 

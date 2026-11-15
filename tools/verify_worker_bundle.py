@@ -11,10 +11,17 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import time
 import zipfile
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
 
 CASES = (
     ("kraken-small-pdf", "small.safetensors", "kraken", "raw", "pdf"),
@@ -135,8 +142,9 @@ def main(argv=None) -> int:
         report["passed"] = True
     except Exception as exc:
         report.update(passed=False, error=f"{type(exc).__name__}: {exc}")
-    args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    report_path = confine_path(args.report, *default_bases())
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
     return 0 if report["passed"] else 1
 

@@ -378,7 +378,7 @@ def prepare_page_for_ocr(
     if (not inverted) and im.mode != "L" and paper_chroma < 0.08:
         p_bright = np.max(proxy, axis=2) > 0.80 * float(np.max(bg_rgb_arr))
         col_frac = ((px_chroma > 0.14) & p_bright).mean(axis=0)
-        cand_cols = np.where(col_frac > 0.45)[0]
+        cand_cols = np.nonzero(col_frac > 0.45)[0]
         if 1 <= len(cand_cols) <= max(4, pw // 55):
             margin_proxy_cols = cand_cols
 

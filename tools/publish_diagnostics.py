@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from hebrew_workbench.console import use_utf8  # noqa: E402
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
 
 BRANCH = "ci/diagnostics"
 FOLDER = "ci-diagnostics"
@@ -73,14 +74,19 @@ def main(argv: list[str] | None = None) -> int:
     target.mkdir(parents=True, exist_ok=True)
     copied = []
     for name in argv:
-        source = Path(name)
+        try:
+            source = confine_path(name, *default_bases())
+        except ValueError:
+            print(f"refused: {name} is outside the folders that may be published")
+            continue
         if not source.exists():
             continue
         destination = target / source.name
         try:
-            destination.write_text(
-                source.read_text(encoding="utf-8", errors="replace"), encoding="utf-8"
-            )
+            with open(source, "r", encoding="utf-8", errors="replace") as incoming:
+                text = incoming.read()
+            with open(destination, "w", encoding="utf-8") as outgoing:
+                outgoing.write(text)
             copied.append(source.name)
         except OSError:
             continue

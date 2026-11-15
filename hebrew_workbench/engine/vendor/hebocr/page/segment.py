@@ -331,8 +331,8 @@ def split_tall(binary: np.ndarray, boxes: list[LineBox], pitch: float) -> list[L
 
         for top, bottom in zip(cuts, cuts[1:]):
             band = roi[top:bottom]
-            rows = np.where(band.sum(axis=1) > 0)[0]
-            cols = np.where(band.sum(axis=0) > 0)[0]
+            rows = np.nonzero(band.sum(axis=1) > 0)[0]
+            cols = np.nonzero(band.sum(axis=0) > 0)[0]
             if len(rows) == 0 or len(cols) == 0:
                 continue
             out.append(
@@ -414,7 +414,7 @@ def straighten_line(crop: Image.Image) -> Image.Image:
     )
     weights = (ink_mask > 0).astype(np.float32)
     col_mass = weights.sum(axis=0)
-    valid_x = np.where(col_mass >= 2.0)[0]
+    valid_x = np.nonzero(col_mass >= 2.0)[0]
     if len(valid_x) < max(12, w // 12):
         return crop
 

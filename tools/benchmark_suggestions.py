@@ -25,6 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from hebrew_workbench.safe_paths import confine_path, default_bases
 from hebrew_workbench.benchmark.metrics import (  # noqa: E402
     character_error_rate,
     levenshtein,
@@ -383,7 +384,7 @@ def evaluate_ocr_report(report_path: Path, corpus_folder: Path) -> list[Benchmar
         page.image.relative_to(corpus_folder).as_posix(): page.text
         for page in corpus.measured_pages
     }
-    data = json.loads(report_path.read_text(encoding="utf-8"))
+    data = json.loads(confine_path(report_path, *default_bases()).read_text(encoding="utf-8"))
     cases: list[BenchmarkCase] = []
     for engine_entry in data.get("engines", []):
         model = engine_entry.get("model") or engine_entry.get("engine", "ocr")
@@ -493,7 +494,7 @@ def main(argv: list[str] | None = None) -> int:
             }
         payload["post_ocr_by_engine"] = by_engine
 
-    args.output.write_text(
+    confine_path(args.output, *default_bases()).write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     for mode, summary in payload["suite"].items():

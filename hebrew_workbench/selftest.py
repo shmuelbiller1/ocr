@@ -21,6 +21,8 @@ import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from hebrew_workbench.safe_paths import confine_path, default_bases
+
 __all__ = ["CheckResult", "run_checks", "main"]
 
 
@@ -484,7 +486,9 @@ def run_checks() -> list[CheckResult]:
 
 def _write_report(path: str | Path, payload: dict) -> bool:
     try:
-        target = Path(path)
+        # The report is written where the program was started, or into a
+        # folder of the repository or of the build, and nowhere else.
+        target = confine_path(path, *default_bases())
         if target.parent and str(target.parent) not in ("", "."):
             target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(

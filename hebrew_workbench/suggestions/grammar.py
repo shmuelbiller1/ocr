@@ -164,13 +164,43 @@ _LIST_HEADER_WORDS: frozenset[str] = frozenset(
 
 _ACRONYM_PROCLITICS: tuple[str, ...] = ("ו", "ב", "כ", "ל", "מ", "ש", "ד", "ה", "וב", "ול", "ומ", "וכ")
 
+#: The first and the last letter of the Hebrew alphabet, for the scans below.
+_HEBREW_FIRST = "\u05d0"
+_HEBREW_LAST = "\u05ea"
+
+
+def _trailing_hebrew_word(text: str, end: int | None = None) -> str:
+    """The run of Hebrew letters at the end of ``text`` ("" when there is none).
+
+    Written as a scan from the end and not as the pattern ``([א-ת]+)$``:
+    that pattern asks the engine to try every place in the line and to
+    walk back from each of them, which takes time that grows with the
+    square of the line, while the answer that is wanted is at its end.
+    """
+    stop = len(text) if end is None else end
+    start = stop
+    while start > 0 and _HEBREW_FIRST <= text[start - 1] <= _HEBREW_LAST:
+        start -= 1
+    return text[start:stop]
+
+
+def _hebrew_word_before(text: str, end: int) -> str:
+    """The Hebrew word that ends at ``end``, with white space before it."""
+    stop = end
+    while stop > 0 and text[stop - 1].isspace():
+        stop -= 1
+    if stop == end:
+        # The white space is part of what is asked for: without it the
+        # word is not the one before ``end``.
+        return ""
+    return _trailing_hebrew_word(text, stop)
+
 
 def _match_comma_acronym_pair(text: str, left: str, right: str, start_idx: int) -> bool:
     """Return True iff ``left,right`` at ``start_idx`` is a known acronym slip, not a list."""
     # Never treat items following an explicit list header ("סעיפים ע,ש" / "סעיפים: ע,ש") as an acronym
     prefix_ctx = text[:start_idx].rstrip(" \t\n\r:-–—")
-    prev_word_m = re.search(r"([א-ת]+)$", prefix_ctx)
-    if prev_word_m and prev_word_m.group(1) in _LIST_HEADER_WORDS:
+    if _trailing_hebrew_word(prefix_ctx) in _LIST_HEADER_WORDS:
         return False
     if (left, right) in _KNOWN_COMMA_ACRONYMS:
         return True
@@ -668,7 +698,6 @@ FEM_PLURAL_NOUNS: frozenset[str] = frozenset(
 
 
 _NUMERAL_PAIR_RE = re.compile(r"(?<![א-ת])([א-ת]{2,10}) +([א-ת]{2,10})(?![א-ת])")
-_PREV_HEB_WORD_RE = re.compile(r"([א-ת]+)\s+$")
 _TEEN_UNITS: frozenset[str] = frozenset(
     {
         "אחד",
@@ -709,8 +738,8 @@ def numeral_gender_agreement(text: str) -> list[Suggestion]:
         num = raw_num[len(prefix):]
         noun = strip_nikud(match.group(2))
         if num in ("עשר", "עשרה"):
-            prev = _PREV_HEB_WORD_RE.search(text, 0, match.start(1))
-            if prev and strip_nikud(prev.group(1)).lstrip("\u05d5") in _TEEN_UNITS:
+            prev = _hebrew_word_before(text, match.start(1))
+            if prev and strip_nikud(prev).lstrip("\u05d5") in _TEEN_UNITS:
                 idx = match.start(2)
                 continue
         if num in FEM_NUM_TO_MASC and noun in MASC_PLURAL_NOUNS:

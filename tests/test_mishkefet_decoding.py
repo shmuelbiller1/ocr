@@ -94,7 +94,9 @@ class DecodingTests(unittest.TestCase):
                 engine = MishkefetEngine("model.pt", mode=mode)
                 factory = Mock()
                 module = types.SimpleNamespace(Recognizer=factory)
-                with patch.object(engine, "_verify_checkpoint"), patch.dict("sys.modules", {
+                with patch(
+                    "hebrew_workbench.engine.mishkefet.verify_mishkefet_checkpoint"
+                ), patch.dict("sys.modules", {
                     "hebrew_workbench.engine.vendor.hebocr.recognize": module
                 }), patch("hebrew_workbench.engine.mishkefet.load_language_models", return_value=("char", "word")) as lms:
                     engine._load_recognizer()

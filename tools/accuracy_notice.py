@@ -20,6 +20,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from hebrew_workbench.console import use_utf8  # noqa: E402
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
 
 
 def summarise(report: dict) -> str:
@@ -74,12 +75,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report", default="ocr-accuracy.json", help="report file")
     args = parser.parse_args(argv)
 
-    path = pathlib.Path(args.report)
+    path = confine_path(args.report, *default_bases())
     if not path.is_file():
         print(f"there is no report at {path} yet")
         return 0
 
-    report = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        # A report that cannot be read is not a measurement, and the
+        # build has to hear about it instead of printing a note with
+        # nothing in it.
+        print(f"::error title=Accuracy::the report at {path} is not read ({exc})")
+        return 1
     print(f"::notice title=Accuracy::{summarise(report)}")
     return 0
 

@@ -26,44 +26,49 @@ MARGIN = 130
 LINES = 22
 
 
-def _ink_background(seed: int) -> Image.Image:
-    """A slightly noisy, off-white page."""
-    random.seed(seed)
+def _ink_background(rng: random.Random) -> Image.Image:
+    """A slightly noisy, off-white page, drawn with the generator it is given."""
     page = Image.new("L", (PAGE_WIDTH, PAGE_HEIGHT), 246)
     draw = ImageDraw.Draw(page)
     for _ in range(4000):
-        x = random.randrange(PAGE_WIDTH)
-        y = random.randrange(PAGE_HEIGHT)
-        shade = random.randrange(225, 250)
+        x = rng.randrange(PAGE_WIDTH)
+        y = rng.randrange(PAGE_HEIGHT)
+        shade = rng.randrange(225, 250)
         draw.point((x, y), fill=shade)
     return page.convert("RGB")
 
 
 def _handwriting_like_lines(seed: int) -> Image.Image:
-    """Draw strokes that look like handwriting without being any text."""
-    random.seed(seed)
-    page = _ink_background(seed)
+    """Draw strokes that look like handwriting without being any text.
+
+    The generator is one of its own and not the one of the module: the
+    samples are written into the repository, and they have to be the same
+    every time they are made, so the page is drawn from a generator that
+    is seeded here and that nothing else can move.
+    """
+    rng = random.Random(seed)
+    page = _ink_background(rng)
     draw = ImageDraw.Draw(page)
     top = MARGIN + 90
     line_height = (PAGE_HEIGHT - 2 * MARGIN - 120) // LINES
     for index in range(LINES):
         y = top + index * line_height
-        if random.random() < 0.18:  # an occasional short line, like a paragraph end
-            x_end = MARGIN + random.randrange(200, 600)
+        if rng.random() < 0.18:  # an occasional short line, like a paragraph end
+            x_end = MARGIN + rng.randrange(200, 600)
         else:
-            x_end = PAGE_WIDTH - MARGIN - random.randrange(0, 120)
+            x_end = PAGE_WIDTH - MARGIN - rng.randrange(0, 120)
         x = MARGIN
         while x < x_end:
-            word_width = random.randrange(60, 190)
+            word_width = rng.randrange(60, 190)
             points = []
             steps = max(6, word_width // 6)
             for step in range(steps + 1):
                 px = x + word_width * step / steps
-                py = y + random.uniform(-9, 9) + math.sin(step * 1.7) * 5
+                py = y + rng.uniform(-9, 9) + math.sin(step * 1.7) * 5
                 points.append((px, py))
             if len(points) > 1:
-                draw.line(points, fill=(24, 24, 30), width=random.choice([3, 3, 4]))
-            x += word_width + random.randrange(18, 34)
+                draw.line(points, fill=(24, 24, 30), width=rng.choice([3, 3, 4]))
+            x += word_width + rng.randrange(18, 34)
     return page
 
 

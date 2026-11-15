@@ -252,9 +252,11 @@ def _eval_page_metrics(hyp_text: str, ref_text: str) -> dict:
 
 def _run_child_real_model_benchmark(models_dir: Path, corpus_dir: Path) -> dict:
     """Execute real Mishkefet-v1 4-way & cross-writer benchmark in an isolated process."""
-    from hebrew_workbench.engine.mishkefet import MishkefetEngine
+    from hebrew_workbench.engine.mishkefet import (
+        MishkefetEngine,
+        load_verified_recognizer,
+    )
     from hebrew_workbench.engine.vendor.hebocr.page.segment import segment_page
-    from hebrew_workbench.engine.vendor.hebocr.recognize import Recognizer
     from hebrew_workbench.engine.writer_adaptation import (
         AdaptConfig,
         train_writer_profile_in_process,
@@ -297,7 +299,7 @@ def _run_child_real_model_benchmark(models_dir: Path, corpus_dir: Path) -> dict:
         rachel = store.create_writer("Rachel Bluwstein (PDM-1.0)")
 
         # Collect Stage-A verified lines from Rachel's 3 training pages ONLY
-        align_rec = Recognizer(str(model_pt), device="cpu")
+        align_rec = load_verified_recognizer(model_pt)
         aligned_count_by_page: dict[str, int] = {}
         approved_terms: list[str] = []
 

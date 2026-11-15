@@ -36,6 +36,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from hebrew_workbench import __version__  # noqa: E402
 
 from hebrew_workbench.console import use_utf8  # noqa: E402
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
 
 #: The components that end up inside the application, and where the
 #: text of their licence is found.
@@ -626,6 +627,9 @@ def build_release(
         )
     (staging / app_name / "README-להשימה.txt").write_text(README, encoding="utf-8")
 
+    # The ZIP is written into the folders the build may use, and not
+    # wherever a path that was typed happens to point.
+    output = confine_path(output, *default_bases())
     if output.exists():
         output.unlink()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -638,7 +642,7 @@ def build_release(
 
 def sha256_of(path: Path) -> str:
     digest = hashlib.sha256()
-    with open(path, "rb") as stream:
+    with open(confine_path(path, *default_bases()), "rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()

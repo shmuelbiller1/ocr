@@ -12,6 +12,7 @@ decompression bomb all produce a clear message for the user.
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -89,11 +90,19 @@ class DocumentPreview:
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
-        if not self.path.exists():
-            raise PreviewError(f"הקובץ אינו נמצא: {self.path}")
-        if not self.path.is_file():
-            raise PreviewError(f"הנתיב אינו קובץ: {self.path}")
-        size = self.path.stat().st_size
+        # The file is opened instead of being asked about first: a check
+        # that asks and an open that opens are two questions, and the
+        # file may answer them differently.  The size is read from the
+        # open file, which is the size that is really rendered.
+        try:
+            with open(self.path, "rb") as stream:
+                size = stream.seek(0, os.SEEK_END)
+        except FileNotFoundError as exc:
+            raise PreviewError(f"הקובץ אינו נמצא: {self.path}") from exc
+        except IsADirectoryError as exc:
+            raise PreviewError(f"הנתיב אינו קובץ: {self.path}") from exc
+        except OSError as exc:
+            raise PreviewError(f"הקובץ אינו נגיש: {self.path}") from exc
         if size > MAX_FILE_BYTES:
             raise PreviewError(
                 f"הקובץ גדול מדי לתצוגה ({size // (1024 * 1024)}MB). "

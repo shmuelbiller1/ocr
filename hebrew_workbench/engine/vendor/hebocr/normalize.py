@@ -20,14 +20,17 @@ import unicodedata
 # Bidi control characters. These carry no textual content but do count as
 # characters in an edit distance, so an RTL-aware model that emits them would be
 # penalized for nothing. Stripping them is the single most important step here.
+# The letters of the control characters are written as escapes and not as
+# themselves: a reader of this file - and a reviewer of it - has to be able
+# to see which direction every one of them asks for.
 _BIDI = dict.fromkeys(
     map(
         ord,
-        "‎‏"  # LRM RLM
-        "‪‫‬‭‮"  # LRE RLE PDF LRO RLO
-        "⁦⁧⁨⁩"  # LRI RLI FSI PDI
-        "​‌‍"  # ZWSP ZWNJ ZWJ
-        "﻿",  # BOM
+        "\u200e\u200f"  # LRM RLM
+        "\u202a\u202b\u202c\u202d\u202e"  # LRE RLE PDF LRO RLO
+        "\u2066\u2067\u2068\u2069"  # LRI RLI FSI PDI
+        "\u200b\u200c\u200d"  # ZWSP ZWNJ ZWJ
+        "\ufeff",  # BOM
     )
 )
 

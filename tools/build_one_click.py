@@ -18,9 +18,14 @@ import hashlib
 import json
 import os
 import shutil
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
 
 MODEL_SIZE = 13_065_380
 MODEL_SHA256 = "3108259779f5abfed3908a1c9eafba64d17e4a2a169368c539ecfeff04c018f3"
@@ -79,7 +84,7 @@ FULL_EXTRA_SPECS = {
 
 def checksum(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as stream:
+    with open(confine_path(path, *default_bases()), "rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
@@ -173,7 +178,16 @@ def main() -> int:
     parser.add_argument("--full-models-dir", type=Path,
                         help="include all three recognition models and both language models")
     args = parser.parse_args()
-    created = build(args.archive, args.model, args.output, args.full_models_dir)
+    # The files the build reads and writes are resolved and kept inside
+    # the folders it may use before anything is read or written.
+    bases = default_bases()
+    archive = confine_path(args.archive, *bases)
+    model = confine_path(args.model, *bases)
+    output = confine_path(args.output, *bases)
+    full_models_dir = (
+        confine_path(args.full_models_dir, *bases) if args.full_models_dir else None
+    )
+    created = build(archive, model, output, full_models_dir)
     print(f"one-click offline payload: {created}")
     print(f"size: {created.stat().st_size} bytes")
     print(f"sha256: {checksum(created)}")

@@ -120,8 +120,17 @@ class Augment:
     imitate a camera.
     """
 
-    def __init__(self, rng: np.random.Generator | None = None, strength: float = 1.0):
-        self.rng = rng if rng is not None else np.random.default_rng()
+    def __init__(
+        self,
+        rng: np.random.Generator | None = None,
+        strength: float = 1.0,
+        seed: int = 0,
+    ):
+        # The generator is seeded, so that the same page is distorted in
+        # the same way in every run: a measurement that cannot be
+        # repeated is not a measurement.  A caller that wants a
+        # different sequence hands over a generator of its own.
+        self.rng = rng if rng is not None else np.random.default_rng(seed)
         self.strength = strength
 
     def _maybe(self, p: float) -> bool:

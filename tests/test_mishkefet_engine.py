@@ -184,6 +184,101 @@ class TheCheckpointIsCheckedTests(unittest.TestCase):
         self.assertIn("weights_only=False", source)
         self.assertNotIn("verify_file", source)
 
+    def test_every_place_that_reads_the_checkpoint_checks_it_first(self) -> None:
+        """The digest is checked on the way in, wherever the way in is.
+
+        The code that came with the model reads the file with
+        ``weights_only=False``, which runs the code that is inside the
+        file.  That is safe only because the file is the file the author
+        published -- and that is known because its digest was checked
+        against the digest this project pinned.  A new place that built
+        the vendored ``Recognizer`` straight from a path would skip the
+        check, so the shipped code and the tools are searched here: the
+        only construction of it outside the vendored package is the one
+        inside the gate, and the gate checks first.
+        """
+        import ast
+
+        gate = "load_verified_recognizer"
+
+        def calls_in(source: Path) -> list[tuple[str, int]]:
+            """Every call of ``Recognizer(`` with the function it is in."""
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+            found: list[tuple[str, int]] = []
+            # The innermost function that holds the call is enough: the
+            # gate is a plain module-level function.
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for call in ast.walk(node):
+                    if (
+                        isinstance(call, ast.Call)
+                        and isinstance(call.func, ast.Name)
+                        and call.func.id == "Recognizer"
+                    ):
+                        found.append((node.name, call.lineno))
+            return found
+
+        sources: list[Path] = [REPO_ROOT / "app.py"]
+        for folder in ("hebrew_workbench", "ocr_worker", "tools"):
+            sources.extend(sorted((REPO_ROOT / folder).rglob("*.py")))
+        offenders: list[str] = []
+        gate_calls = 0
+        for source in sources:
+            if "vendor" in source.parts:
+                continue
+            for function, line in calls_in(source):
+                if function == gate:
+                    gate_calls += 1
+                    continue
+                offenders.append(
+                    f"{source.relative_to(REPO_ROOT)}:{line} in {function}()"
+                )
+
+        self.assertEqual(
+            offenders,
+            [],
+            "the checkpoint must be checked before it is read; build it "
+            f"with hebrew_workbench.engine.mishkefet.{gate}",
+        )
+        # The gate is there, and it is the one that checks, so a reader
+        # of the report knows what stands between the file and
+        # ``torch.load``.
+        self.assertEqual(gate_calls, 1, "the gate itself has to build it")
+        engine = (REPO_ROOT / "hebrew_workbench" / "engine" / "mishkefet.py").read_text(
+            encoding="utf-8"
+        )
+        body = engine.split(f"def {gate}(", 1)[1]
+        self.assertIn("verify_mishkefet_checkpoint(", body)
+
+    def test_the_gate_checks_the_digest_before_it_builds(self) -> None:
+        """Inside the gate the order is: check, and only then build."""
+        import ast
+
+        source = (REPO_ROOT / "hebrew_workbench" / "engine" / "mishkefet.py").read_text(
+            encoding="utf-8"
+        )
+        tree = ast.parse(source)
+        gate = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "load_verified_recognizer"
+        )
+        names = [
+            stmt.value.func.id
+            for stmt in gate.body
+            if isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Call)
+            and isinstance(stmt.value.func, ast.Name)
+        ]
+        self.assertIn("verify_mishkefet_checkpoint", names)
+        self.assertLess(
+            names.index("verify_mishkefet_checkpoint"),
+            len(names),
+            "the check has to come before the recogniser is built",
+        )
+        self.assertIn("Recognizer(", ast.unparse(gate))
+
 
 def engine_manifest() -> EngineManifest:
     return build_manifest(None, "mishkefet-v1")

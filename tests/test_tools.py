@@ -129,5 +129,52 @@ class SmokeTestTests(unittest.TestCase):
             self.assertIn("NOT verified", report["note"])
 
 
+class ThePinsOfTheBuildTests(unittest.TestCase):
+    """The versions the build installs are the versions the program asks for.
+
+    The two jobs that install the dependencies name every package with
+    its version, so that the version is pinned where the command is read
+    and no file has to be opened to know what is installed.  That is a
+    second place where the pins are written, and a pin that is changed
+    in ``requirements.txt`` alone would be measured in one job and
+    packaged in the other.  This test keeps the two together.
+    """
+
+    def _installed(self) -> list[list[str]]:
+        """The pinned packages of every "Install dependencies" step.
+
+        ``pip`` itself is not a dependency of the program, and it is not
+        compared.
+        """
+        import re
+
+        workflow = (
+            REPO_ROOT / ".github" / "workflows" / "windows.yml"
+        ).read_text(encoding="utf-8")
+        steps: list[list[str]] = []
+        for step in re.split(r"\n      - name: ", workflow):
+            if not step.startswith("Install dependencies\n"):
+                continue
+            pins = re.findall(r'"([A-Za-z0-9][A-Za-z0-9._-]*==[0-9][^"]*)"', step)
+            steps.append(sorted(p for p in pins if not p.startswith("pip==")))
+        return steps
+
+    def test_the_build_installs_the_versions_of_requirements(self) -> None:
+        requirements = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")
+        wanted = sorted(
+            line.strip()
+            for line in requirements.splitlines()
+            if line.strip() and not line.startswith("#")
+        )
+        installed = self._installed()
+        self.assertTrue(installed, "no 'Install dependencies' step was found")
+        for pins in installed:
+            self.assertEqual(
+                pins,
+                wanted,
+                "the workflow and requirements.txt have drifted apart",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

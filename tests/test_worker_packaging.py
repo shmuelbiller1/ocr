@@ -108,7 +108,12 @@ class WorkerPackagingTests(unittest.TestCase):
         match = re.search(r'(?ms)^  ocr-worker-windows:\n(.*?)(?=^  \S|\Z)', workflow)
         self.assertIsNotNone(match, 'Missing independent worker job')
         worker_job = match.group(1)
-        self.assertRegex(worker_job, rf'(?m)^ +python -m pip install "{re.escape(pdf_pin)}"(?: +|$)')
+        # The pin is the pin of the desktop application, and the package
+        # is taken as a wheel: nothing is built from a source archive.
+        self.assertRegex(
+            worker_job,
+            rf'(?m)^ +python -m pip install --only-binary :all: "{re.escape(pdf_pin)}"(?: +|$)',
+        )
 
     def test_unpacked_application_failure_cannot_be_masked_by_worker_success(self):
         workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/windows.yml').read_text()

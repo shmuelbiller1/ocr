@@ -48,10 +48,10 @@ jobs:
       - name: Install recognition engines
         run: |
           set -o pipefail
-          python -m pip install --upgrade pip
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
-          python -m pip install "opencv-python-headless==4.12.0.88" "pypdfium2==4.30.0"
+          python -m pip install --upgrade --only-binary :all: "pip==26.3"
+          python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0" "torchvision==0.29.0"
+          python -m pip install --only-binary :all: --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "kraken==7.1.1" "pillow==11.3.0"
+          python -m pip install --only-binary :all: "opencv-python-headless==4.12.0.88" "pypdfium2==4.30.0"
           python tools/check_engine.py
       - name: Download recognition models
         run: |

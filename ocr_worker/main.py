@@ -15,12 +15,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 import traceback
 from pathlib import Path
 
 # Make the package importable when the worker runs from a source checkout.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from hebrew_workbench.safe_paths import confine_path  # noqa: E402
 
 
 def _engine_of(job: dict):
@@ -84,6 +88,18 @@ def _install_offline_guard(attempts: list) -> None:
         raise OSError("Offline check: outbound network access is forbidden")
 
     sys.addaudithook(guard)
+
+
+def _ipc_bases() -> tuple[str, ...]:
+    """The folders the worker is allowed to use.
+
+    The application hands the worker its job, its result and the pages of
+    the preview as files in a folder of its own, and it makes that folder
+    with ``tempfile``; nothing else has to be reached by the worker.
+    """
+    temporary = os.path.realpath(tempfile.gettempdir())
+    repository = os.path.realpath(str(Path(__file__).resolve().parents[1]))
+    return (temporary, repository)
 
 
 def _run_enhance_preview(input_path: Path, output_path: Path, enabled: bool) -> int:
@@ -236,19 +252,33 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    if args.enhance_preview and args.output_preview:
-        return _run_enhance_preview(
-            Path(args.enhance_preview),
-            Path(args.output_preview),
-            enabled=not args.disable_enhancement,
+    bases = _ipc_bases()
+    try:
+        preview_in = (
+            confine_path(args.enhance_preview, *bases) if args.enhance_preview else None
         )
-    if args.train_writer and args.result:
-        return _run_train_writer(Path(args.train_writer), Path(args.result))
+        preview_out = (
+            confine_path(args.output_preview, *bases) if args.output_preview else None
+        )
+        train_job = (
+            confine_path(args.train_writer, *bases) if args.train_writer else None
+        )
+        result_path = confine_path(args.result, *bases) if args.result else None
+        job_path = confine_path(args.job, *bases) if args.job else None
+    except ValueError as exc:
+        # A path outside the folders of the worker is refused, and it is
+        # said, so that the application sees a reason and not a traceback.
+        print(f"the worker was given a path it may not use: {exc}", file=sys.stderr)
+        return 1
+
+    if preview_in and preview_out:
+        return _run_enhance_preview(
+            preview_in, preview_out, enabled=not args.disable_enhancement
+        )
+    if train_job and result_path:
+        return _run_train_writer(train_job, result_path)
     if not args.job or not args.result:
         parser.error("--job and --result are required unless --enhance-preview is used")
-
-    job_path = Path(args.job)
-    result_path = Path(args.result)
 
     attempts = []
     offline_check = False

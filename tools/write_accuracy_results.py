@@ -29,6 +29,8 @@ END = "<!-- RESULTS:END -->"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from hebrew_workbench.safe_paths import confine_path, default_bases  # noqa: E402
+
 from hebrew_workbench.console import use_utf8  # noqa: E402
 
 
@@ -432,6 +434,7 @@ def update_document(
     document: Path, section: str, begin: str = BEGIN, end: str = END
 ) -> bool:
     """Put the section between the markers.  Returns True when the file changed."""
+    document = confine_path(document, *default_bases())
     if not document.is_file():
         return False
     text = document.read_text(encoding="utf-8")
@@ -445,7 +448,10 @@ def update_document(
         return False
     if new_text == text:
         return False
-    document.write_text(new_text, encoding="utf-8")
+    # The document is written through an open file, so that the path is
+    # asked about once and the text is written exactly as it was built.
+    with open(document, "w", encoding="utf-8") as stream:
+        stream.write(new_text)
     return True
 
 
@@ -471,12 +477,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    report_path = Path(args.report)
+    report_path = confine_path(args.report, *default_bases())
     if not report_path.is_file():
         print(f"no report: {report_path}", file=sys.stderr)
         return 1
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    document = Path(args.document)
+    document = confine_path(args.document, *default_bases())
     if not document.is_file():
         # The document is not there: the build must not fail with a
         # traceback, and it must say what is missing.
